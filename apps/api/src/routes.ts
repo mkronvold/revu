@@ -95,8 +95,8 @@ function getBearerToken(request: FastifyRequest) {
   return header.slice("Bearer ".length);
 }
 
-function requireSession(request: FastifyRequest, store: ApiStore, options?: { allowPasswordReset?: boolean }) {
-  const session = store.getSession(getBearerToken(request));
+async function requireSession(request: FastifyRequest, store: ApiStore, options?: { allowPasswordReset?: boolean }) {
+  const session = await store.getSession(getBearerToken(request));
   if (!session) {
     throw new ApiError(401, "Authentication required");
   }
@@ -117,12 +117,12 @@ function requirePermissions(session: AuthSession, permissions: AuthPermission[])
 export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
   app.get("/", async () => apiIndexExample);
   app.get("/domain-rules", async () => domainRulesExample);
-  app.get("/review-periods", async () => reviewPeriodsListResponseSchema.parse({ items: store.listReviewPeriods() }));
+  app.get("/review-periods", async () => reviewPeriodsListResponseSchema.parse({ items: await store.listReviewPeriods() }));
   app.get("/review-periods/:id", async (request, reply) => {
     try {
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
-        item: store.getReviewPeriod(reviewPeriodId),
+        item: await store.getReviewPeriod(reviewPeriodId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -132,7 +132,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const query = parseWithSchema(reviewPeriodScopedQuerySchema, request.query);
       return questionSetsListResponseSchema.parse({
-        items: store.listQuestionSets(query.reviewPeriodId),
+        items: await store.listQuestionSets(query.reviewPeriodId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -142,7 +142,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return questionSetResponseSchema.parse({
-        item: store.getQuestionSet(questionSetId),
+        item: await store.getQuestionSet(questionSetId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -152,7 +152,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const query = parseWithSchema(reviewPeriodScopedQuerySchema, request.query);
       return assignmentsListResponseSchema.parse({
-        items: store.listAssignments(query.reviewPeriodId),
+        items: await store.listAssignments(query.reviewPeriodId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -162,7 +162,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return assignmentResponseSchema.parse({
-        item: store.getAssignment(assignmentId),
+        item: await store.getAssignment(assignmentId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -170,9 +170,9 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   });
   app.get("/assessments", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       const query = parseWithSchema(assessmentsListQuerySchema, request.query);
-      return assessmentsListResponseSchema.parse({ items: store.listAssessments(session, query) });
+      return assessmentsListResponseSchema.parse({ items: await store.listAssessments(session, query) });
     } catch (error) {
       return sendError(reply, error);
     }
@@ -180,10 +180,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/assessments/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return assessmentItemResponseSchema.parse({
-        item: store.getAssessment(session, assessmentId),
+        item: await store.getAssessment(session, assessmentId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -192,8 +192,8 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/foundation", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
-      return foundationSnapshotSchema.parse(store.foundationSnapshot(session));
+      const session = await requireSession(request, store);
+      return foundationSnapshotSchema.parse(await store.foundationSnapshot(session));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -203,7 +203,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const body = parseWithSchema(authLoginRequestSchema, request.body);
       return authLoginResponseSchema.parse({
-        session: store.authenticate(body.username, body.password),
+        session: await store.authenticate(body.username, body.password),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -212,7 +212,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/auth/me", async (request, reply) => {
     try {
-      const session = requireSession(request, store, { allowPasswordReset: true });
+      const session = await requireSession(request, store, { allowPasswordReset: true });
       return authMeResponseSchema.parse({ session });
     } catch (error) {
       return sendError(reply, error);
@@ -221,8 +221,8 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/auth/logout", async (request, reply) => {
     try {
-      const session = requireSession(request, store, { allowPasswordReset: true });
-      store.logout(session.token);
+      const session = await requireSession(request, store, { allowPasswordReset: true });
+      await store.logout(session.token);
       return authLogoutResponseSchema.parse({ success: true });
     } catch (error) {
       return sendError(reply, error);
@@ -231,10 +231,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/auth/password/change", async (request, reply) => {
     try {
-      const session = requireSession(request, store, { allowPasswordReset: true });
+      const session = await requireSession(request, store, { allowPasswordReset: true });
       const body = parseWithSchema(authChangePasswordRequestSchema, request.body);
       return authChangePasswordResponseSchema.parse(
-        store.changeOwnPassword(session.token, body.currentPassword, body.newPassword),
+        await store.changeOwnPassword(session.token, body.currentPassword, body.newPassword),
       );
     } catch (error) {
       return sendError(reply, error);
@@ -243,10 +243,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/employees", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:read"]);
       return employeesListResponseSchema.parse({
-        items: store.listEmployees(),
+        items: await store.listEmployees(),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -255,11 +255,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/employees/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:read"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return employeeResponseSchema.parse({
-        item: store.getEmployee(employeeId),
+        item: await store.getEmployee(employeeId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -268,12 +268,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/employees", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:create"]);
       const body = parseWithSchema(createEmployeeRequestSchema, request.body);
       reply.code(201);
       return employeeResponseSchema.parse({
-        item: store.createEmployee({
+        item: await store.createEmployee({
           ...body,
           status: body.status ?? "active",
         }),
@@ -285,12 +285,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.patch("/employees/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:update"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateEmployeeRequestSchema, request.body);
       return employeeResponseSchema.parse({
-        item: store.updateEmployee(session.user, employeeId, body),
+        item: await store.updateEmployee(session.user, employeeId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -299,10 +299,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.delete("/employees/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:delete"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      return deleteEmployeeResponseSchema.parse(store.deleteEmployee(employeeId));
+      return deleteEmployeeResponseSchema.parse(await store.deleteEmployee(employeeId));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -310,10 +310,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/employees/export", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:export"]);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return localUsersExportResponseSchema.parse(store.exportLocalUsers(query.format ?? "json"));
+      return localUsersExportResponseSchema.parse(await store.exportLocalUsers(query.format ?? "json"));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -321,11 +321,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/employees/import", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:import"]);
       const body = parseWithSchema(localUsersImportRequestSchema, request.body);
       return localUsersImportResponseSchema.parse(
-        store.importLocalUsers(
+        await store.importLocalUsers(
           body.format,
           body.items.map((item) => ({
             ...item,
@@ -340,11 +340,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/employees/:id/password/set", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:password:set"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(setEmployeePasswordRequestSchema, request.body);
-      return setEmployeePasswordResponseSchema.parse(store.setPassword(employeeId, body.password));
+      return setEmployeePasswordResponseSchema.parse(await store.setPassword(employeeId, body.password));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -352,11 +352,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/employees/:id/password/reset", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["employees:password:reset"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(resetEmployeePasswordRequestSchema, request.body ?? {});
-      return resetEmployeePasswordResponseSchema.parse(store.resetPassword(employeeId, body.password));
+      return resetEmployeePasswordResponseSchema.parse(await store.resetPassword(employeeId, body.password));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -364,12 +364,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["reviewPeriods:create"]);
       const body = parseWithSchema(createReviewPeriodRequestSchema, request.body);
       reply.code(201);
       return reviewPeriodResponseSchema.parse({
-        item: store.createReviewPeriod(body),
+        item: await store.createReviewPeriod(body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -378,12 +378,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.patch("/review-periods/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["reviewPeriods:update"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateReviewPeriodRequestSchema, request.body);
       return reviewPeriodResponseSchema.parse({
-        item: store.updateReviewPeriod(reviewPeriodId, body),
+        item: await store.updateReviewPeriod(reviewPeriodId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -392,11 +392,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/archive", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["reviewPeriods:archive"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
-        item: store.archiveReviewPeriod(reviewPeriodId, session.user.id),
+        item: await store.archiveReviewPeriod(reviewPeriodId, session.user.id),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -405,11 +405,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/unarchive", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["reviewPeriods:archive"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
-        item: store.unarchiveReviewPeriod(reviewPeriodId),
+        item: await store.unarchiveReviewPeriod(reviewPeriodId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -418,13 +418,13 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/question-sets", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:create"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(createQuestionSetRequestSchema, request.body);
       reply.code(201);
       return questionSetResponseSchema.parse({
-        item: store.createQuestionSet(reviewPeriodId, {
+        item: await store.createQuestionSet(reviewPeriodId, {
           ...body,
           headerMarkdown: body.headerMarkdown ?? "",
           footerMarkdown: body.footerMarkdown ?? "",
@@ -437,12 +437,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.patch("/question-sets/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:update"]);
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateQuestionSetRequestSchema, request.body);
       return questionSetResponseSchema.parse({
-        item: store.updateQuestionSet(questionSetId, body),
+        item: await store.updateQuestionSet(questionSetId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -451,11 +451,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/question-sets/:id/activate", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:activate"]);
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return questionSetResponseSchema.parse({
-        item: store.activateQuestionSet(questionSetId),
+        item: await store.activateQuestionSet(questionSetId),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -464,11 +464,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/review-periods/:id/question-sets/export", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:export"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return exportStubResponseSchema.parse(store.exportQuestionSets(reviewPeriodId, query.format ?? "json"));
+      return exportStubResponseSchema.parse(await store.exportQuestionSets(reviewPeriodId, query.format ?? "json"));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -476,11 +476,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/question-sets/import", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:import"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       parseWithSchema(importStubRequestSchema, request.body ?? {});
-      return importStubResponseSchema.parse(store.importQuestionSetsStub(reviewPeriodId));
+      return importStubResponseSchema.parse(await store.importQuestionSetsStub(reviewPeriodId));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -488,13 +488,13 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/assignments", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:create"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(createAssignmentRequestSchema, request.body);
       reply.code(201);
       return assignmentResponseSchema.parse({
-        item: store.createAssignment(reviewPeriodId, body),
+        item: await store.createAssignment(reviewPeriodId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -503,12 +503,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.patch("/assignments/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:update"]);
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateAssignmentRequestSchema, request.body);
       return assignmentResponseSchema.parse({
-        item: store.updateAssignment(assignmentId, body),
+        item: await store.updateAssignment(assignmentId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -517,10 +517,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.delete("/assignments/:id", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:delete"]);
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      return deleteAssignmentResponseSchema.parse(store.deleteAssignment(assignmentId));
+      return deleteAssignmentResponseSchema.parse(await store.deleteAssignment(assignmentId));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -528,11 +528,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/review-periods/:id/assignments/export", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:export"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return exportStubResponseSchema.parse(store.exportAssignments(reviewPeriodId, query.format ?? "json"));
+      return exportStubResponseSchema.parse(await store.exportAssignments(reviewPeriodId, query.format ?? "json"));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -540,11 +540,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/assignments/import", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:import"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       parseWithSchema(importStubRequestSchema, request.body ?? {});
-      return importStubResponseSchema.parse(store.importAssignmentsStub(reviewPeriodId));
+      return importStubResponseSchema.parse(await store.importAssignmentsStub(reviewPeriodId));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -552,12 +552,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/review-periods/:id/assessments", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(createAssessmentRequestSchema, request.body);
       reply.code(201);
       return assessmentItemResponseSchema.parse({
-        item: store.createAssessment(session, reviewPeriodId, body),
+        item: await store.createAssessment(session, reviewPeriodId, body),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -566,11 +566,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.patch("/assessments/:id/save", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(saveAssessmentDraftRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
-        item: store.saveAssessmentDraft(session, assessmentId, {
+        item: await store.saveAssessmentDraft(session, assessmentId, {
           responses: body.responses ?? [],
         }),
       });
@@ -581,11 +581,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/assessments/:id/submit", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(submitAssessmentRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
-        item: store.submitAssessment(session, assessmentId, {
+        item: await store.submitAssessment(session, assessmentId, {
           responses: body.responses ?? [],
         }),
       });
@@ -596,12 +596,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/assessments/:id/accept", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assessments:accept"]);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(acceptAssessmentRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
-        item: store.acceptAssessment(session, assessmentId, body.managerNotes),
+        item: await store.acceptAssessment(session, assessmentId, body.managerNotes),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -610,12 +610,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/assessments/:id/reject-to-draft", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assessments:accept"]);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(rejectAssessmentToDraftRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
-        item: store.rejectAssessmentToDraft(session, assessmentId, body.managerNotes),
+        item: await store.rejectAssessmentToDraft(session, assessmentId, body.managerNotes),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -624,12 +624,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/assessments/:id/review", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assessments:review"]);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(reviewAssessmentRequestSchema, request.body);
       return assessmentItemResponseSchema.parse({
-        item: store.reviewAssessment(session, assessmentId, {
+        item: await store.reviewAssessment(session, assessmentId, {
           managerNotes: body.managerNotes,
           reviewed: body.reviewed ?? false,
         }),
@@ -641,11 +641,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/assessments/:id/reassign", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = await requireSession(request, store);
       requirePermissions(session, ["assessments:reassign"]);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(reassignAssessmentRequestSchema, request.body);
-      return assessmentReassignmentResponseSchema.parse(store.reassignAssessment(session, assessmentId, body));
+      return assessmentReassignmentResponseSchema.parse(await store.reassignAssessment(session, assessmentId, body));
     } catch (error) {
       return sendError(reply, error);
     }

@@ -413,6 +413,12 @@ export function buildLocalUsersImportPayload(format: TransferFormat, raw: string
   return format === 'csv' ? parseLocalUsersCsv(raw) : parseLocalUsersJson(raw, format);
 }
 
+export function buildLocalUsersImportPayloadFromFile(raw: string) {
+  const trimmed = raw.trimStart();
+  const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+  return looksLikeJson ? parseLocalUsersJson(raw, 'json') : parseLocalUsersCsv(raw);
+}
+
 export function buildExportNotice(response: ExportStubResponse) {
   return `Prepared ${response.resource} ${response.format.toUpperCase()} export stub for ${response.itemCount} items.`;
 }
@@ -423,6 +429,18 @@ export function buildImportNotice(response: ImportStubResponse) {
 
 export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount'>) {
   return `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Every exported account now uses a generated one-time passcode and must change it after sign-in.`;
+}
+
+export function triggerDownload(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 export function buildLocalUsersImportNotice(response: LocalUsersImportResponse) {

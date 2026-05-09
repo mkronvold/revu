@@ -32,6 +32,7 @@ import {
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
   buildLocalUsersImportPayload,
+  buildLocalUsersImportPayloadFromFile,
   buildExportNotice,
   buildImportNotice,
   saveAssignmentToApi,
@@ -225,6 +226,29 @@ describe('review admin API orchestration', () => {
       format: 'csv',
       items: exportResponse.items,
     });
+  });
+
+  it('autodetects JSON vs CSV when parsing from a file', () => {
+    const item = {
+      username: 'elliot.employee',
+      fullName: 'Elliot Employee',
+      email: 'elliot.employee@example.com',
+      role: 'employee' as const,
+      status: 'active' as const,
+      managerUsername: 'manny.manager',
+      assessorUsername: 'pat.peer',
+      password: 'tmp-passcode-123',
+      passwordResetRequired: true,
+    };
+
+    const jsonContent = serializeLocalUsersTransfer({ format: 'json', items: [item] });
+    expect(buildLocalUsersImportPayloadFromFile(jsonContent)).toEqual({ format: 'json', items: [item] });
+
+    const jsonArrayContent = JSON.stringify([item]);
+    expect(buildLocalUsersImportPayloadFromFile(jsonArrayContent)).toEqual({ format: 'json', items: [item] });
+
+    const csvContent = serializeLocalUsersTransfer({ format: 'csv', items: [item] });
+    expect(buildLocalUsersImportPayloadFromFile(csvContent)).toEqual({ format: 'csv', items: [item] });
   });
 
   it('describes local user export/import one-time passcode behavior', () => {

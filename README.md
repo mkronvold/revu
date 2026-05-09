@@ -112,7 +112,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./down.sh
    ```
 
-    This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, and the generated runtime config is served without browser caching, so changing it in `.env` takes effect after restarting the web container and refreshing the page.
+    This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, and the generated runtime config is served without browser caching, so changing it in `.env` takes effect after restarting the web container and refreshing the page. The same runtime config also carries the published image revision, which the sidebar shows in a compact Build card.
 
 ## Container publishing
 
@@ -136,6 +136,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, then pulls images and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
 | `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, and sleeps 30 minutes between checks by default. |
+| `./reset-to-example.sh` | Applies migrations and reloads Postgres with the exact example dataset used by development and tests. |
 | `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
@@ -149,7 +150,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 
 ## Demo accounts
 
-The current API boots with seeded demo users for end-to-end workflow testing:
+The default example dataset includes seeded demo users for end-to-end workflow testing:
 
 | Role | Username | Password |
 | --- | --- | --- |
@@ -158,19 +159,26 @@ The current API boots with seeded demo users for end-to-end workflow testing:
 | Employee | `elliot.employee` | `EmployeePass123!` |
 | Peer reviewer | `pat.peer` | `PeerPass123!` |
 
-These credentials are for local development only and live in the in-memory demo store.
+These credentials are for local development only. They are stored in Postgres and restored by `./reset-to-example.sh`.
 
 If a user signs in with a generated reset password or exported one-time passcode, the API allows `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, and `POST /api/v1/auth/password/change` only until that user chooses a new password.
 
 ## Database notes
 
-- `DATABASE_URL` is used by the containerized API configuration and future persistence work.
-- The running API does not write the seeded demo workflows into Postgres yet.
+- `DATABASE_URL` is used by the API runtime, example seeding/reset helpers, and API tests.
+- The running API persists employees, auth sessions, review periods, question sets, assignments, assessments, and responses in Postgres.
 - `.env.example` defaults `DATABASE_URL` to the Compose network host (`db`). If you run API tooling directly on the host instead of in Compose, switch that hostname to `localhost`.
+- Host-side API tests need a reachable Postgres instance that matches `DATABASE_URL`. The fallback is `postgresql://revu:revu@localhost:5432/revu`.
+- To restore the exact example dataset used by development and tests, run:
+
+  ```bash
+  ./reset-to-example.sh
+  ```
+
 - If you need a clean local schema, run:
 
   ```bash
-  docker compose down -v && npm run db:migrate
+  docker compose down -v && npm run db:up && npm run db:migrate && ./reset-to-example.sh
   ```
 
 ## Import/export status
@@ -191,3 +199,4 @@ Current behavior:
 - import endpoints return `status: "not_implemented"`
 - local user exports return import-ready payloads plus generated one-time passcodes
 - local user imports upsert users, preserve the supplied `passwordResetRequired` flag, and invalidate sessions for imported accounts
+- the Employees admin screen exports local users as direct `.json` or `.csv` downloads and imports from a browser-selected file with JSON/CSV autodetection

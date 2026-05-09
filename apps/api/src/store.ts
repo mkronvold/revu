@@ -1,20 +1,13 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 
-import {
-  assessmentsListExample,
-  assignmentsListExample,
-  employeesListExample,
-  questionSetsListExample,
-  reviewPeriodsListExample,
-} from "@revu/contracts";
 import type {
-  AssessmentArchiveState,
   Assessment,
+  AssessmentArchiveState,
   AssessmentResponse,
   AssessmentReviewState,
-  AuthChangePasswordResponse,
   AssessmentsListQuery,
   Assignment,
+  AuthChangePasswordResponse,
   AuthPermission,
   AuthSession,
   CreateAssessmentRequest,
@@ -34,8 +27,8 @@ import type {
   QuestionSet,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
-  ReviewPeriod,
   ReviewAssessmentRequest,
+  ReviewPeriod,
   SaveAssessmentDraftRequest,
   SetEmployeePasswordResponse,
   SubmitAssessmentRequest,
@@ -44,17 +37,145 @@ import type {
   UpdateQuestionSetRequest,
   UpdateReviewPeriodRequest,
 } from "@revu/contracts";
+import type { Pool, PoolClient } from "pg";
+
+import { getPool, withTransaction } from "./db.js";
+
+type DbClient = Pool | PoolClient;
 
 type StoredAuthMetadata = EmployeeAuthMetadata & {
   passwordHash: string | null;
 };
 
 type SessionRecord = {
+  sessionId: string;
   token: string;
   issuedAt: string;
   expiresAt: string;
   permissions: AuthPermission[];
   employeeId: string;
+};
+
+type EmployeeRow = {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  role: Employee["role"];
+  status: Employee["status"];
+  manager_employee_id: string | null;
+  assessor_employee_id: string | null;
+  password_hash: string | null;
+  password_reset_required: boolean;
+  password_changed_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type ReviewPeriodRow = {
+  id: string;
+  key: string;
+  label: string;
+  start_date: Date | string;
+  due_date: Date | string;
+  status: ReviewPeriod["status"];
+  archived_at: Date | string | null;
+  archived_by_employee_id: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type QuestionSetRow = {
+  id: string;
+  review_period_id: string;
+  target: QuestionSet["target"];
+  status: QuestionSet["status"];
+  is_read_only: boolean;
+  title: string;
+  header_markdown: string;
+  footer_markdown: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type QuestionRow = {
+  id: string;
+  question_set_id: string;
+  display_order: number;
+  type: CreateQuestionInput["type"];
+  category: string | null;
+  prompt: string;
+};
+
+type AssignmentRow = {
+  id: string;
+  review_period_id: string;
+  employee_id: string;
+  manager_employee_id: string | null;
+  assessor_employee_id: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type AssessmentRow = {
+  id: string;
+  review_period_id: string;
+  question_set_id: string;
+  assignment_id: string | null;
+  target: Assessment["target"];
+  employee_id: string;
+  assessor_employee_id: string;
+  review_state: AssessmentReviewState;
+  archive_state: AssessmentArchiveState;
+  submitted_at: Date | string | null;
+  accepted_at: Date | string | null;
+  accepted_by_employee_id: string | null;
+  reviewed_at: Date | string | null;
+  reviewed_by_employee_id: string | null;
+  manager_notes: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  assignment_manager_employee_id: string | null;
+  employee_manager_employee_id: string | null;
+};
+
+type AssessmentResponseRow = {
+  assessment_id: string;
+  question_id: string;
+  display_order: number;
+  response_text: string;
+};
+
+type AssessmentRecord = {
+  assessment: Assessment;
+  assignmentManagerId: string | null;
+  employeeManagerId: string | null;
+};
+
+type AuthSessionRow = {
+  id: string;
+  employee_id: string;
+  created_at: Date | string;
+  expires_at: Date | string;
+};
+
+type RelationshipRow = {
+  id: string;
+  role: Employee["role"];
+  status: Employee["status"];
+};
+
+type ExistsRow = {
+  exists: boolean;
+};
+
+type UniqueEmployeeFieldsRow = {
+  username_exists: boolean;
+  email_exists: boolean;
+};
+
+type UniqueReviewPeriodKeyRow = {
+  key_exists: boolean;
 };
 
 export class ApiError extends Error {
@@ -142,119 +263,133 @@ function generateTemporaryPassword() {
   return `tmp-${randomBytes(9).toString("base64url")}`;
 }
 
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function toIsoTimestamp(value: Date | string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
+function toIsoDate(value: Date | string) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return value;
+}
+
+function isPgError(error: unknown): error is { code?: string; constraint?: string; message: string } {
+  return typeof error === "object" && error !== null && "message" in error;
+}
+
+function mapDatabaseError(error: unknown) {
+  if (!isPgError(error)) {
+    return null;
+  }
+
+  if (error.code === "23505") {
+    switch (error.constraint) {
+      case "employees_username_unique_idx":
+        return new ApiError(409, "Username already exists");
+      case "employees_email_key":
+        return new ApiError(409, "Email already exists");
+      case "review_periods_key_key":
+        return new ApiError(409, "Review period key already exists");
+      case "uq_assignment_employee_per_period":
+        return new ApiError(409, "Assignment already exists for this employee in the review period");
+      case "uq_assessment_actor_per_period":
+        return new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
+      case "uq_question_order_per_set":
+        return new ApiError(400, "Question order must be unique within a question set");
+      default:
+        return null;
+    }
+  }
+
+  if (error.code === "P0001") {
+    switch (error.message) {
+      case "Question sets for archived review periods are read-only":
+      case "Assignments for archived review periods are read-only":
+      case "Accepted, reviewed, or archived assessments are read-only":
+      case "Accepted, reviewed, or archived assessments have immutable authored fields":
+      case "Assessment review state cannot change after review period archive":
+        return new ApiError(409, error.message);
+      case "Assessment responses must reference questions from the selected question set":
+      case "Assessment question set must exist":
+      case "Assessment review period must match question set review period":
+      case "Assessment target must match question set target":
+        return new ApiError(400, error.message);
+      default:
+        return null;
+    }
+  }
+
+  if (error.code === "23503") {
+    switch (error.constraint) {
+      case "review_period_assignments_employee_id_fkey":
+      case "assessments_employee_id_fkey":
+        return new ApiError(400, "Employee not found");
+      case "review_period_assignments_manager_employee_id_fkey":
+        return new ApiError(400, "Manager not found");
+      case "review_period_assignments_assessor_employee_id_fkey":
+      case "assessments_assessor_employee_id_fkey":
+        return new ApiError(400, "Assessor not found");
+      default:
+        return null;
+    }
+  }
+
+  return null;
+}
+
+function rethrowDatabaseError(error: unknown): never {
+  const mapped = mapDatabaseError(error);
+  if (mapped) {
+    throw mapped;
+  }
+
+  throw error;
+}
+
 export class ApiStore {
-  private readonly employees: Employee[];
+  private readonly pool = getPool();
 
-  private readonly auth = new Map<string, StoredAuthMetadata>();
+  constructor() {}
 
-  private readonly sessions = new Map<string, SessionRecord>();
-
-  private readonly reviewPeriods: ReviewPeriod[];
-
-  private readonly questionSets: QuestionSet[];
-
-  private readonly assignments: Assignment[];
-
-  private readonly assessments: Assessment[];
-
-  constructor() {
-    this.employees = clone(employeesListExample.items);
-    this.reviewPeriods = clone(reviewPeriodsListExample.items);
-    this.questionSets = clone(questionSetsListExample.items);
-    this.assignments = clone(assignmentsListExample.items);
-    this.assessments = clone(assessmentsListExample.items);
-
-    for (const employee of this.employees) {
-      const password = seedPasswordsByUsername[employee.username];
-      this.auth.set(employee.id, {
-        passwordHash: password ? hashPassword(password) : null,
-        passwordConfigured: Boolean(password),
-        passwordResetRequired: false,
-        lastPasswordChangeAt: password ? employee.updatedAt : null,
-      });
-    }
-
-    for (const reviewPeriod of this.reviewPeriods) {
-      this.refreshDerivedState(reviewPeriod.id);
-    }
+  private toEmployee(row: EmployeeRow): Employee {
+    return {
+      id: row.id,
+      username: row.username,
+      fullName: row.full_name,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      managerId: row.manager_employee_id,
+      assessorId: row.assessor_employee_id,
+      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+    };
   }
 
-  private employeeOrThrow(employeeId: string) {
-    const employee = this.employees.find((item) => item.id === employeeId);
-    if (!employee) {
-      throw new ApiError(404, "Employee not found");
-    }
-
-    return employee;
+  private toStoredAuthMetadata(row: EmployeeRow): StoredAuthMetadata {
+    return {
+      passwordHash: row.password_hash,
+      passwordConfigured: row.password_hash !== null,
+      passwordResetRequired: row.password_reset_required,
+      lastPasswordChangeAt: toIsoTimestamp(row.password_changed_at),
+    };
   }
 
-  private authOrThrow(employeeId: string) {
-    const metadata = this.auth.get(employeeId);
-    if (!metadata) {
-      throw new ApiError(500, "Employee auth metadata missing");
-    }
-
-    return metadata;
-  }
-
-  private reviewPeriodOrThrow(reviewPeriodId: string) {
-    const reviewPeriod = this.reviewPeriods.find((item) => item.id === reviewPeriodId);
-    if (!reviewPeriod) {
-      throw new ApiError(404, "Review period not found");
-    }
-
-    return reviewPeriod;
-  }
-
-  private questionSetOrThrow(questionSetId: string) {
-    const questionSet = this.questionSets.find((item) => item.id === questionSetId);
-    if (!questionSet) {
-      throw new ApiError(404, "Question set not found");
-    }
-
-    return questionSet;
-  }
-
-  private assignmentOrThrow(assignmentId: string) {
-    const assignment = this.assignments.find((item) => item.id === assignmentId);
-    if (!assignment) {
-      throw new ApiError(404, "Assignment not found");
-    }
-
-    return assignment;
-  }
-
-  private assessmentOrThrow(assessmentId: string) {
-    const assessment = this.assessments.find((item) => item.id === assessmentId);
-    if (!assessment) {
-      throw new ApiError(404, "Assessment not found");
-    }
-
-    return assessment;
-  }
-
-  private activeQuestionSetOrThrow(reviewPeriodId: string, target: Assessment["target"]) {
-    const questionSet = this.questionSets.find(
-      (item) => item.reviewPeriodId === reviewPeriodId && item.target === target && item.status === "active",
-    );
-    if (!questionSet) {
-      throw new ApiError(409, `No active ${target} question set is available for this review period`);
-    }
-
-    return questionSet;
-  }
-
-  private findAssessmentByKey(reviewPeriodId: string, employeeId: string, assessorId: string) {
-    return this.assessments.find(
-      (item) => item.reviewPeriodId === reviewPeriodId && item.employeeId === employeeId && item.assessorId === assessorId,
-    );
-  }
-
-  private toEmployeeAdmin(employee: Employee): EmployeeAdmin {
-    const auth = this.authOrThrow(employee.id);
+  private toEmployeeAdmin(row: EmployeeRow): EmployeeAdmin {
+    const auth = this.toStoredAuthMetadata(row);
 
     return {
-      ...clone(employee),
+      ...this.toEmployee(row),
       auth: {
         passwordConfigured: auth.passwordConfigured,
         passwordResetRequired: auth.passwordResetRequired,
@@ -263,41 +398,555 @@ export class ApiStore {
     };
   }
 
-  private toSession(record: SessionRecord): AuthSession {
-    const auth = this.authOrThrow(record.employeeId);
+  private toSession(record: SessionRecord, employeeRow: EmployeeRow): AuthSession {
     return {
-      ...record,
-      passwordResetRequired: auth.passwordResetRequired,
-      user: clone(this.employeeOrThrow(record.employeeId)),
+      token: record.token,
+      issuedAt: record.issuedAt,
+      expiresAt: record.expiresAt,
+      passwordResetRequired: employeeRow.password_reset_required,
+      permissions: clone(record.permissions),
+      user: clone(this.toEmployee(employeeRow)),
     };
   }
 
-  private assertUniqueEmployeeFields(candidate: {
-    id?: string;
-    username: string;
-    email: string;
-  }, employees = this.employees) {
-    const duplicateUsername = employees.find(
-      (employee) => employee.username === candidate.username && employee.id !== candidate.id,
+  private async loadEmployeeRows(
+    client: DbClient,
+    filters: { employeeId?: string; usernames?: readonly string[]; employeeIds?: readonly string[] } = {},
+  ) {
+    const clauses: string[] = [];
+    const values: Array<string | readonly string[]> = [];
+
+    if (filters.employeeId) {
+      values.push(filters.employeeId);
+      clauses.push(`id = $${values.length}`);
+    }
+
+    if (filters.usernames && filters.usernames.length > 0) {
+      values.push(filters.usernames);
+      clauses.push(`username = ANY($${values.length}::text[])`);
+    }
+
+    if (filters.employeeIds && filters.employeeIds.length > 0) {
+      values.push(filters.employeeIds);
+      clauses.push(`id = ANY($${values.length}::uuid[])`);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const result = await client.query<EmployeeRow>(
+      `
+        SELECT
+          id,
+          username,
+          full_name,
+          email,
+          role,
+          status,
+          manager_employee_id,
+          assessor_employee_id,
+          password_hash,
+          password_reset_required,
+          password_changed_at,
+          created_at,
+          updated_at
+        FROM employees
+        ${whereClause}
+        ORDER BY created_at, id
+      `,
+      values,
     );
-    if (duplicateUsername) {
+
+    return result.rows;
+  }
+
+  private async employeeOrThrow(client: DbClient, employeeId: string) {
+    const [employee] = await this.loadEmployeeRows(client, { employeeId });
+    if (!employee) {
+      throw new ApiError(404, "Employee not found");
+    }
+
+    return employee;
+  }
+
+  private async reviewPeriodOrThrow(client: DbClient, reviewPeriodId: string) {
+    const result = await client.query<ReviewPeriodRow>(
+      `
+        SELECT
+          id,
+          key,
+          label,
+          start_date,
+          due_date,
+          status,
+          archived_at,
+          archived_by_employee_id,
+          created_at,
+          updated_at
+        FROM review_periods
+        WHERE id = $1
+      `,
+      [reviewPeriodId],
+    );
+
+    const reviewPeriod = result.rows[0];
+    if (!reviewPeriod) {
+      throw new ApiError(404, "Review period not found");
+    }
+
+    return reviewPeriod;
+  }
+
+  private toReviewPeriod(row: ReviewPeriodRow): ReviewPeriod {
+    return {
+      id: row.id,
+      key: row.key,
+      label: row.label,
+      startDate: toIsoDate(row.start_date),
+      dueDate: toIsoDate(row.due_date),
+      status: row.status,
+      archivedAt: toIsoTimestamp(row.archived_at),
+      archivedByEmployeeId: row.archived_by_employee_id,
+      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+    };
+  }
+
+  private async loadQuestionSets(
+    client: DbClient,
+    filters: { reviewPeriodId?: string; questionSetId?: string; reviewPeriodStatus?: ReviewPeriod["status"]; status?: QuestionSet["status"]; target?: QuestionSet["target"] } = {},
+  ) {
+    const clauses: string[] = [];
+    const values: Array<string> = [];
+
+    if (filters.reviewPeriodId) {
+      values.push(filters.reviewPeriodId);
+      clauses.push(`qs.review_period_id = $${values.length}`);
+    }
+
+    if (filters.questionSetId) {
+      values.push(filters.questionSetId);
+      clauses.push(`qs.id = $${values.length}`);
+    }
+
+    if (filters.reviewPeriodStatus) {
+      values.push(filters.reviewPeriodStatus);
+      clauses.push(`rp.status = $${values.length}`);
+    }
+
+    if (filters.status) {
+      values.push(filters.status);
+      clauses.push(`qs.status = $${values.length}`);
+    }
+
+    if (filters.target) {
+      values.push(filters.target);
+      clauses.push(`qs.target = $${values.length}`);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const questionSetsResult = await client.query<QuestionSetRow>(
+      `
+        SELECT
+          qs.id,
+          qs.review_period_id,
+          qs.target,
+          qs.status,
+          (rp.status = 'archived') AS is_read_only,
+          qs.title,
+          qs.header_markdown,
+          qs.footer_markdown,
+          qs.created_at,
+          qs.updated_at
+        FROM question_sets qs
+        JOIN review_periods rp ON rp.id = qs.review_period_id
+        ${whereClause}
+        ORDER BY rp.start_date DESC, CASE qs.target WHEN 'self' THEN 0 ELSE 1 END, qs.created_at, qs.id
+      `,
+      values,
+    );
+
+    const questionSetIds = questionSetsResult.rows.map((row) => row.id);
+    const questionsResult = questionSetIds.length > 0
+      ? await client.query<QuestionRow>(
+          `
+            SELECT
+              id,
+              question_set_id,
+              display_order,
+              type,
+              category,
+              prompt
+            FROM question_set_questions
+            WHERE question_set_id = ANY($1::uuid[])
+            ORDER BY question_set_id, display_order
+          `,
+          [questionSetIds],
+        )
+      : { rows: [] as QuestionRow[] };
+
+    const questionsBySetId = new Map<string, QuestionSet["questions"]>();
+    for (const question of questionsResult.rows) {
+      const items = questionsBySetId.get(question.question_set_id) ?? [];
+      items.push({
+        id: question.id,
+        order: question.display_order,
+        type: question.type,
+        category: question.category,
+        prompt: question.prompt,
+      });
+      questionsBySetId.set(question.question_set_id, items);
+    }
+
+    return questionSetsResult.rows.map((row) => ({
+      id: row.id,
+      reviewPeriodId: row.review_period_id,
+      target: row.target,
+      status: row.status,
+      isReadOnly: row.is_read_only,
+      title: row.title,
+      headerMarkdown: row.header_markdown,
+      footerMarkdown: row.footer_markdown,
+      questions: questionsBySetId.get(row.id) ?? [],
+      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+    } satisfies QuestionSet));
+  }
+
+  private async questionSetOrThrow(client: DbClient, questionSetId: string) {
+    const [questionSet] = await this.loadQuestionSets(client, { questionSetId });
+    if (!questionSet) {
+      throw new ApiError(404, "Question set not found");
+    }
+
+    return questionSet;
+  }
+
+  private async loadAssignments(
+    client: DbClient,
+    filters: { reviewPeriodId?: string; assignmentId?: string } = {},
+  ) {
+    const clauses: string[] = [];
+    const values: string[] = [];
+
+    if (filters.reviewPeriodId) {
+      values.push(filters.reviewPeriodId);
+      clauses.push(`a.review_period_id = $${values.length}`);
+    }
+
+    if (filters.assignmentId) {
+      values.push(filters.assignmentId);
+      clauses.push(`a.id = $${values.length}`);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const result = await client.query<AssignmentRow>(
+      `
+        SELECT
+          a.id,
+          a.review_period_id,
+          a.employee_id,
+          a.manager_employee_id,
+          a.assessor_employee_id,
+          a.created_at,
+          a.updated_at
+        FROM review_period_assignments a
+        JOIN review_periods rp ON rp.id = a.review_period_id
+        ${whereClause}
+        ORDER BY rp.start_date DESC, a.created_at, a.id
+      `,
+      values,
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      reviewPeriodId: row.review_period_id,
+      employeeId: row.employee_id,
+      managerId: row.manager_employee_id,
+      assessorId: row.assessor_employee_id,
+      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+    } satisfies Assignment));
+  }
+
+  private async assignmentOrThrow(client: DbClient, assignmentId: string) {
+    const [assignment] = await this.loadAssignments(client, { assignmentId });
+    if (!assignment) {
+      throw new ApiError(404, "Assignment not found");
+    }
+
+    return assignment;
+  }
+
+  private async loadAssessmentRecords(
+    client: DbClient,
+    filters: {
+      assessmentId?: string;
+      reviewPeriodId?: string;
+      employeeId?: string;
+      assessorId?: string;
+      assignmentId?: string;
+      target?: Assessment["target"];
+      reviewState?: AssessmentReviewState;
+      archiveState?: AssessmentArchiveState;
+    } = {},
+  ) {
+    const clauses: string[] = [];
+    const values: string[] = [];
+
+    if (filters.assessmentId) {
+      values.push(filters.assessmentId);
+      clauses.push(`a.id = $${values.length}`);
+    }
+
+    if (filters.reviewPeriodId) {
+      values.push(filters.reviewPeriodId);
+      clauses.push(`a.review_period_id = $${values.length}`);
+    }
+
+    if (filters.employeeId) {
+      values.push(filters.employeeId);
+      clauses.push(`a.employee_id = $${values.length}`);
+    }
+
+    if (filters.assessorId) {
+      values.push(filters.assessorId);
+      clauses.push(`a.assessor_employee_id = $${values.length}`);
+    }
+
+    if (filters.assignmentId) {
+      values.push(filters.assignmentId);
+      clauses.push(`a.assignment_id = $${values.length}`);
+    }
+
+    if (filters.target) {
+      values.push(filters.target);
+      clauses.push(`a.target = $${values.length}`);
+    }
+
+    if (filters.reviewState) {
+      values.push(filters.reviewState);
+      clauses.push(`a.review_state = $${values.length}`);
+    }
+
+    if (filters.archiveState) {
+      values.push(filters.archiveState);
+      clauses.push(`a.archive_state = $${values.length}`);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const assessmentsResult = await client.query<AssessmentRow>(
+      `
+        SELECT
+          a.id,
+          a.review_period_id,
+          a.question_set_id,
+          a.assignment_id,
+          a.target,
+          a.employee_id,
+          a.assessor_employee_id,
+          a.review_state,
+          a.archive_state,
+          a.submitted_at,
+          a.accepted_at,
+          a.accepted_by_employee_id,
+          a.reviewed_at,
+          a.reviewed_by_employee_id,
+          a.manager_notes,
+          a.created_at,
+          a.updated_at,
+          assignment.manager_employee_id AS assignment_manager_employee_id,
+          employee.manager_employee_id AS employee_manager_employee_id
+        FROM assessments a
+        LEFT JOIN review_period_assignments assignment ON assignment.id = a.assignment_id
+        JOIN employees employee ON employee.id = a.employee_id
+        ${whereClause}
+        ORDER BY a.created_at, a.id
+      `,
+      values,
+    );
+
+    const assessmentIds = assessmentsResult.rows.map((row) => row.id);
+    const responsesResult = assessmentIds.length > 0
+      ? await client.query<AssessmentResponseRow>(
+          `
+            SELECT
+              response.assessment_id,
+              response.question_id,
+              question.display_order,
+              response.response_text
+            FROM assessment_responses response
+            JOIN question_set_questions question ON question.id = response.question_id
+            WHERE response.assessment_id = ANY($1::uuid[])
+            ORDER BY response.assessment_id, question.display_order
+          `,
+          [assessmentIds],
+        )
+      : { rows: [] as AssessmentResponseRow[] };
+
+    const responsesByAssessmentId = new Map<string, AssessmentResponse[]>();
+    for (const response of responsesResult.rows) {
+      const items = responsesByAssessmentId.get(response.assessment_id) ?? [];
+      items.push({
+        questionId: response.question_id,
+        order: response.display_order,
+        response: response.response_text,
+      });
+      responsesByAssessmentId.set(response.assessment_id, items);
+    }
+
+    return assessmentsResult.rows.map((row) => ({
+      assessment: {
+        id: row.id,
+        reviewPeriodId: row.review_period_id,
+        questionSetId: row.question_set_id,
+        assignmentId: row.assignment_id,
+        target: row.target,
+        employeeId: row.employee_id,
+        assessorId: row.assessor_employee_id,
+        reviewState: row.review_state,
+        archiveState: row.archive_state,
+        isReadOnly: row.archive_state === "archived" || ["accepted", "reviewed"].includes(row.review_state),
+        responses: responsesByAssessmentId.get(row.id) ?? [],
+        submittedAt: toIsoTimestamp(row.submitted_at),
+        acceptedAt: toIsoTimestamp(row.accepted_at),
+        acceptedByEmployeeId: row.accepted_by_employee_id,
+        managerNotes: row.manager_notes,
+        reviewedAt: toIsoTimestamp(row.reviewed_at),
+        reviewedByEmployeeId: row.reviewed_by_employee_id,
+        createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+        updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+      },
+      assignmentManagerId: row.assignment_manager_employee_id,
+      employeeManagerId: row.employee_manager_employee_id,
+    } satisfies AssessmentRecord));
+  }
+
+  private async assessmentOrThrow(client: DbClient, assessmentId: string) {
+    const [assessment] = await this.loadAssessmentRecords(client, { assessmentId });
+    if (!assessment) {
+      throw new ApiError(404, "Assessment not found");
+    }
+
+    return assessment;
+  }
+
+  private async activeQuestionSetOrThrow(reviewPeriodId: string, target: Assessment["target"], client: DbClient) {
+    const [questionSet] = await this.loadQuestionSets(client, {
+      reviewPeriodId,
+      status: "active",
+      target,
+    });
+
+    if (!questionSet) {
+      throw new ApiError(409, `No active ${target} question set is available for this review period`);
+    }
+
+    return questionSet;
+  }
+
+  private async findAssessmentByKey(client: DbClient, reviewPeriodId: string, employeeId: string, assessorId: string) {
+    const result = await client.query<{ id: string }>(
+      `
+        SELECT id
+        FROM assessments
+        WHERE review_period_id = $1
+          AND employee_id = $2
+          AND assessor_employee_id = $3
+      `,
+      [reviewPeriodId, employeeId, assessorId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  private async loadSessionRecord(client: DbClient, token: string) {
+    const result = await client.query<AuthSessionRow>(
+      `
+        SELECT id, employee_id, created_at, expires_at
+        FROM auth_sessions
+        WHERE token_hash = $1
+          AND revoked_at IS NULL
+      `,
+      [hashToken(token)],
+    );
+
+    const sessionRow = result.rows[0];
+    if (!sessionRow) {
+      return null;
+    }
+
+    if (Date.parse(toIsoTimestamp(sessionRow.expires_at) ?? "") <= Date.now()) {
+      await client.query("DELETE FROM auth_sessions WHERE id = $1", [sessionRow.id]);
+      return null;
+    }
+
+    const employeeRow = await this.employeeOrThrow(client, sessionRow.employee_id);
+    return {
+      session: {
+        sessionId: sessionRow.id,
+        token,
+        employeeId: employeeRow.id,
+        issuedAt: toIsoTimestamp(sessionRow.created_at) ?? nowIso(),
+        expiresAt: toIsoTimestamp(sessionRow.expires_at) ?? nowIso(),
+        permissions: clone(permissionsByRole[employeeRow.role]),
+      } satisfies SessionRecord,
+      employee: employeeRow,
+    };
+  }
+
+  private async sessionOrThrow(client: DbClient, token: string) {
+    const session = await this.loadSessionRecord(client, token);
+    if (!session) {
+      throw new ApiError(401, "Authentication required");
+    }
+
+    return session;
+  }
+
+  private async assertUniqueEmployeeFields(client: DbClient, candidate: { id?: string; username: string; email: string }) {
+    const result = await client.query<UniqueEmployeeFieldsRow>(
+      `
+        SELECT
+          EXISTS(
+            SELECT 1
+            FROM employees
+            WHERE username = $1
+              AND ($2::uuid IS NULL OR id <> $2)
+          ) AS username_exists,
+          EXISTS(
+            SELECT 1
+            FROM employees
+            WHERE email = $3
+              AND ($2::uuid IS NULL OR id <> $2)
+          ) AS email_exists
+      `,
+      [candidate.username, candidate.id ?? null, candidate.email],
+    );
+
+    const row = result.rows[0];
+    if (row?.username_exists) {
       throw new ApiError(409, "Username already exists");
     }
 
-    const duplicateEmail = employees.find(
-      (employee) => employee.email === candidate.email && employee.id !== candidate.id,
-    );
-    if (duplicateEmail) {
+    if (row?.email_exists) {
       throw new ApiError(409, "Email already exists");
     }
   }
 
-  private assertRelationships(candidate: {
-    id: string;
-    managerId: string | null;
-    assessorId: string | null;
-  }, employees = this.employees) {
-    const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+  private async assertRelationships(client: DbClient, candidate: { id: string; managerId: string | null; assessorId: string | null }) {
+    const relationshipIds = [candidate.managerId, candidate.assessorId].filter((value): value is string => value !== null);
+    const result = relationshipIds.length > 0
+      ? await client.query<RelationshipRow>(
+          `
+            SELECT id, role, status
+            FROM employees
+            WHERE id = ANY($1::uuid[])
+          `,
+          [relationshipIds],
+        )
+      : { rows: [] as RelationshipRow[] };
+
+    const employeeById = new Map(result.rows.map((row) => [row.id, row]));
+
     if (candidate.managerId) {
       const manager = employeeById.get(candidate.managerId);
       if (!manager) {
@@ -306,8 +955,7 @@ export class ApiStore {
       if (manager.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own manager");
       }
-
-      if (!["manager", "admin"].includes(manager.role)) {
+      if (manager.role !== "manager" && manager.role !== "admin") {
         throw new ApiError(400, "Manager must reference a manager or admin");
       }
     }
@@ -320,21 +968,26 @@ export class ApiStore {
       if (assessor.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own assessor");
       }
-
       if (assessor.status !== "active") {
         throw new ApiError(400, "Assessor must be active");
       }
     }
   }
 
-  private assertReviewPeriodFields(candidate: {
-    id?: string;
-    key: string;
-    startDate: string;
-    dueDate: string;
-  }) {
-    const duplicate = this.reviewPeriods.find((period) => period.key === candidate.key && period.id !== candidate.id);
-    if (duplicate) {
+  private async assertReviewPeriodFields(client: DbClient, candidate: { id?: string; key: string; startDate: string; dueDate: string }) {
+    const result = await client.query<UniqueReviewPeriodKeyRow>(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM review_periods
+          WHERE key = $1
+            AND ($2::uuid IS NULL OR id <> $2)
+        ) AS key_exists
+      `,
+      [candidate.key, candidate.id ?? null],
+    );
+
+    if (result.rows[0]?.key_exists) {
       throw new ApiError(409, "Review period key already exists");
     }
 
@@ -354,8 +1007,8 @@ export class ApiStore {
     }
   }
 
-  private assertReviewPeriodMutable(reviewPeriodId: string) {
-    const reviewPeriod = this.reviewPeriodOrThrow(reviewPeriodId);
+  private async assertReviewPeriodMutable(client: DbClient, reviewPeriodId: string) {
+    const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
     if (reviewPeriod.status === "archived") {
       throw new ApiError(409, "Archived review periods are read-only");
     }
@@ -363,45 +1016,43 @@ export class ApiStore {
     return reviewPeriod;
   }
 
-  private isManagerForAssessment(actorEmployeeId: string, assessment: Assessment) {
-    const assignment = assessment.assignmentId ? this.assignments.find((item) => item.id === assessment.assignmentId) : null;
-    const employee = this.employeeOrThrow(assessment.employeeId);
-    return assignment?.managerId === actorEmployeeId || employee.managerId === actorEmployeeId;
+  private isManagerForAssessment(actorEmployeeId: string, assessment: AssessmentRecord) {
+    return assessment.assignmentManagerId === actorEmployeeId || assessment.employeeManagerId === actorEmployeeId;
   }
 
-  private canReadAssessment(session: AuthSession, assessment: Assessment) {
+  private canReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (session.user.role === "admin") {
       return true;
     }
 
     if (session.user.role === "manager") {
-      return this.isManagerForAssessment(session.user.id, assessment) && !["new", "draft"].includes(assessment.reviewState);
+      return this.isManagerForAssessment(session.user.id, assessment) && !["new", "draft"].includes(assessment.assessment.reviewState);
     }
 
-    return assessment.assessorId === session.user.id;
+    return assessment.assessment.assessorId === session.user.id;
   }
 
-  private assertCanReadAssessment(session: AuthSession, assessment: Assessment) {
+  private assertCanReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (!this.canReadAssessment(session, assessment)) {
       throw new ApiError(403, "You do not have permission to view this assessment");
     }
   }
 
-  private assertCanAuthorAssessment(session: AuthSession, assessment: Assessment) {
-    if (assessment.assessorId !== session.user.id) {
+  private assertCanAuthorAssessment(session: AuthSession, assessment: AssessmentRecord) {
+    if (assessment.assessment.assessorId !== session.user.id) {
       throw new ApiError(403, "Only the assigned assessor can edit this assessment");
     }
 
-    if (assessment.archiveState === "archived") {
+    if (assessment.assessment.archiveState === "archived") {
       throw new ApiError(409, "Archived assessments are read-only");
     }
 
-    if (!["new", "draft"].includes(assessment.reviewState)) {
+    if (!["new", "draft"].includes(assessment.assessment.reviewState)) {
       throw new ApiError(409, "Submitted or accepted assessments cannot be edited by the assessor");
     }
   }
 
-  private assertCanManageAssessment(session: AuthSession, assessment: Assessment) {
+  private assertCanManageAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (session.user.role === "admin") {
       return;
     }
@@ -445,281 +1096,123 @@ export class ApiStore {
     }
   }
 
-  private applyAssessmentResponses(assessment: Assessment, responses: AssessmentResponse[], nextState: AssessmentReviewState) {
-    const questionSet = this.questionSetOrThrow(assessment.questionSetId);
+  private async replaceAssessmentResponses(client: DbClient, assessmentId: string, responses: AssessmentResponse[]) {
+    if (responses.length === 0) {
+      await client.query("DELETE FROM assessment_responses WHERE assessment_id = $1", [assessmentId]);
+      return;
+    }
+
+    for (const response of responses) {
+      await client.query(
+        `
+          INSERT INTO assessment_responses (assessment_id, question_id, response_text)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (assessment_id, question_id)
+          DO UPDATE SET response_text = EXCLUDED.response_text
+        `,
+        [assessmentId, response.questionId, response.response],
+      );
+    }
+
+    await client.query(
+      `
+        DELETE FROM assessment_responses
+        WHERE assessment_id = $1
+          AND NOT (question_id = ANY($2::uuid[]))
+      `,
+      [assessmentId, responses.map((response) => response.questionId)],
+    );
+  }
+
+  private async applyAssessmentResponses(
+    client: DbClient,
+    assessment: AssessmentRecord,
+    responses: AssessmentResponse[],
+    nextState: AssessmentReviewState,
+  ) {
+    const questionSet = await this.questionSetOrThrow(client, assessment.assessment.questionSetId);
     this.assertAssessmentResponses(questionSet, responses, nextState === "submitted");
 
-    assessment.responses = clone(responses);
-    assessment.reviewState = nextState;
-    assessment.isReadOnly = false;
-    assessment.updatedAt = nowIso();
-
-    if (nextState === "submitted") {
-      assessment.submittedAt = assessment.updatedAt;
-    } else if (nextState === "draft") {
-      assessment.submittedAt = null;
-      assessment.acceptedAt = null;
-      assessment.acceptedByEmployeeId = null;
-      assessment.reviewedAt = null;
-      assessment.reviewedByEmployeeId = null;
-    }
-  }
-
-  private refreshDerivedState(reviewPeriodId: string) {
-    const reviewPeriod = this.reviewPeriodOrThrow(reviewPeriodId);
-    const archived = reviewPeriod.status === "archived";
-
-    for (const questionSet of this.questionSets) {
-      if (questionSet.reviewPeriodId === reviewPeriodId) {
-        questionSet.isReadOnly = archived;
-      }
-    }
-
-    for (const assessment of this.assessments) {
-      if (assessment.reviewPeriodId === reviewPeriodId) {
-        assessment.archiveState = archived ? "archived" : "active";
-        assessment.isReadOnly = archived || ["accepted", "reviewed"].includes(assessment.reviewState);
-      }
-    }
-  }
-
-  private setEmployeeRelationships(employeeId: string, relationships: { managerId: string | null; assessorId: string | null }) {
-    const employee = this.employeeOrThrow(employeeId);
-    this.assertRelationships({
-      id: employee.id,
-      managerId: relationships.managerId,
-      assessorId: relationships.assessorId,
-    });
-
-    employee.managerId = relationships.managerId;
-    employee.assessorId = relationships.assessorId;
-    employee.updatedAt = nowIso();
-  }
-
-  private activateQuestionSetRecord(questionSetId: string) {
-    const questionSet = this.questionSetOrThrow(questionSetId);
-    this.assertReviewPeriodMutable(questionSet.reviewPeriodId);
+    await this.replaceAssessmentResponses(client, assessment.assessment.id, responses);
 
     const timestamp = nowIso();
-    for (const sibling of this.questionSets) {
-      if (
-        sibling.reviewPeriodId === questionSet.reviewPeriodId &&
-        sibling.target === questionSet.target &&
-        sibling.id !== questionSet.id &&
-        sibling.status === "active"
-      ) {
-        sibling.status = "draft";
-        sibling.updatedAt = timestamp;
-      }
+    if (nextState === "submitted") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'submitted',
+              submitted_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp],
+      );
+      return;
     }
 
-    questionSet.status = "active";
-    questionSet.updatedAt = timestamp;
-    return questionSet;
-  }
+    if (nextState === "draft") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'draft',
+              submitted_at = NULL,
+              accepted_at = NULL,
+              accepted_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL
+          WHERE id = $1
+        `,
+        [assessment.assessment.id],
+      );
+      return;
+    }
 
-  private buildQuestionInputs(questions: CreateQuestionInput[]) {
-    this.assertQuestionInputs(questions);
-
-    return questions.map((question) => ({
-      id: randomUUID(),
-      ...question,
-    }));
-  }
-
-  private ensureAssignmentCandidate(reviewPeriodId: string, candidate: {
-    id?: string;
-    employeeId: string;
-    managerId: string | null;
-    assessorId: string;
-  }) {
-    this.assertReviewPeriodMutable(reviewPeriodId);
-    this.employeeOrThrow(candidate.employeeId);
-    this.assertRelationships({
-      id: candidate.employeeId,
-      managerId: candidate.managerId,
-      assessorId: candidate.assessorId,
-    });
-
-    const duplicate = this.assignments.find(
-      (assignment) =>
-        assignment.reviewPeriodId === reviewPeriodId &&
-        assignment.employeeId === candidate.employeeId &&
-        assignment.id !== candidate.id,
+    await client.query(
+      `
+        UPDATE assessments
+        SET review_state = 'new'
+        WHERE id = $1
+      `,
+      [assessment.assessment.id],
     );
-    if (duplicate) {
-      throw new ApiError(409, "Assignment already exists for this employee in the review period");
+  }
+
+  private async invalidateEmployeeSessions(client: DbClient, employeeId: string, keepSessionId?: string) {
+    if (keepSessionId) {
+      await client.query(
+        `
+          DELETE FROM auth_sessions
+          WHERE employee_id = $1
+            AND id <> $2
+        `,
+        [employeeId, keepSessionId],
+      );
+      return;
     }
+
+    await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
   }
 
-  listEmployees() {
-    return clone(this.employees);
+  private usernameForEmployee(employeeId: string | null, employeesById: Map<string, Employee>) {
+    return employeeId ? employeesById.get(employeeId)?.username ?? null : null;
   }
 
-  private invalidateEmployeeSessions(employeeId: string, keepToken?: string) {
-    this.sessions.forEach((session, token) => {
-      if (session.employeeId === employeeId && token !== keepToken) {
-        this.sessions.delete(token);
-      }
-    });
-  }
-
-  private usernameForEmployee(employeeId: string | null) {
-    return employeeId ? this.employeeOrThrow(employeeId).username : null;
-  }
-
-  private toLocalUserTransferItem(employee: Employee, password: string): LocalUserTransferItem {
-    const auth = this.authOrThrow(employee.id);
+  private toLocalUserTransferItem(
+    employee: Employee,
+    auth: StoredAuthMetadata,
+    password: string,
+    employeesById: Map<string, Employee>,
+  ): LocalUserTransferItem {
     return {
       username: employee.username,
       fullName: employee.fullName,
       email: employee.email,
       role: employee.role,
       status: employee.status,
-      managerUsername: this.usernameForEmployee(employee.managerId),
-      assessorUsername: this.usernameForEmployee(employee.assessorId),
+      managerUsername: this.usernameForEmployee(employee.managerId, employeesById),
+      assessorUsername: this.usernameForEmployee(employee.assessorId, employeesById),
       password,
       passwordResetRequired: auth.passwordResetRequired,
     };
-  }
-
-  getEmployee(employeeId: string) {
-    return this.toEmployeeAdmin(this.employeeOrThrow(employeeId));
-  }
-
-  authenticate(username: string, password: string) {
-    const employee = this.employees.find((item) => item.username === username);
-    if (!employee || employee.status !== "active") {
-      throw new ApiError(401, "Invalid username or password");
-    }
-
-    const auth = this.authOrThrow(employee.id);
-    if (!verifyPassword(password, auth.passwordHash)) {
-      throw new ApiError(401, "Invalid username or password");
-    }
-
-    const issuedAt = nowIso();
-    const expiresAt = new Date(Date.now() + eightHoursInMs).toISOString();
-    const token = randomUUID();
-    const sessionRecord: SessionRecord = {
-      token,
-      employeeId: employee.id,
-      issuedAt,
-      expiresAt,
-      permissions: clone(permissionsByRole[employee.role]),
-    };
-
-    this.sessions.set(token, sessionRecord);
-    return this.toSession(sessionRecord);
-  }
-
-  getSession(token: string) {
-    const session = this.sessions.get(token);
-    if (!session) {
-      return null;
-    }
-
-    if (Date.parse(session.expiresAt) <= Date.now()) {
-      this.sessions.delete(token);
-      return null;
-    }
-
-    return this.toSession(session);
-  }
-
-  logout(token: string) {
-    return this.sessions.delete(token);
-  }
-
-  changeOwnPassword(token: string, currentPassword: string, newPassword: string): AuthChangePasswordResponse {
-    const session = this.sessions.get(token);
-    if (!session || Date.parse(session.expiresAt) <= Date.now()) {
-      this.sessions.delete(token);
-      throw new ApiError(401, "Authentication required");
-    }
-
-    const employee = this.employeeOrThrow(session.employeeId);
-    const auth = this.authOrThrow(employee.id);
-    if (!verifyPassword(currentPassword, auth.passwordHash)) {
-      throw new ApiError(401, "Invalid username or password");
-    }
-
-    const timestamp = nowIso();
-    this.auth.set(employee.id, {
-      passwordHash: hashPassword(newPassword),
-      passwordConfigured: true,
-      passwordResetRequired: false,
-      lastPasswordChangeAt: timestamp,
-    });
-    this.invalidateEmployeeSessions(employee.id, token);
-
-    return {
-      session: this.toSession(session),
-      lastPasswordChangeAt: timestamp,
-    };
-  }
-
-  createEmployee(input: CreateEmployeeRequest) {
-    this.assertUniqueEmployeeFields(input);
-
-    const id = randomUUID();
-    this.assertRelationships({
-      id,
-      managerId: input.managerId ?? null,
-      assessorId: input.assessorId ?? null,
-    });
-
-    const timestamp = nowIso();
-    const employee: Employee = {
-      id,
-      username: input.username,
-      fullName: input.fullName,
-      email: input.email,
-      role: input.role,
-      status: input.status ?? "active",
-      managerId: input.managerId ?? null,
-      assessorId: input.assessorId ?? null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    this.employees.push(employee);
-    this.auth.set(id, {
-      passwordHash: input.password ? hashPassword(input.password) : null,
-      passwordConfigured: Boolean(input.password),
-      passwordResetRequired: false,
-      lastPasswordChangeAt: input.password ? timestamp : null,
-    });
-
-    return this.toEmployeeAdmin(employee);
-  }
-
-  updateEmployee(actor: Pick<Employee, "id" | "role">, employeeId: string, updates: UpdateEmployeeRequest) {
-    const index = this.employees.findIndex((employee) => employee.id === employeeId);
-    if (index < 0) {
-      throw new ApiError(404, "Employee not found");
-    }
-
-    const existing = this.employees[index];
-    if (!existing) {
-      throw new ApiError(404, "Employee not found");
-    }
-
-    if (actor.role === "manager") {
-      this.canManagerEdit(existing, updates);
-    }
-
-    const nextEmployee: Employee = {
-      ...existing,
-      ...updates,
-      updatedAt: nowIso(),
-    };
-
-    this.assertUniqueEmployeeFields(nextEmployee);
-    this.assertRelationships(nextEmployee);
-
-    this.employees[index] = nextEmployee;
-    return this.toEmployeeAdmin(nextEmployee);
   }
 
   private canManagerEdit(target: Employee, updates: UpdateEmployeeRequest) {
@@ -732,252 +1225,860 @@ export class ApiStore {
     }
   }
 
-  deleteEmployee(employeeId: string) {
-    const employee = this.employeeOrThrow(employeeId);
-    if (this.employees.some((item) => item.managerId === employee.id || item.assessorId === employee.id)) {
-      throw new ApiError(409, "Employee is still referenced by another employee relationship");
-    }
-
-    if (
-      this.assignments.some(
-        (assignment) =>
-          assignment.employeeId === employee.id ||
-          assignment.managerId === employee.id ||
-          assignment.assessorId === employee.id,
-      )
-    ) {
-      throw new ApiError(409, "Employee is still referenced by review period assignments");
-    }
-
-    if (
-      this.assessments.some(
-        (assessment) =>
-          assessment.employeeId === employee.id ||
-          assessment.assessorId === employee.id ||
-          assessment.acceptedByEmployeeId === employee.id ||
-          assessment.reviewedByEmployeeId === employee.id,
-      )
-    ) {
-      throw new ApiError(409, "Employee is still referenced by assessments");
-    }
-
-    this.sessions.forEach((session, token) => {
-      if (session.employeeId === employee.id) {
-        this.sessions.delete(token);
-      }
+  private async ensureAssignmentCandidate(
+    client: DbClient,
+    reviewPeriodId: string,
+    candidate: { id?: string; employeeId: string; managerId: string | null; assessorId: string },
+  ) {
+    await this.assertReviewPeriodMutable(client, reviewPeriodId);
+    await this.employeeOrThrow(client, candidate.employeeId);
+    await this.assertRelationships(client, {
+      id: candidate.employeeId,
+      managerId: candidate.managerId,
+      assessorId: candidate.assessorId,
     });
 
-    this.auth.delete(employee.id);
-    this.employees.splice(
-      this.employees.findIndex((item) => item.id === employee.id),
-      1,
+    const result = await client.query<ExistsRow>(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM review_period_assignments
+          WHERE review_period_id = $1
+            AND employee_id = $2
+            AND ($3::uuid IS NULL OR id <> $3)
+        ) AS exists
+      `,
+      [reviewPeriodId, candidate.employeeId, candidate.id ?? null],
     );
 
-    return {
-      employeeId,
-      deleted: true as const,
-    };
+    if (result.rows[0]?.exists) {
+      throw new ApiError(409, "Assignment already exists for this employee in the review period");
+    }
   }
 
-  setPassword(employeeId: string, password: string): SetEmployeePasswordResponse {
-    const employee = this.employeeOrThrow(employeeId);
-    const timestamp = nowIso();
-    this.auth.set(employee.id, {
-      passwordHash: hashPassword(password),
-      passwordConfigured: true,
-      passwordResetRequired: false,
-      lastPasswordChangeAt: timestamp,
-    });
-    this.invalidateEmployeeSessions(employee.id);
-
-    return {
-      employeeId: employee.id,
-      passwordResetRequired: false,
-      lastPasswordChangeAt: timestamp,
-    };
+  async listEmployees() {
+    const employees = await this.loadEmployeeRows(this.pool);
+    return clone(employees.map((employee) => this.toEmployee(employee)));
   }
 
-  resetPassword(employeeId: string, password?: string): ResetEmployeePasswordResponse {
-    const employee = this.employeeOrThrow(employeeId);
-    const temporaryPassword = password ?? generateTemporaryPassword();
-    const timestamp = nowIso();
-    this.auth.set(employee.id, {
-      passwordHash: hashPassword(temporaryPassword),
-      passwordConfigured: true,
-      passwordResetRequired: true,
-      lastPasswordChangeAt: timestamp,
-    });
-    this.invalidateEmployeeSessions(employee.id);
-
-    return {
-      employeeId: employee.id,
-      temporaryPassword,
-      passwordResetRequired: true,
-      lastPasswordChangeAt: timestamp,
-    };
+  async getEmployee(employeeId: string) {
+    const employee = await this.employeeOrThrow(this.pool, employeeId);
+    return clone(this.toEmployeeAdmin(employee));
   }
 
-  listReviewPeriods() {
-    return clone(this.reviewPeriods);
-  }
-
-  getReviewPeriod(reviewPeriodId: string) {
-    return clone(this.reviewPeriodOrThrow(reviewPeriodId));
-  }
-
-  createReviewPeriod(input: CreateReviewPeriodRequest) {
-    this.assertReviewPeriodFields(input);
-
-    const timestamp = nowIso();
-    const reviewPeriod: ReviewPeriod = {
-      id: randomUUID(),
-      key: input.key,
-      label: input.label,
-      startDate: input.startDate,
-      dueDate: input.dueDate,
-      status: "active",
-      archivedAt: null,
-      archivedByEmployeeId: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    this.reviewPeriods.push(reviewPeriod);
-    return clone(reviewPeriod);
-  }
-
-  updateReviewPeriod(reviewPeriodId: string, updates: UpdateReviewPeriodRequest) {
-    const reviewPeriod = this.assertReviewPeriodMutable(reviewPeriodId);
-    const nextReviewPeriod: ReviewPeriod = {
-      ...reviewPeriod,
-      ...updates,
-      updatedAt: nowIso(),
-    };
-
-    this.assertReviewPeriodFields(nextReviewPeriod);
-    Object.assign(reviewPeriod, nextReviewPeriod);
-    return clone(reviewPeriod);
-  }
-
-  archiveReviewPeriod(reviewPeriodId: string, actorEmployeeId: string) {
-    this.employeeOrThrow(actorEmployeeId);
-    const reviewPeriod = this.reviewPeriodOrThrow(reviewPeriodId);
-    if (reviewPeriod.status === "archived") {
-      throw new ApiError(409, "Review period is already archived");
+  async authenticate(username: string, password: string) {
+    const [employee] = await this.loadEmployeeRows(this.pool, { usernames: [username] });
+    if (!employee || employee.status !== "active") {
+      throw new ApiError(401, "Invalid username or password");
     }
 
-    const timestamp = nowIso();
-    reviewPeriod.status = "archived";
-    reviewPeriod.archivedAt = timestamp;
-    reviewPeriod.archivedByEmployeeId = actorEmployeeId;
-    reviewPeriod.updatedAt = timestamp;
-    this.refreshDerivedState(reviewPeriodId);
-    return clone(reviewPeriod);
+    const auth = this.toStoredAuthMetadata(employee);
+    if (!verifyPassword(password, auth.passwordHash)) {
+      throw new ApiError(401, "Invalid username or password");
+    }
+
+    const issuedAt = nowIso();
+    const expiresAt = new Date(Date.now() + eightHoursInMs).toISOString();
+    const token = randomUUID();
+
+    try {
+      const sessionResult = await this.pool.query<AuthSessionRow>(
+        `
+          INSERT INTO auth_sessions (employee_id, token_hash, created_at, expires_at)
+          VALUES ($1, $2, $3::timestamptz, $4::timestamptz)
+          RETURNING id, employee_id, created_at, expires_at
+        `,
+        [employee.id, hashToken(token), issuedAt, expiresAt],
+      );
+
+      const row = sessionResult.rows[0];
+      if (!row) {
+        throw new ApiError(500, "Session creation failed");
+      }
+
+      return this.toSession(
+        {
+          sessionId: row.id,
+          token,
+          employeeId: employee.id,
+          issuedAt: toIsoTimestamp(row.created_at) ?? issuedAt,
+          expiresAt: toIsoTimestamp(row.expires_at) ?? expiresAt,
+          permissions: clone(permissionsByRole[employee.role]),
+        },
+        employee,
+      );
+    } catch (error) {
+      rethrowDatabaseError(error);
+    }
   }
 
-  unarchiveReviewPeriod(reviewPeriodId: string) {
-    const reviewPeriod = this.reviewPeriodOrThrow(reviewPeriodId);
-    if (reviewPeriod.status === "active") {
-      throw new ApiError(409, "Review period is already active");
+  async getSession(token: string) {
+    const session = await this.loadSessionRecord(this.pool, token);
+    if (!session) {
+      return null;
     }
 
-    reviewPeriod.status = "active";
-    reviewPeriod.archivedAt = null;
-    reviewPeriod.archivedByEmployeeId = null;
-    reviewPeriod.updatedAt = nowIso();
-    this.refreshDerivedState(reviewPeriodId);
-    return clone(reviewPeriod);
+    return this.toSession(session.session, session.employee);
   }
 
-  listQuestionSets(reviewPeriodId?: string) {
-    const items = reviewPeriodId
-      ? this.questionSets.filter((questionSet) => questionSet.reviewPeriodId === reviewPeriodId)
-      : this.questionSets;
-    return clone(items);
+  async logout(token: string) {
+    const result = await this.pool.query("DELETE FROM auth_sessions WHERE token_hash = $1", [hashToken(token)]);
+    return (result.rowCount ?? 0) > 0;
   }
 
-  getQuestionSet(questionSetId: string) {
-    return clone(this.questionSetOrThrow(questionSetId));
+  async changeOwnPassword(token: string, currentPassword: string, newPassword: string): Promise<AuthChangePasswordResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const session = await this.sessionOrThrow(client, token);
+        const auth = this.toStoredAuthMetadata(session.employee);
+        if (!verifyPassword(currentPassword, auth.passwordHash)) {
+          throw new ApiError(401, "Invalid username or password");
+        }
+
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE employees
+            SET password_hash = $2,
+                password_reset_required = FALSE,
+                password_changed_at = $3::timestamptz,
+                password_changed_by_employee_id = $1
+            WHERE id = $1
+          `,
+          [session.employee.id, hashPassword(newPassword), timestamp],
+        );
+        await this.invalidateEmployeeSessions(client, session.employee.id, session.session.sessionId);
+
+        const updatedEmployee = await this.employeeOrThrow(client, session.employee.id);
+        return {
+          session: this.toSession(session.session, updatedEmployee),
+          lastPasswordChangeAt: timestamp,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
-  createQuestionSet(reviewPeriodId: string, input: CreateQuestionSetRequest) {
-    this.assertReviewPeriodMutable(reviewPeriodId);
+  async createEmployee(input: CreateEmployeeRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertUniqueEmployeeFields(client, input);
 
-    const timestamp = nowIso();
-    const questionSet: QuestionSet = {
-      id: randomUUID(),
-      reviewPeriodId,
-      target: input.target,
-      status: "draft",
-      isReadOnly: false,
-      title: input.title,
-      headerMarkdown: input.headerMarkdown,
-      footerMarkdown: input.footerMarkdown,
-      questions: this.buildQuestionInputs(input.questions),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+        const id = randomUUID();
+        await this.assertRelationships(client, {
+          id,
+          managerId: input.managerId ?? null,
+          assessorId: input.assessorId ?? null,
+        });
 
-    this.questionSets.push(questionSet);
-    return clone(questionSet);
+        const timestamp = nowIso();
+        const employeeResult = await client.query<EmployeeRow>(
+          `
+            INSERT INTO employees (
+              id,
+              username,
+              full_name,
+              email,
+              role,
+              status,
+              manager_employee_id,
+              assessor_employee_id,
+              password_hash,
+              password_reset_required,
+              password_changed_at,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              $8,
+              $9,
+              FALSE,
+              $10,
+              $11::timestamptz,
+              $11::timestamptz
+            )
+            RETURNING
+              id,
+              username,
+              full_name,
+              email,
+              role,
+              status,
+              manager_employee_id,
+              assessor_employee_id,
+              password_hash,
+              password_reset_required,
+              password_changed_at,
+              created_at,
+              updated_at
+          `,
+          [
+            id,
+            input.username,
+            input.fullName,
+            input.email,
+            input.role,
+            input.status ?? "active",
+            input.managerId ?? null,
+            input.assessorId ?? null,
+            input.password ? hashPassword(input.password) : null,
+            input.password ? timestamp : null,
+            timestamp,
+          ],
+        );
+
+        const employee = employeeResult.rows[0];
+        if (!employee) {
+          throw new ApiError(500, "Employee creation failed");
+        }
+
+        return this.toEmployeeAdmin(employee);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
-  updateQuestionSet(questionSetId: string, updates: UpdateQuestionSetRequest) {
-    const questionSet = this.questionSetOrThrow(questionSetId);
-    this.assertReviewPeriodMutable(questionSet.reviewPeriodId);
+  async updateEmployee(actor: Pick<Employee, "id" | "role">, employeeId: string, updates: UpdateEmployeeRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const existingRow = await this.employeeOrThrow(client, employeeId);
+        const existing = this.toEmployee(existingRow);
 
-    if (updates.questions) {
-      this.assertQuestionInputs(updates.questions);
+        if (actor.role === "manager") {
+          this.canManagerEdit(existing, updates);
+        }
+
+        const nextEmployee = {
+          ...existing,
+          ...updates,
+        };
+
+        await this.assertUniqueEmployeeFields(client, nextEmployee);
+        await this.assertRelationships(client, {
+          id: nextEmployee.id,
+          managerId: nextEmployee.managerId,
+          assessorId: nextEmployee.assessorId,
+        });
+
+        const result = await client.query<EmployeeRow>(
+          `
+            UPDATE employees
+            SET username = $2,
+                full_name = $3,
+                email = $4,
+                role = $5,
+                status = $6,
+                manager_employee_id = $7,
+                assessor_employee_id = $8
+            WHERE id = $1
+            RETURNING
+              id,
+              username,
+              full_name,
+              email,
+              role,
+              status,
+              manager_employee_id,
+              assessor_employee_id,
+              password_hash,
+              password_reset_required,
+              password_changed_at,
+              created_at,
+              updated_at
+          `,
+          [
+            employeeId,
+            nextEmployee.username,
+            nextEmployee.fullName,
+            nextEmployee.email,
+            nextEmployee.role,
+            nextEmployee.status,
+            nextEmployee.managerId,
+            nextEmployee.assessorId,
+          ],
+        );
+
+        const updatedEmployee = result.rows[0];
+        if (!updatedEmployee) {
+          throw new ApiError(404, "Employee not found");
+        }
+
+        return this.toEmployeeAdmin(updatedEmployee);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
     }
-
-    if (updates.title !== undefined) {
-      questionSet.title = updates.title;
-    }
-
-    if (updates.headerMarkdown !== undefined) {
-      questionSet.headerMarkdown = updates.headerMarkdown;
-    }
-
-    if (updates.footerMarkdown !== undefined) {
-      questionSet.footerMarkdown = updates.footerMarkdown;
-    }
-
-    if (updates.questions !== undefined) {
-      questionSet.questions = this.buildQuestionInputs(updates.questions);
-    }
-
-    questionSet.updatedAt = nowIso();
-
-    if (updates.status === "active") {
-      return clone(this.activateQuestionSetRecord(questionSetId));
-    }
-
-    if (updates.status === "draft") {
-      questionSet.status = "draft";
-      questionSet.updatedAt = nowIso();
-    }
-
-    return clone(questionSet);
   }
 
-  activateQuestionSet(questionSetId: string) {
-    return clone(this.activateQuestionSetRecord(questionSetId));
+  async deleteEmployee(employeeId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.employeeOrThrow(client, employeeId);
+
+        const relationshipReference = await client.query<ExistsRow>(
+          `
+            SELECT EXISTS(
+              SELECT 1
+              FROM employees
+              WHERE manager_employee_id = $1
+                 OR assessor_employee_id = $1
+            ) AS exists
+          `,
+          [employeeId],
+        );
+        if (relationshipReference.rows[0]?.exists) {
+          throw new ApiError(409, "Employee is still referenced by another employee relationship");
+        }
+
+        const assignmentReference = await client.query<ExistsRow>(
+          `
+            SELECT EXISTS(
+              SELECT 1
+              FROM review_period_assignments
+              WHERE employee_id = $1
+                 OR manager_employee_id = $1
+                 OR assessor_employee_id = $1
+            ) AS exists
+          `,
+          [employeeId],
+        );
+        if (assignmentReference.rows[0]?.exists) {
+          throw new ApiError(409, "Employee is still referenced by review period assignments");
+        }
+
+        const assessmentReference = await client.query<ExistsRow>(
+          `
+            SELECT EXISTS(
+              SELECT 1
+              FROM assessments
+              WHERE employee_id = $1
+                 OR assessor_employee_id = $1
+                 OR accepted_by_employee_id = $1
+                 OR reviewed_by_employee_id = $1
+            ) AS exists
+          `,
+          [employeeId],
+        );
+        if (assessmentReference.rows[0]?.exists) {
+          throw new ApiError(409, "Employee is still referenced by assessments");
+        }
+
+        await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
+        const deleteResult = await client.query("DELETE FROM employees WHERE id = $1", [employeeId]);
+        if (deleteResult.rowCount === 0) {
+          throw new ApiError(404, "Employee not found");
+        }
+
+        return {
+          employeeId,
+          deleted: true as const,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
-  exportQuestionSets(reviewPeriodId: string, format: "json" | "csv"): ExportStubResponse {
-    this.reviewPeriodOrThrow(reviewPeriodId);
+  async setPassword(employeeId: string, password: string): Promise<SetEmployeePasswordResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        await this.employeeOrThrow(client, employeeId);
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE employees
+            SET password_hash = $2,
+                password_reset_required = FALSE,
+                password_changed_at = $3::timestamptz,
+                password_changed_by_employee_id = NULL
+            WHERE id = $1
+          `,
+          [employeeId, hashPassword(password), timestamp],
+        );
+        await this.invalidateEmployeeSessions(client, employeeId);
+
+        return {
+          employeeId,
+          passwordResetRequired: false,
+          lastPasswordChangeAt: timestamp,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async resetPassword(employeeId: string, password?: string): Promise<ResetEmployeePasswordResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        await this.employeeOrThrow(client, employeeId);
+        const temporaryPassword = password ?? generateTemporaryPassword();
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE employees
+            SET password_hash = $2,
+                password_reset_required = TRUE,
+                password_changed_at = $3::timestamptz,
+                password_changed_by_employee_id = NULL
+            WHERE id = $1
+          `,
+          [employeeId, hashPassword(temporaryPassword), timestamp],
+        );
+        await this.invalidateEmployeeSessions(client, employeeId);
+
+        return {
+          employeeId,
+          temporaryPassword,
+          passwordResetRequired: true,
+          lastPasswordChangeAt: timestamp,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async listReviewPeriods() {
+    const result = await this.pool.query<ReviewPeriodRow>(
+      `
+        SELECT
+          id,
+          key,
+          label,
+          start_date,
+          due_date,
+          status,
+          archived_at,
+          archived_by_employee_id,
+          created_at,
+          updated_at
+        FROM review_periods
+        ORDER BY start_date DESC, created_at, id
+      `,
+    );
+
+    return clone(result.rows.map((reviewPeriod) => this.toReviewPeriod(reviewPeriod)));
+  }
+
+  async getReviewPeriod(reviewPeriodId: string) {
+    const reviewPeriod = await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
+    return clone(this.toReviewPeriod(reviewPeriod));
+  }
+
+  async createReviewPeriod(input: CreateReviewPeriodRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertReviewPeriodFields(client, input);
+
+        const timestamp = nowIso();
+        const result = await client.query<ReviewPeriodRow>(
+          `
+            INSERT INTO review_periods (
+              id,
+              key,
+              label,
+              start_date,
+              due_date,
+              status,
+              archived_at,
+              archived_by_employee_id,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1,
+              $2,
+              $3,
+              $4::date,
+              $5::date,
+              'active',
+              NULL,
+              NULL,
+              $6::timestamptz,
+              $6::timestamptz
+            )
+            RETURNING
+              id,
+              key,
+              label,
+              start_date,
+              due_date,
+              status,
+              archived_at,
+              archived_by_employee_id,
+              created_at,
+              updated_at
+          `,
+          [randomUUID(), input.key, input.label, input.startDate, input.dueDate, timestamp],
+        );
+
+        const reviewPeriod = result.rows[0];
+        if (!reviewPeriod) {
+          throw new ApiError(500, "Review period creation failed");
+        }
+
+        return this.toReviewPeriod(reviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async updateReviewPeriod(reviewPeriodId: string, updates: UpdateReviewPeriodRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const reviewPeriod = this.toReviewPeriod(await this.assertReviewPeriodMutable(client, reviewPeriodId));
+        const nextReviewPeriod = {
+          ...reviewPeriod,
+          ...updates,
+        };
+        await this.assertReviewPeriodFields(client, nextReviewPeriod);
+
+        const result = await client.query<ReviewPeriodRow>(
+          `
+            UPDATE review_periods
+            SET key = $2,
+                label = $3,
+                start_date = $4::date,
+                due_date = $5::date
+            WHERE id = $1
+            RETURNING
+              id,
+              key,
+              label,
+              start_date,
+              due_date,
+              status,
+              archived_at,
+              archived_by_employee_id,
+              created_at,
+              updated_at
+          `,
+          [reviewPeriodId, nextReviewPeriod.key, nextReviewPeriod.label, nextReviewPeriod.startDate, nextReviewPeriod.dueDate],
+        );
+
+        const updatedReviewPeriod = result.rows[0];
+        if (!updatedReviewPeriod) {
+          throw new ApiError(404, "Review period not found");
+        }
+
+        return this.toReviewPeriod(updatedReviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async archiveReviewPeriod(reviewPeriodId: string, actorEmployeeId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.employeeOrThrow(client, actorEmployeeId);
+        const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
+        if (reviewPeriod.status === "archived") {
+          throw new ApiError(409, "Review period is already archived");
+        }
+
+        const timestamp = nowIso();
+        const result = await client.query<ReviewPeriodRow>(
+          `
+            UPDATE review_periods
+            SET status = 'archived',
+                archived_at = $2::timestamptz,
+                archived_by_employee_id = $3
+            WHERE id = $1
+            RETURNING
+              id,
+              key,
+              label,
+              start_date,
+              due_date,
+              status,
+              archived_at,
+              archived_by_employee_id,
+              created_at,
+              updated_at
+          `,
+          [reviewPeriodId, timestamp, actorEmployeeId],
+        );
+
+        const archivedReviewPeriod = result.rows[0];
+        if (!archivedReviewPeriod) {
+          throw new ApiError(404, "Review period not found");
+        }
+
+        return this.toReviewPeriod(archivedReviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async unarchiveReviewPeriod(reviewPeriodId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
+        if (reviewPeriod.status === "active") {
+          throw new ApiError(409, "Review period is already active");
+        }
+
+        const result = await client.query<ReviewPeriodRow>(
+          `
+            UPDATE review_periods
+            SET status = 'active',
+                archived_at = NULL,
+                archived_by_employee_id = NULL
+            WHERE id = $1
+            RETURNING
+              id,
+              key,
+              label,
+              start_date,
+              due_date,
+              status,
+              archived_at,
+              archived_by_employee_id,
+              created_at,
+              updated_at
+          `,
+          [reviewPeriodId],
+        );
+
+        const unarchivedReviewPeriod = result.rows[0];
+        if (!unarchivedReviewPeriod) {
+          throw new ApiError(404, "Review period not found");
+        }
+
+        return this.toReviewPeriod(unarchivedReviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async listQuestionSets(reviewPeriodId?: string) {
+    return clone(await this.loadQuestionSets(this.pool, reviewPeriodId ? { reviewPeriodId } : {}));
+  }
+
+  async getQuestionSet(questionSetId: string) {
+    return clone(await this.questionSetOrThrow(this.pool, questionSetId));
+  }
+
+  async createQuestionSet(reviewPeriodId: string, input: CreateQuestionSetRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+        this.assertQuestionInputs(input.questions);
+
+        const timestamp = nowIso();
+        const questionSetId = randomUUID();
+        await client.query(
+          `
+            INSERT INTO question_sets (
+              id,
+              review_period_id,
+              target,
+              status,
+              title,
+              header_markdown,
+              footer_markdown,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1,
+              $2,
+              $3,
+              'draft',
+              $4,
+              $5,
+              $6,
+              $7::timestamptz,
+              $7::timestamptz
+            )
+          `,
+          [questionSetId, reviewPeriodId, input.target, input.title, input.headerMarkdown, input.footerMarkdown, timestamp],
+        );
+
+        for (const question of input.questions) {
+          await client.query(
+            `
+              INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
+              VALUES ($1, $2, $3, $4, $5, $6)
+            `,
+            [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+          );
+        }
+
+        return await this.questionSetOrThrow(client, questionSetId);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async updateQuestionSet(questionSetId: string, updates: UpdateQuestionSetRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const questionSet = await this.questionSetOrThrow(client, questionSetId);
+        await this.assertReviewPeriodMutable(client, questionSet.reviewPeriodId);
+
+        if (updates.questions) {
+          this.assertQuestionInputs(updates.questions);
+        }
+
+        const nextQuestionSet = {
+          ...questionSet,
+          ...updates,
+        };
+
+        await client.query(
+          `
+            UPDATE question_sets
+            SET title = $2,
+                header_markdown = $3,
+                footer_markdown = $4,
+                status = $5
+            WHERE id = $1
+          `,
+          [
+            questionSetId,
+            nextQuestionSet.title,
+            nextQuestionSet.headerMarkdown,
+            nextQuestionSet.footerMarkdown,
+            updates.status ?? questionSet.status,
+          ],
+        );
+
+        if (updates.questions !== undefined) {
+          await client.query("DELETE FROM question_set_questions WHERE question_set_id = $1", [questionSetId]);
+          for (const question of updates.questions) {
+            await client.query(
+              `
+                INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
+                VALUES ($1, $2, $3, $4, $5, $6)
+              `,
+              [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+            );
+          }
+        }
+
+        if (updates.status === "active") {
+          await client.query(
+            `
+              UPDATE question_sets
+              SET status = 'draft'
+              WHERE review_period_id = $1
+                AND target = $2
+                AND id <> $3
+                AND status = 'active'
+            `,
+            [questionSet.reviewPeriodId, questionSet.target, questionSetId],
+          );
+          await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [questionSetId]);
+        }
+
+        return await this.questionSetOrThrow(client, questionSetId);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async activateQuestionSet(questionSetId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        const questionSet = await this.questionSetOrThrow(client, questionSetId);
+        await this.assertReviewPeriodMutable(client, questionSet.reviewPeriodId);
+
+        await client.query(
+          `
+            UPDATE question_sets
+            SET status = 'draft'
+            WHERE review_period_id = $1
+              AND target = $2
+              AND id <> $3
+              AND status = 'active'
+          `,
+          [questionSet.reviewPeriodId, questionSet.target, questionSetId],
+        );
+        await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [questionSetId]);
+
+        return await this.questionSetOrThrow(client, questionSetId);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async exportQuestionSets(reviewPeriodId: string, format: "json" | "csv"): Promise<ExportStubResponse> {
+    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
+    const result = await this.pool.query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM question_sets
+        WHERE review_period_id = $1
+      `,
+      [reviewPeriodId],
+    );
+
     return {
       reviewPeriodId,
       resource: "questionSets",
       format,
       exportedAt: nowIso(),
       stub: true,
-      itemCount: this.questionSets.filter((questionSet) => questionSet.reviewPeriodId === reviewPeriodId).length,
+      itemCount: Number(result.rows[0]?.count ?? "0"),
     };
   }
 
-  importQuestionSetsStub(reviewPeriodId: string): ImportStubResponse {
-    this.reviewPeriodOrThrow(reviewPeriodId);
+  async importQuestionSetsStub(reviewPeriodId: string): Promise<ImportStubResponse> {
+    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
     return {
       reviewPeriodId,
       resource: "questionSets",
@@ -987,242 +2088,387 @@ export class ApiStore {
     };
   }
 
-  exportLocalUsers(format: "json" | "csv"): LocalUsersExportResponse {
-    const exportedAt = nowIso();
-    const items = this.employees.map((employee) => {
-      const temporaryPassword = generateTemporaryPassword();
-      this.auth.set(employee.id, {
-        passwordHash: hashPassword(temporaryPassword),
-        passwordConfigured: true,
-        passwordResetRequired: true,
-        lastPasswordChangeAt: exportedAt,
+  async exportLocalUsers(format: "json" | "csv"): Promise<LocalUsersExportResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const employeeRows = await this.loadEmployeeRows(client);
+        const employees = employeeRows.map((employee) => this.toEmployee(employee));
+        const employeesById = new Map(employees.map((employee) => [employee.id, employee]));
+        const exportedAt = nowIso();
+        const items: LocalUserTransferItem[] = [];
+
+        for (const employeeRow of employeeRows) {
+          const temporaryPassword = generateTemporaryPassword();
+          await client.query(
+            `
+              UPDATE employees
+              SET password_hash = $2,
+                  password_reset_required = TRUE,
+                  password_changed_at = $3::timestamptz,
+                  password_changed_by_employee_id = NULL
+              WHERE id = $1
+            `,
+            [employeeRow.id, hashPassword(temporaryPassword), exportedAt],
+          );
+          items.push(
+            this.toLocalUserTransferItem(
+              this.toEmployee(employeeRow),
+              {
+                passwordHash: "hidden",
+                passwordConfigured: true,
+                passwordResetRequired: true,
+                lastPasswordChangeAt: exportedAt,
+              },
+              temporaryPassword,
+              employeesById,
+            ),
+          );
+        }
+
+        if (employeeRows.length > 0) {
+          await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [employeeRows.map((employee) => employee.id)]);
+        }
+
+        return {
+          format,
+          exportedAt,
+          itemCount: items.length,
+          items,
+        };
       });
-      this.invalidateEmployeeSessions(employee.id);
-      return this.toLocalUserTransferItem(employee, temporaryPassword);
-    });
-
-    return {
-      format,
-      exportedAt,
-      itemCount: items.length,
-      items,
-    };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
-  importLocalUsers(format: "json" | "csv", items: LocalUserTransferItem[]): LocalUsersImportResponse {
-    const importedAt = nowIso();
-    const seenUsernames = new Set<string>();
-    const seenEmails = new Set<string>();
-    const existingByUsername = new Map(this.employees.map((employee) => [employee.username, employee]));
+  async importLocalUsers(format: "json" | "csv", items: LocalUserTransferItem[]): Promise<LocalUsersImportResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const importedAt = nowIso();
+        const seenUsernames = new Set<string>();
+        const seenEmails = new Set<string>();
 
-    for (const item of items) {
-      if (seenUsernames.has(item.username)) {
-        throw new ApiError(400, "Imported usernames must be unique");
-      }
-      if (seenEmails.has(item.email)) {
-        throw new ApiError(400, "Imported emails must be unique");
-      }
-      seenUsernames.add(item.username);
-      seenEmails.add(item.email);
-    }
+        for (const item of items) {
+          if (seenUsernames.has(item.username)) {
+            throw new ApiError(400, "Imported usernames must be unique");
+          }
+          if (seenEmails.has(item.email)) {
+            throw new ApiError(400, "Imported emails must be unique");
+          }
+          seenUsernames.add(item.username);
+          seenEmails.add(item.email);
+        }
 
-    const importedByUsername = new Map(items.map((item) => [item.username, item]));
-    const finalEmployees = this.employees.map((employee) => {
-      const item = importedByUsername.get(employee.username);
-      if (!item) {
-        return employee;
-      }
+        const existingRows = await this.loadEmployeeRows(client, { usernames: items.map((item) => item.username) });
+        const existingByUsername = new Map(existingRows.map((employee) => [employee.username, employee]));
 
-      return {
-        ...employee,
-        fullName: item.fullName,
-        email: item.email,
-        role: item.role,
-        status: item.status,
-        updatedAt: importedAt,
-      };
-    });
+        let createdCount = 0;
+        let updatedCount = 0;
+        for (const item of items) {
+          const existing = existingByUsername.get(item.username);
+          if (existing) {
+            updatedCount += 1;
+            await this.assertUniqueEmployeeFields(client, {
+              id: existing.id,
+              username: item.username,
+              email: item.email,
+            });
+            await client.query(
+              `
+                UPDATE employees
+                SET full_name = $2,
+                    email = $3,
+                    role = $4,
+                    status = $5
+                WHERE id = $1
+              `,
+              [existing.id, item.fullName, item.email, item.role, item.status],
+            );
+            continue;
+          }
 
-    let createdCount = 0;
-    let updatedCount = 0;
-    for (const item of items) {
-      if (existingByUsername.has(item.username)) {
-        updatedCount += 1;
-        continue;
-      }
+          createdCount += 1;
+          await this.assertUniqueEmployeeFields(client, {
+            username: item.username,
+            email: item.email,
+          });
+          await client.query(
+            `
+              INSERT INTO employees (
+                id,
+                username,
+                full_name,
+                email,
+                role,
+                status,
+                manager_employee_id,
+                assessor_employee_id,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                NULL,
+                NULL,
+                $7::timestamptz,
+                $7::timestamptz
+              )
+            `,
+            [randomUUID(), item.username, item.fullName, item.email, item.role, item.status, importedAt],
+          );
+        }
 
-      createdCount += 1;
-      finalEmployees.push({
-        id: randomUUID(),
-        username: item.username,
-        fullName: item.fullName,
-        email: item.email,
-        role: item.role,
-        status: item.status,
-        managerId: null,
-        assessorId: null,
-        createdAt: importedAt,
-        updatedAt: importedAt,
+        const referencedUsernames = Array.from(
+          new Set(
+            items.flatMap((item) => [item.username, item.managerUsername, item.assessorUsername]).filter((value): value is string => value !== null),
+          ),
+        );
+        const finalRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
+        const finalByUsername = new Map(finalRows.map((employee) => [employee.username, employee]));
+
+        for (const item of items) {
+          const employee = finalByUsername.get(item.username);
+          if (!employee) {
+            throw new ApiError(500, "Imported employee missing after merge");
+          }
+
+          const managerId = item.managerUsername === null
+            ? null
+            : finalByUsername.get(item.managerUsername)?.id ?? (() => {
+                throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+              })();
+          const assessorId = item.assessorUsername === null
+            ? null
+            : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
+                throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+              })();
+
+          await this.assertRelationships(client, {
+            id: employee.id,
+            managerId,
+            assessorId,
+          });
+
+          await client.query(
+            `
+              UPDATE employees
+              SET manager_employee_id = $2,
+                  assessor_employee_id = $3,
+                  password_hash = $4,
+                  password_reset_required = $5,
+                  password_changed_at = $6::timestamptz,
+                  password_changed_by_employee_id = NULL
+              WHERE id = $1
+            `,
+            [employee.id, managerId, assessorId, hashPassword(item.password), item.passwordResetRequired, importedAt],
+          );
+        }
+
+        const importedRows = await this.loadEmployeeRows(client, { usernames: items.map((item) => item.username) });
+        if (importedRows.length > 0) {
+          await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [importedRows.map((employee) => employee.id)]);
+        }
+
+        const importedByUsername = new Map(importedRows.map((employee) => [employee.username, employee]));
+        const importedEmployees = items.map((item) => {
+          const employee = importedByUsername.get(item.username);
+          if (!employee) {
+            throw new ApiError(500, "Imported employee missing after commit");
+          }
+
+          return this.toEmployeeAdmin(employee);
+        });
+
+        return {
+          format,
+          importedAt,
+          itemCount: items.length,
+          createdCount,
+          updatedCount,
+          items: importedEmployees,
+        };
       });
-    }
-
-    for (const employee of finalEmployees) {
-      this.assertUniqueEmployeeFields(employee, finalEmployees);
-    }
-
-    const finalByUsername = new Map(finalEmployees.map((employee) => [employee.username, employee]));
-    for (const item of items) {
-      const employee = finalByUsername.get(item.username);
-      if (!employee) {
-        throw new ApiError(500, "Imported employee missing after merge");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
       }
-
-      const managerId =
-        item.managerUsername === null
-          ? null
-          : finalByUsername.get(item.managerUsername)?.id ?? (() => {
-              throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
-            })();
-      const assessorId =
-        item.assessorUsername === null
-          ? null
-          : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
-              throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
-            })();
-
-      employee.managerId = managerId;
-      employee.assessorId = assessorId;
+      rethrowDatabaseError(error);
     }
+  }
 
-    for (const employee of finalEmployees) {
-      this.assertRelationships(employee, finalEmployees);
-    }
+  async listAssignments(reviewPeriodId?: string) {
+    return clone(await this.loadAssignments(this.pool, reviewPeriodId ? { reviewPeriodId } : {}));
+  }
 
-    this.employees.splice(0, this.employees.length, ...finalEmployees);
+  async getAssignment(assignmentId: string) {
+    return clone(await this.assignmentOrThrow(this.pool, assignmentId));
+  }
 
-    const importedEmployees = items.map((item) => {
-      const employee = finalByUsername.get(item.username);
-      if (!employee) {
-        throw new ApiError(500, "Imported employee missing after commit");
-      }
+  async createAssignment(reviewPeriodId: string, input: CreateAssignmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.ensureAssignmentCandidate(client, reviewPeriodId, {
+          employeeId: input.employeeId,
+          managerId: input.managerId,
+          assessorId: input.assessorId,
+        });
 
-      this.auth.set(employee.id, {
-        passwordHash: hashPassword(item.password),
-        passwordConfigured: true,
-        passwordResetRequired: item.passwordResetRequired,
-        lastPasswordChangeAt: importedAt,
+        const timestamp = nowIso();
+        const assignmentId = randomUUID();
+        await client.query(
+          `
+            INSERT INTO review_period_assignments (
+              id,
+              review_period_id,
+              employee_id,
+              manager_employee_id,
+              assessor_employee_id,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6::timestamptz,
+              $6::timestamptz
+            )
+          `,
+          [assignmentId, reviewPeriodId, input.employeeId, input.managerId, input.assessorId, timestamp],
+        );
+
+        return await this.assignmentOrThrow(client, assignmentId);
       });
-      this.invalidateEmployeeSessions(employee.id);
-      return this.toEmployeeAdmin(employee);
-    });
-
-    return {
-      format,
-      importedAt,
-      itemCount: items.length,
-      createdCount,
-      updatedCount,
-      items: importedEmployees,
-    };
-  }
-
-  listAssignments(reviewPeriodId?: string) {
-    const items = reviewPeriodId
-      ? this.assignments.filter((assignment) => assignment.reviewPeriodId === reviewPeriodId)
-      : this.assignments;
-    return clone(items);
-  }
-
-  getAssignment(assignmentId: string) {
-    return clone(this.assignmentOrThrow(assignmentId));
-  }
-
-  createAssignment(reviewPeriodId: string, input: CreateAssignmentRequest) {
-    this.ensureAssignmentCandidate(reviewPeriodId, {
-      employeeId: input.employeeId,
-      managerId: input.managerId,
-      assessorId: input.assessorId,
-    });
-
-    const timestamp = nowIso();
-    const assignment: Assignment = {
-      id: randomUUID(),
-      reviewPeriodId,
-      employeeId: input.employeeId,
-      managerId: input.managerId,
-      assessorId: input.assessorId,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    this.assignments.push(assignment);
-    this.setEmployeeRelationships(input.employeeId, {
-      managerId: input.managerId,
-      assessorId: input.assessorId,
-    });
-
-    return clone(assignment);
-  }
-
-  updateAssignment(assignmentId: string, updates: UpdateAssignmentRequest) {
-    const assignment = this.assignmentOrThrow(assignmentId);
-    this.ensureAssignmentCandidate(assignment.reviewPeriodId, {
-      id: assignment.id,
-      employeeId: assignment.employeeId,
-      managerId: updates.managerId !== undefined ? updates.managerId : assignment.managerId,
-      assessorId: updates.assessorId !== undefined ? updates.assessorId : assignment.assessorId,
-    });
-
-    if (updates.managerId !== undefined) {
-      assignment.managerId = updates.managerId;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
     }
-
-    if (updates.assessorId !== undefined) {
-      assignment.assessorId = updates.assessorId;
-    }
-
-    assignment.updatedAt = nowIso();
-    this.setEmployeeRelationships(assignment.employeeId, {
-      managerId: assignment.managerId,
-      assessorId: assignment.assessorId,
-    });
-
-    return clone(assignment);
   }
 
-  deleteAssignment(assignmentId: string) {
-    const assignment = this.assignmentOrThrow(assignmentId);
-    this.assertReviewPeriodMutable(assignment.reviewPeriodId);
+  async updateAssignment(assignmentId: string, updates: UpdateAssignmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assignment = await this.assignmentOrThrow(client, assignmentId);
+        await this.ensureAssignmentCandidate(client, assignment.reviewPeriodId, {
+          id: assignment.id,
+          employeeId: assignment.employeeId,
+          managerId: updates.managerId !== undefined ? updates.managerId : assignment.managerId,
+          assessorId: updates.assessorId !== undefined ? updates.assessorId : assignment.assessorId,
+        });
 
-    if (this.assessments.some((assessment) => assessment.assignmentId === assignment.id)) {
-      throw new ApiError(409, "Assignment is still referenced by assessments");
+        const result = await client.query<AssignmentRow>(
+          `
+            UPDATE review_period_assignments
+            SET manager_employee_id = $2,
+                assessor_employee_id = $3
+            WHERE id = $1
+            RETURNING
+              id,
+              review_period_id,
+              employee_id,
+              manager_employee_id,
+              assessor_employee_id,
+              created_at,
+              updated_at
+          `,
+          [
+            assignmentId,
+            updates.managerId !== undefined ? updates.managerId : assignment.managerId,
+            updates.assessorId !== undefined ? updates.assessorId : assignment.assessorId,
+          ],
+        );
+
+        const updatedAssignment = result.rows[0];
+        if (!updatedAssignment) {
+          throw new ApiError(404, "Assignment not found");
+        }
+
+        return {
+          id: updatedAssignment.id,
+          reviewPeriodId: updatedAssignment.review_period_id,
+          employeeId: updatedAssignment.employee_id,
+          managerId: updatedAssignment.manager_employee_id,
+          assessorId: updatedAssignment.assessor_employee_id,
+          createdAt: toIsoTimestamp(updatedAssignment.created_at) ?? nowIso(),
+          updatedAt: toIsoTimestamp(updatedAssignment.updated_at) ?? nowIso(),
+        } satisfies Assignment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
     }
+  }
 
-    this.assignments.splice(
-      this.assignments.findIndex((item) => item.id === assignment.id),
-      1,
+  async deleteAssignment(assignmentId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        const assignment = await this.assignmentOrThrow(client, assignmentId);
+        await this.assertReviewPeriodMutable(client, assignment.reviewPeriodId);
+
+        const assessmentReference = await client.query<ExistsRow>(
+          `
+            SELECT EXISTS(
+              SELECT 1
+              FROM assessments
+              WHERE assignment_id = $1
+            ) AS exists
+          `,
+          [assignmentId],
+        );
+        if (assessmentReference.rows[0]?.exists) {
+          throw new ApiError(409, "Assignment is still referenced by assessments");
+        }
+
+        await client.query("DELETE FROM review_period_assignments WHERE id = $1", [assignmentId]);
+
+        return {
+          assignmentId,
+          deleted: true as const,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async exportAssignments(reviewPeriodId: string, format: "json" | "csv"): Promise<ExportStubResponse> {
+    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
+    const result = await this.pool.query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM review_period_assignments
+        WHERE review_period_id = $1
+      `,
+      [reviewPeriodId],
     );
 
-    return {
-      assignmentId,
-      deleted: true as const,
-    };
-  }
-
-  exportAssignments(reviewPeriodId: string, format: "json" | "csv"): ExportStubResponse {
-    this.reviewPeriodOrThrow(reviewPeriodId);
     return {
       reviewPeriodId,
       resource: "assignments",
       format,
       exportedAt: nowIso(),
       stub: true,
-      itemCount: this.assignments.filter((assignment) => assignment.reviewPeriodId === reviewPeriodId).length,
+      itemCount: Number(result.rows[0]?.count ?? "0"),
     };
   }
 
-  importAssignmentsStub(reviewPeriodId: string): ImportStubResponse {
-    this.reviewPeriodOrThrow(reviewPeriodId);
+  async importAssignmentsStub(reviewPeriodId: string): Promise<ImportStubResponse> {
+    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
     return {
       reviewPeriodId,
       resource: "assignments",
@@ -1232,263 +2478,353 @@ export class ApiStore {
     };
   }
 
-  listAssessments(session: AuthSession, query: AssessmentsListQuery = {}) {
-    const items = this.assessments.filter((assessment) => {
-      if (!this.canReadAssessment(session, assessment)) {
-        return false;
-      }
-
-      if (query.reviewPeriodId && assessment.reviewPeriodId !== query.reviewPeriodId) {
-        return false;
-      }
-
-      if (query.employeeId && assessment.employeeId !== query.employeeId) {
-        return false;
-      }
-
-      if (query.assessorId && assessment.assessorId !== query.assessorId) {
-        return false;
-      }
-
-      if (query.assignmentId && assessment.assignmentId !== query.assignmentId) {
-        return false;
-      }
-
-      if (query.target && assessment.target !== query.target) {
-        return false;
-      }
-
-      if (query.reviewState && assessment.reviewState !== query.reviewState) {
-        return false;
-      }
-
-      if (query.archiveState && assessment.archiveState !== query.archiveState) {
-        return false;
-      }
-
-      return true;
-    });
-
-    return clone(items);
+  async listAssessments(session: AuthSession, query: AssessmentsListQuery = {}) {
+    const records = await this.loadAssessmentRecords(this.pool, query);
+    return clone(records.filter((assessment) => this.canReadAssessment(session, assessment)).map((assessment) => assessment.assessment));
   }
 
-  getAssessment(session: AuthSession, assessmentId: string) {
-    const assessment = this.assessmentOrThrow(assessmentId);
+  async getAssessment(session: AuthSession, assessmentId: string) {
+    const assessment = await this.assessmentOrThrow(this.pool, assessmentId);
     this.assertCanReadAssessment(session, assessment);
-    return clone(assessment);
+    return clone(assessment.assessment);
   }
 
-  createAssessment(session: AuthSession, reviewPeriodId: string, input: CreateAssessmentRequest) {
-    this.assertReviewPeriodMutable(reviewPeriodId);
+  async createAssessment(session: AuthSession, reviewPeriodId: string, input: CreateAssessmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
 
-    const assessorId = session.user.id;
-    const target = input.target;
+        const assessorId = session.user.id;
+        const target = input.target;
 
-    if (target === "self") {
-      if (input.employeeId !== assessorId) {
-        throw new ApiError(403, "Self assessments can only be authored by the employee being reviewed");
+        if (target === "self") {
+          if (input.employeeId !== assessorId) {
+            throw new ApiError(403, "Self assessments can only be authored by the employee being reviewed");
+          }
+        } else {
+          const assignment = input.assignmentId
+            ? await this.assignmentOrThrow(client, input.assignmentId)
+            : (await this.loadAssignments(client, { reviewPeriodId })).find(
+                (item) => item.employeeId === input.employeeId && item.assessorId === assessorId,
+              );
+
+          if (!assignment || assignment.reviewPeriodId !== reviewPeriodId || assignment.employeeId !== input.employeeId) {
+            throw new ApiError(403, "Peer assessments can only be authored by the assigned assessor");
+          }
+        }
+
+        if (await this.findAssessmentByKey(client, reviewPeriodId, input.employeeId, assessorId)) {
+          throw new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
+        }
+
+        const assignment = target === "peer"
+          ? (await this.loadAssignments(client, { reviewPeriodId })).find(
+              (item) =>
+                item.employeeId === input.employeeId &&
+                item.assessorId === assessorId &&
+                (input.assignmentId ? item.id === input.assignmentId : true),
+            ) ?? null
+          : null;
+
+        const questionSet = await this.activeQuestionSetOrThrow(reviewPeriodId, target, client);
+        const timestamp = nowIso();
+        const assessmentId = randomUUID();
+        await client.query(
+          `
+            INSERT INTO assessments (
+              id,
+              review_period_id,
+              question_set_id,
+              assignment_id,
+              target,
+              employee_id,
+              assessor_employee_id,
+              review_state,
+              archive_state,
+              submitted_at,
+              accepted_at,
+              accepted_by_employee_id,
+              reviewed_at,
+              reviewed_by_employee_id,
+              manager_notes,
+              created_at,
+              updated_at
+            ) VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              'new',
+              'active',
+              NULL,
+              NULL,
+              NULL,
+              NULL,
+              NULL,
+              NULL,
+              $8::timestamptz,
+              $8::timestamptz
+            )
+          `,
+          [assessmentId, reviewPeriodId, questionSet.id, assignment?.id ?? null, target, input.employeeId, assessorId, timestamp],
+        );
+
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
       }
-    } else {
-      const assignment = input.assignmentId
-        ? this.assignmentOrThrow(input.assignmentId)
-        : this.assignments.find(
-            (item) =>
-              item.reviewPeriodId === reviewPeriodId &&
-              item.employeeId === input.employeeId &&
-              item.assessorId === assessorId,
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async saveAssessmentDraft(session: AuthSession, assessmentId: string, input: SaveAssessmentDraftRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanAuthorAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        const nextState: AssessmentReviewState = input.responses.length > 0 ? "draft" : "new";
+        await this.applyAssessmentResponses(client, assessment, input.responses, nextState);
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async submitAssessment(session: AuthSession, assessmentId: string, input: SubmitAssessmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanAuthorAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+        await this.applyAssessmentResponses(client, assessment, input.responses, "submitted");
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async acceptAssessment(session: AuthSession, assessmentId: string, managerNotes?: string | null) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanManageAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        if (assessment.assessment.reviewState !== "submitted") {
+          throw new ApiError(409, "Only submitted assessments can be accepted");
+        }
+
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE assessments
+            SET review_state = 'accepted',
+                accepted_at = $2::timestamptz,
+                accepted_by_employee_id = $3,
+                reviewed_at = NULL,
+                reviewed_by_employee_id = NULL,
+                manager_notes = $4
+            WHERE id = $1
+          `,
+          [assessmentId, timestamp, session.user.id, managerNotes ?? assessment.assessment.managerNotes],
+        );
+
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async rejectAssessmentToDraft(session: AuthSession, assessmentId: string, managerNotes?: string | null) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanManageAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        if (assessment.assessment.reviewState !== "submitted") {
+          throw new ApiError(409, "Only submitted assessments can be returned to draft");
+        }
+
+        await client.query(
+          `
+            UPDATE assessments
+            SET review_state = 'draft',
+                submitted_at = NULL,
+                accepted_at = NULL,
+                accepted_by_employee_id = NULL,
+                reviewed_at = NULL,
+                reviewed_by_employee_id = NULL,
+                manager_notes = $2
+            WHERE id = $1
+          `,
+          [assessmentId, managerNotes ?? assessment.assessment.managerNotes],
+        );
+
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async reviewAssessment(session: AuthSession, assessmentId: string, input: ReviewAssessmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanManageAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        if (assessment.assessment.reviewState !== "accepted") {
+          throw new ApiError(409, "Only accepted assessments can be reviewed");
+        }
+
+        if (input.reviewed) {
+          const timestamp = nowIso();
+          await client.query(
+            `
+              UPDATE assessments
+              SET review_state = 'reviewed',
+                  manager_notes = $2,
+                  reviewed_at = $3::timestamptz,
+                  reviewed_by_employee_id = $4
+              WHERE id = $1
+            `,
+            [assessmentId, input.managerNotes, timestamp, session.user.id],
+          );
+        } else {
+          await client.query(
+            `
+              UPDATE assessments
+              SET manager_notes = $2
+              WHERE id = $1
+            `,
+            [assessmentId, input.managerNotes],
+          );
+        }
+
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async reassignAssessment(session: AuthSession, assessmentId: string, input: ReassignAssessmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanManageAssessment(session, assessment);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        const employee = this.toEmployee(await this.employeeOrThrow(client, assessment.assessment.employeeId));
+        const nextManagerId = input.managerId !== undefined ? input.managerId : employee.managerId;
+        const nextAssessorId = input.assessorId !== undefined ? input.assessorId : employee.assessorId;
+
+        if (assessment.assessment.assignmentId) {
+          const assignment = await this.assignmentOrThrow(client, assessment.assessment.assignmentId);
+          if (input.assessorId === null) {
+            throw new ApiError(400, "Peer assessment reassignments require an assessor");
+          }
+
+          const nextAssignmentAssessorId = input.assessorId !== undefined ? input.assessorId : assignment.assessorId;
+          await this.ensureAssignmentCandidate(client, assignment.reviewPeriodId, {
+            id: assignment.id,
+            employeeId: assignment.employeeId,
+            managerId: input.managerId !== undefined ? input.managerId : assignment.managerId,
+            assessorId: nextAssignmentAssessorId,
+          });
+
+          await client.query(
+            `
+              UPDATE review_period_assignments
+              SET manager_employee_id = $2,
+                  assessor_employee_id = $3
+              WHERE id = $1
+            `,
+            [
+              assignment.id,
+              input.managerId !== undefined ? input.managerId : assignment.managerId,
+              nextAssignmentAssessorId,
+            ],
           );
 
-      if (!assignment || assignment.reviewPeriodId !== reviewPeriodId || assignment.employeeId !== input.employeeId) {
-        throw new ApiError(403, "Peer assessments can only be authored by the assigned assessor");
-      }
-    }
+          return {
+            assessment: (await this.assessmentOrThrow(client, assessmentId)).assessment,
+            employee: this.toEmployee(await this.employeeOrThrow(client, employee.id)),
+            assignment: await this.assignmentOrThrow(client, assignment.id),
+          };
+        }
 
-    if (this.findAssessmentByKey(reviewPeriodId, input.employeeId, assessorId)) {
-      throw new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
-    }
+        await this.assertRelationships(client, {
+          id: employee.id,
+          managerId: nextManagerId,
+          assessorId: nextAssessorId,
+        });
+        await client.query(
+          `
+            UPDATE employees
+            SET manager_employee_id = $2,
+                assessor_employee_id = $3
+            WHERE id = $1
+          `,
+          [employee.id, nextManagerId, nextAssessorId],
+        );
 
-    const assignment =
-      target === "peer"
-        ? this.assignments.find(
-            (item) =>
-              item.reviewPeriodId === reviewPeriodId &&
-              item.employeeId === input.employeeId &&
-              item.assessorId === assessorId &&
-              (input.assignmentId ? item.id === input.assignmentId : true),
-          ) ?? null
-        : null;
-
-    const questionSet = this.activeQuestionSetOrThrow(reviewPeriodId, target);
-    const timestamp = nowIso();
-    const assessment: Assessment = {
-      id: randomUUID(),
-      reviewPeriodId,
-      questionSetId: questionSet.id,
-      assignmentId: assignment?.id ?? null,
-      target,
-      employeeId: input.employeeId,
-      assessorId,
-      reviewState: "new",
-      archiveState: "active",
-      isReadOnly: false,
-      responses: [],
-      submittedAt: null,
-      acceptedAt: null,
-      acceptedByEmployeeId: null,
-      managerNotes: null,
-      reviewedAt: null,
-      reviewedByEmployeeId: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    this.assessments.push(assessment);
-    return clone(assessment);
-  }
-
-  saveAssessmentDraft(session: AuthSession, assessmentId: string, input: SaveAssessmentDraftRequest) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanAuthorAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-
-    const nextState: AssessmentReviewState = input.responses.length > 0 ? "draft" : "new";
-    this.applyAssessmentResponses(assessment, input.responses, nextState);
-    return clone(assessment);
-  }
-
-  submitAssessment(session: AuthSession, assessmentId: string, input: SubmitAssessmentRequest) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanAuthorAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-    this.applyAssessmentResponses(assessment, input.responses, "submitted");
-    return clone(assessment);
-  }
-
-  acceptAssessment(session: AuthSession, assessmentId: string, managerNotes?: string | null) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanManageAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-
-    if (assessment.reviewState !== "submitted") {
-      throw new ApiError(409, "Only submitted assessments can be accepted");
-    }
-
-    const timestamp = nowIso();
-    assessment.reviewState = "accepted";
-    assessment.acceptedAt = timestamp;
-    assessment.acceptedByEmployeeId = session.user.id;
-    assessment.reviewedAt = null;
-    assessment.reviewedByEmployeeId = null;
-    assessment.managerNotes = managerNotes ?? assessment.managerNotes;
-    assessment.isReadOnly = true;
-    assessment.updatedAt = timestamp;
-    return clone(assessment);
-  }
-
-  rejectAssessmentToDraft(session: AuthSession, assessmentId: string, managerNotes?: string | null) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanManageAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-
-    if (assessment.reviewState !== "submitted") {
-      throw new ApiError(409, "Only submitted assessments can be returned to draft");
-    }
-
-    const timestamp = nowIso();
-    assessment.reviewState = "draft";
-    assessment.submittedAt = null;
-    assessment.acceptedAt = null;
-    assessment.acceptedByEmployeeId = null;
-    assessment.reviewedAt = null;
-    assessment.reviewedByEmployeeId = null;
-    assessment.managerNotes = managerNotes ?? assessment.managerNotes;
-    assessment.isReadOnly = false;
-    assessment.updatedAt = timestamp;
-    return clone(assessment);
-  }
-
-  reviewAssessment(session: AuthSession, assessmentId: string, input: ReviewAssessmentRequest) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanManageAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-
-    if (assessment.reviewState !== "accepted") {
-      throw new ApiError(409, "Only accepted assessments can be reviewed");
-    }
-
-    const timestamp = nowIso();
-    assessment.managerNotes = input.managerNotes;
-    assessment.updatedAt = timestamp;
-
-    if (input.reviewed) {
-      assessment.reviewState = "reviewed";
-      assessment.reviewedAt = timestamp;
-      assessment.reviewedByEmployeeId = session.user.id;
-      assessment.isReadOnly = true;
-    }
-
-    return clone(assessment);
-  }
-
-  reassignAssessment(session: AuthSession, assessmentId: string, input: ReassignAssessmentRequest) {
-    const assessment = this.assessmentOrThrow(assessmentId);
-    this.assertCanManageAssessment(session, assessment);
-    this.assertReviewPeriodMutable(assessment.reviewPeriodId);
-
-    const employee = this.employeeOrThrow(assessment.employeeId);
-    const nextManagerId = input.managerId !== undefined ? input.managerId : employee.managerId;
-    const nextAssessorId = input.assessorId !== undefined ? input.assessorId : employee.assessorId;
-
-    if (assessment.assignmentId) {
-      const assignment = this.assignmentOrThrow(assessment.assignmentId);
-      if (input.assessorId === null) {
-        throw new ApiError(400, "Peer assessment reassignments require an assessor");
-      }
-      const nextAssignmentAssessorId = input.assessorId !== undefined ? input.assessorId : assignment.assessorId;
-      this.ensureAssignmentCandidate(assignment.reviewPeriodId, {
-        id: assignment.id,
-        employeeId: assignment.employeeId,
-        managerId: input.managerId !== undefined ? input.managerId : assignment.managerId,
-        assessorId: nextAssignmentAssessorId,
+        return {
+          assessment: (await this.assessmentOrThrow(client, assessmentId)).assessment,
+          employee: this.toEmployee(await this.employeeOrThrow(client, employee.id)),
+          assignment: null,
+        };
       });
-      if (input.managerId !== undefined) {
-        assignment.managerId = input.managerId;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
       }
-      if (input.assessorId !== undefined) {
-        assignment.assessorId = input.assessorId;
-      }
-      assignment.updatedAt = nowIso();
-      this.setEmployeeRelationships(employee.id, {
-        managerId: assignment.managerId,
-        assessorId: assignment.assessorId,
-      });
-
-      return {
-        assessment: clone(assessment),
-        employee: clone(this.employeeOrThrow(employee.id)),
-        assignment: clone(assignment),
-      };
+      rethrowDatabaseError(error);
     }
+  }
 
-    this.setEmployeeRelationships(employee.id, {
-      managerId: nextManagerId,
-      assessorId: nextAssessorId,
-    });
+  async foundationSnapshot(session?: AuthSession) {
+    const [employees, reviewPeriods, questionSets, assignments, assessments] = await Promise.all([
+      this.listEmployees(),
+      this.listReviewPeriods(),
+      this.listQuestionSets(),
+      this.listAssignments(),
+      session ? this.listAssessments(session) : this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
+    ]);
 
     return {
-      assessment: clone(assessment),
-      employee: clone(this.employeeOrThrow(employee.id)),
-      assignment: null,
-    };
-  }
-
-  foundationSnapshot(session?: AuthSession) {
-    return {
-      employees: this.listEmployees(),
-      reviewPeriods: clone(this.reviewPeriods),
-      questionSets: clone(this.questionSets),
-      assignments: clone(this.assignments),
-      assessments: clone(session ? this.assessments.filter((assessment) => this.canReadAssessment(session, assessment)) : this.assessments),
+      employees,
+      reviewPeriods,
+      questionSets,
+      assignments,
+      assessments,
     };
   }
 }

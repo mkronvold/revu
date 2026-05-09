@@ -7,7 +7,7 @@ import type {
   QuestionTarget,
   ReviewPeriod,
 } from '@revu/contracts';
-import { FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiClientError,
@@ -67,7 +67,7 @@ import {
   buildImportNotice,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
-  buildLocalUsersImportPayload,
+  buildLocalUsersImportPayloadFromFile,
   exportAssignmentsFromApi,
   exportLocalUsersFromApi,
   exportQuestionSetsFromApi,
@@ -77,6 +77,7 @@ import {
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
+  triggerDownload,
   saveReviewPeriodToApi,
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
@@ -116,12 +117,6 @@ type DemoAccount = {
   password: string;
 };
 
-type LocalUserTransferPreview = {
-  format: TransferFormat;
-  itemCount: number;
-  content: string;
-  exportedAt: string;
-};
 const demoAccounts: DemoAccount[] = [
   {
     fullName: 'Ada Admin',
@@ -262,9 +257,7 @@ function App() {
     archived: true,
   });
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
-  const [localUserTransferFormat, setLocalUserTransferFormat] = useState<TransferFormat>('json');
-  const [localUserImportDraft, setLocalUserImportDraft] = useState('');
-  const [localUserTransferPreview, setLocalUserTransferPreview] = useState<LocalUserTransferPreview | null>(null);
+  const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const reviewPanelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -746,8 +739,6 @@ function App() {
 
   const clearSession = (options?: {
     authNotice?: string;
-    preserveLocalUserTransferDraft?: boolean;
-    preserveLocalUserTransferPreview?: boolean;
   }) => {
     window.sessionStorage.removeItem(sessionStorageKey);
     setSessionToken(null);
@@ -788,12 +779,6 @@ function App() {
       archived: true,
     });
     setPasswordDialogEmployeeId(null);
-    if (!options?.preserveLocalUserTransferDraft) {
-      setLocalUserImportDraft('');
-    }
-    if (!options?.preserveLocalUserTransferPreview) {
-      setLocalUserTransferPreview(null);
-    }
   };
 
   const syncEmployeeRelationships = (employeeId: string, managerId: string | null, assessorId: string | null) => {
@@ -929,13 +914,13 @@ function App() {
     }
   };
 
-  const handleLocalUserExport = async () => {
+  const handleLocalUserExport = async (format: TransferFormat) => {
     if (!sessionToken || !sessionUser) {
       return;
     }
 
     const confirmed = window.confirm(
-      `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${localUserTransferFormat.toUpperCase()} export?`,
+      `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${format.toUpperCase()} export?`,
     );
     if (!confirmed) {
       return;
@@ -945,23 +930,15 @@ function App() {
     setAppError('');
 
     try {
-      const response = await exportLocalUsersFromApi(sessionToken, localUserTransferFormat);
-      const preview = serializeLocalUsersTransfer(response);
-      const notice = `${buildLocalUsersExportNotice(response)} Your current session is now signed out. Copy the export, then sign in again with your exported one-time passcode.`;
+      const response = await exportLocalUsersFromApi(sessionToken, format);
+      const content = serializeLocalUsersTransfer(response);
+      const extension = format === 'csv' ? 'csv' : 'json';
+      const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+      triggerDownload(`local-users-export.${extension}`, content, mimeType);
+      const notice = `${buildLocalUsersExportNotice(response)} Your current session is now signed out. Sign in again with your exported one-time passcode.`;
 
-      setLocalUserTransferPreview({
-        format: response.format,
-        itemCount: response.itemCount,
-        content: preview,
-        exportedAt: response.exportedAt,
-      });
-      setLocalUserImportDraft(preview);
       setLoginUsername(sessionUser.username);
-      clearSession({
-        authNotice: notice,
-        preserveLocalUserTransferDraft: true,
-        preserveLocalUserTransferPreview: true,
-      });
+      clearSession({ authNotice: notice });
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -969,13 +946,15 @@ function App() {
     }
   };
 
-  const handleLocalUserImport = async () => {
-    if (!sessionToken || !sessionUser) {
-      return;
-    }
+  const handleLocalUserImport = () => {
+    localUserImportInputRef.current?.click();
+  };
 
-    if (!localUserImportDraft.trim()) {
-      setAdminNotice('Paste a JSON or CSV payload before importing local users.');
+  const handleLocalUserImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file || !sessionToken || !sessionUser) {
       return;
     }
 
@@ -984,7 +963,8 @@ function App() {
     setAppError('');
 
     try {
-      const payload = buildLocalUsersImportPayload(localUserTransferFormat, localUserImportDraft);
+      const raw = await file.text();
+      const payload = buildLocalUsersImportPayloadFromFile(raw);
       const response = await importLocalUsersFromApi(sessionToken, payload);
       const notice = buildLocalUsersImportNotice(response);
       const currentUserWasImported = response.items.some((item) => item.id === sessionUser.id);
@@ -993,8 +973,6 @@ function App() {
         setLoginUsername(sessionUser.username);
         clearSession({
           authNotice: `${notice} Your account was part of the import, so sign in again with the imported password or one-time passcode.`,
-          preserveLocalUserTransferDraft: true,
-          preserveLocalUserTransferPreview: true,
         });
         return;
       }
@@ -2974,8 +2952,11 @@ function App() {
             </div>
           </div>
           <div className="action-row">
-            <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport()}>
-              {isSyncingLocalUsers ? 'Working…' : 'Export Users'}
+            <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
+              {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
+            </button>
+            <button type="button" className="secondary-button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('csv')}>
+              Export CSV
             </button>
             <button
               type="button"
@@ -2985,12 +2966,14 @@ function App() {
             >
               Import Users
             </button>
+            <input
+              ref={localUserImportInputRef}
+              type="file"
+              accept=".json,.csv,application/json,text/csv,text/plain"
+              style={{ display: 'none' }}
+              onChange={(event) => void handleLocalUserImportFileChange(event)}
+            />
           </div>
-          {localUserTransferPreview ? (
-            <p className="temporary-password">
-              Last export prepared {localUserTransferPreview.itemCount} users at {localUserTransferPreview.exportedAt}.
-            </p>
-          ) : null}
         </section>
       ) : null}
 
@@ -3011,26 +2994,6 @@ function App() {
               administration screens.
             </p>
             {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
-            {localUserTransferPreview ? (
-              <div className="card" style={{ marginTop: '1.5rem' }}>
-                <p className="section-label">Latest local-user export</p>
-                <h3>
-                  {localUserTransferPreview.itemCount} users • {localUserTransferPreview.format.toUpperCase()}
-                </h3>
-                <p className="muted-copy">
-                  Generated one-time passcodes replace the previous passwords. Copy this payload before closing the tab.
-                </p>
-                <label className="stack-form">
-                  <span>Import-ready payload</span>
-                  <textarea readOnly rows={8} value={localUserTransferPreview.content} />
-                </label>
-                <div className="action-row">
-                  <button type="button" className="secondary-button" onClick={() => setLocalUserTransferPreview(null)}>
-                    Dismiss payload
-                  </button>
-                </div>
-              </div>
-            ) : null}
 
             <form className="stack-form" onSubmit={handleLogin}>
               <label>

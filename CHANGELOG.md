@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Switched the API from in-memory fixtures to Postgres-backed persistence for employees, auth sessions, review periods, question sets, assignments, assessments, and responses
+- Added `reset-to-example.sh` plus example-data seeding so persistent deployments, local development, and tests can return to the same known dataset
+- Simplified Employees import/export into browser-upload import with JSON/CSV autodetection and direct `.json` / `.csv` downloads
+- Added a sidebar Build revision card sourced from the published image revision/runtime config
 - Polished the sidebar by shrinking the REVU wordmark, tightening the signed-in card, simplifying nav labels, adding space before Administration, and trimming the theme card copy
 - Reworked the Employees roster into a table-style layout with Name, Role, Email, Manager, Assessor, and retained Edit/Password actions
 - Darkened the Summer Nights theme overall to feel like dusk instead of bright late-evening, with deeper sand and rock tones while keeping the warm beach-at-sunset direction

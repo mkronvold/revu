@@ -8,12 +8,15 @@
     "build": "npm run build --workspace @revu/contracts && tsc --project tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "npm run build --workspace @revu/contracts && tsc --project tsconfig.json --noEmit",
-    "test": "npm run build --workspace @revu/contracts && vitest run --config vitest.config.ts"
+    "test": "npm run build --workspace @revu/contracts && vitest run --config vitest.config.ts",
+    "seed:example": "npm run build --workspace @revu/contracts && tsx src/seed-example.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
     "@revu/contracts": "file:../../packages/contracts",
+    "@types/pg": "^8.20.0",
     "fastify": "^5.2.1",
+    "pg": "^8.20.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
