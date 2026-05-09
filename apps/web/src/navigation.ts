@@ -3,7 +3,7 @@ export type NavGroup = 'Workspace' | 'Administration';
 export type AppRole = 'employee' | 'manager' | 'admin';
 
 export type AppSection = {
-  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'archive' | 'backups';
+  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'fileManagement' | 'workflow';
   path: `/${string}`;
   group: NavGroup;
   title: string;
@@ -13,12 +13,21 @@ export type AppSection = {
   placeholderTitle: string;
   placeholderDescription: string;
   nextSlice: string;
+  showInNavigation?: boolean;
 };
 
 export const routeLegend = {
   assessments: 'Assessments are employee-authored forms that staff complete before any review work begins.',
   reviews: 'Reviews are manager and admin actions taken after an assessment is accepted.',
 } as const;
+
+export const workflowMarkdown = `### New \`Review Period\` begins
+- HR Admin generates a \`Review Period\` and \`Question Sets\` for Self-assessment and Peer-assessment
+- Managers assign peers to assess employees
+- All Employees complete and submit Self-Assessments and Peer-Assessments assigned to them
+- Managers accept and review submitted Assessments and add their comments
+- Completed Reviews are finalized by HR Admin
+- When the \`Review Period\` is complete, HR Admin archives them.`;
 
 export const appSections: AppSection[] = [
   {
@@ -86,36 +95,37 @@ export const appSections: AppSection[] = [
     nextSlice: 'Wire in review-period aware question set forms and import/export actions.',
   },
   {
-    id: 'archive',
-    path: '/archive',
+    id: 'fileManagement',
+    path: '/file-management',
     group: 'Administration',
-    title: 'Archive',
-    summary: 'Admin archive management for review periods and their read-only historical data.',
+    title: 'File Management',
+    summary: 'Admin archive and backup operations live together here so review-period retention and restore work stays in one place.',
     audience: ['Admin'],
     highlights: [
-      'Archive actions happen at the review-period level.',
-      'Archived content becomes read-only and moves out of active workflow views.',
-      'Keep archive controls explicit so they are not confused with review completion.',
+      'Archive actions still happen at the review-period level and stay distinct from review completion.',
+      'Backup downloads and replace-mode restores remain available while the broader file transfer migration lands.',
+      'Keep archive and backup controls together so administrators have one operational workspace.',
     ],
-    placeholderTitle: 'Review-period archive controls',
-    placeholderDescription: 'This shell reserves space for archive and unarchive actions plus a list of review periods and historical counts.',
-    nextSlice: 'Implement archive state management once review-period APIs and policies are available.',
+    placeholderTitle: 'Archive and backup operations',
+    placeholderDescription: 'This route now hosts the archive controls and backup tools while remaining import and export actions move here in a later slice.',
+    nextSlice: 'Finish consolidating the remaining import and export workflows into the shared file management route.',
   },
   {
-    id: 'backups',
-    path: '/backups',
-    group: 'Administration',
-    title: 'Backups',
-    summary: 'Admin-only backup status, backup downloads, and replace-mode restore controls for users and review data.',
-    audience: ['Admin'],
+    id: 'workflow',
+    path: '/workflow',
+    group: 'Workspace',
+    title: 'Workflow',
+    summary: 'Reference the full review lifecycle from review-period setup through assessment submission, review, finalization, and archive.',
+    audience: ['Employee', 'Manager', 'Admin'],
     highlights: [
-      'Review runtime backup cadence, retention, and the most recent backup and restore timestamps.',
-      'Download a fresh JSON backup now with explicit user export mode choices.',
-      'Upload one backup file and run explicit replace restores for all data, users, questions, or reviews.',
+      'Show the shared review lifecycle in one place for employees, managers, and admins.',
+      'Keep workflow guidance available from the sidebar without adding another primary navigation item.',
+      'Render the approved workflow copy as markdown so future edits can stay content-driven.',
     ],
-    placeholderTitle: 'Backup status and restore tools',
-    placeholderDescription: 'The live Backups page shows runtime status, backup downloads, and explicit restore actions for uploaded JSON backups.',
-    nextSlice: 'Add dedicated audit history later if administrators need a longer-lived backup event timeline.',
+    placeholderTitle: 'Review workflow reference',
+    placeholderDescription: 'This route renders the complete workflow markdown and keeps it accessible from the sidebar card.',
+    nextSlice: 'Add deeper links from each workflow step once the destination views are fully implemented.',
+    showInNavigation: false,
   },
 ];
 
@@ -123,6 +133,10 @@ export const defaultPath = '/dashboard';
 const fallbackSection = appSections[0]!;
 
 const appSectionByPath = new Map<string, AppSection>(appSections.map((section) => [section.path, section]));
+const legacyPathRedirects = new Map<string, AppSection['path']>([
+  ['/archive', '/file-management'],
+  ['/backups', '/file-management'],
+]);
 
 export function normalizePath(pathname: string): string {
   if (pathname === '/') {
@@ -130,6 +144,11 @@ export function normalizePath(pathname: string): string {
   }
 
   const trimmedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const redirectedPath = legacyPathRedirects.get(trimmedPath);
+  if (redirectedPath) {
+    return redirectedPath;
+  }
+
   return appSectionByPath.has(trimmedPath) ? trimmedPath : defaultPath;
 }
 
@@ -151,4 +170,8 @@ export function canAccessSection(role: AppRole, section: AppSection): boolean {
 
 export function getSectionsForRole(role: AppRole): AppSection[] {
   return appSections.filter((section) => canAccessSection(role, section));
+}
+
+export function getNavigationSectionsForRole(role: AppRole): AppSection[] {
+  return getSectionsForRole(role).filter((section) => section.showInNavigation !== false);
 }

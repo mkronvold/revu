@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import type { AuthSession } from '@revu/contracts';
+import type { AuthSession, BackupStatusResponse } from '@revu/contracts';
 import { adminEmployeeExample, adminLoginExample, employeesListExample, foundationSnapshotExample } from '@revu/contracts';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -122,6 +122,21 @@ function createBackupExample() {
       ],
     },
     reviewData,
+  };
+}
+
+function createBackupStatusExample(): BackupStatusResponse {
+  return {
+    dailyBackupsEnabled: true,
+    retentionDays: 14,
+    lastBackupAt: '2026-06-01T12:00:00.000Z',
+    lastRestoreAt: null,
+    defaultUserExportMode: 'preserve-passwords' as const,
+    replaceStrategy: 'replace' as const,
+    supportedFormats: ['json'],
+    supportedRestoreModes: ['replace'],
+    supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'],
+    supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'],
   };
 }
 
@@ -283,7 +298,7 @@ describe('questions screen', () => {
   });
 });
 
-describe('backups screen', () => {
+describe('workflow entry', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -295,7 +310,69 @@ describe('backups screen', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
-    window.history.pushState(null, '', '/backups');
+    window.history.pushState(null, '', '/dashboard');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('keeps Workflow out of the main nav, renders the sidebar markdown card, and routes to the workflow page', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('File Management') ?? false);
+
+    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    expect(navLinkLabels).toContain('File Management');
+    expect(navLinkLabels).not.toContain('Archive');
+    expect(navLinkLabels).not.toContain('Backups');
+    expect(navLinkLabels).not.toContain('Workflow');
+
+    const workflowCard = container.querySelector('a.workflow-card') as HTMLAnchorElement | null;
+    expect(workflowCard).toBeTruthy();
+    expect(workflowCard?.getAttribute('href')).toBe('/workflow');
+    expect(workflowCard?.textContent).toContain('New Review Period begins');
+    expect(workflowCard?.querySelectorAll('li')).toHaveLength(6);
+
+    await act(async () => {
+      workflowCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/workflow');
+
+    expect(container.textContent).toContain('Reference the full review lifecycle');
+    expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
+  });
+});
+
+describe('file management screen', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/file-management');
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.stubGlobal(
       'URL',
@@ -336,18 +413,7 @@ describe('backups screen', () => {
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
-    vi.mocked(getBackupStatus).mockResolvedValue({
-      dailyBackupsEnabled: true,
-      retentionDays: 14,
-      lastBackupAt: '2026-06-01T12:00:00.000Z',
-      lastRestoreAt: null,
-      defaultUserExportMode: 'preserve-passwords',
-      replaceStrategy: 'replace',
-      supportedFormats: ['json'],
-      supportedRestoreModes: ['replace'],
-      supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'],
-      supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'],
-    });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(exportBackup).mockResolvedValue(backup);
     vi.mocked(restoreBackup).mockResolvedValue({
       mode: 'replace',
@@ -370,6 +436,8 @@ describe('backups screen', () => {
 
     await waitFor(() => container.textContent?.includes('Runtime backup configuration') ?? false);
 
+    expect(window.location.pathname).toBe('/file-management');
+    expect(container.textContent).toContain('Archive review periods');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');

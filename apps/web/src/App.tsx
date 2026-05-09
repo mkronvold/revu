@@ -36,11 +36,12 @@ import { buildDashboardSnapshot } from './dashboard';
 import {
   appSections,
   defaultPath,
+  getNavigationSectionsForRole,
   getSection,
   getSectionsForRole,
   navGroups,
   normalizePath,
-  routeLegend,
+  workflowMarkdown,
   type AppRole,
 } from './navigation';
 import {
@@ -486,8 +487,12 @@ function App() {
   const sessionUser = session?.user ?? null;
   const passwordResetRequired = session?.passwordResetRequired ?? false;
   const currentSection = useMemo(() => getSection(pathname), [pathname]);
-  const availableSections = useMemo(
+  const accessibleSections = useMemo(
     () => (sessionUser ? getSectionsForRole(sessionUser.role) : []),
+    [sessionUser],
+  );
+  const navigationSections = useMemo(
+    () => (sessionUser ? getNavigationSectionsForRole(sessionUser.role) : []),
     [sessionUser],
   );
   const hasEmployeeReadAccess = session?.permissions.includes('employees:read') ?? false;
@@ -648,11 +653,11 @@ function App() {
       return;
     }
 
-    if (!availableSections.some((section) => section.path === pathname)) {
+    if (!accessibleSections.some((section) => section.path === pathname)) {
       window.history.replaceState(null, '', '/dashboard');
       setPathname('/dashboard');
     }
-  }, [availableSections, pathname, sessionUser]);
+  }, [accessibleSections, pathname, sessionUser]);
 
   useEffect(() => {
     if (!sessionUser || !sessionToken) {
@@ -955,12 +960,13 @@ function App() {
   };
 
   const goTo = (nextPath: string) => {
-    if (nextPath === pathname) {
+    const normalizedNextPath = normalizePath(nextPath);
+    if (normalizedNextPath === pathname) {
       return;
     }
 
-    window.history.pushState(null, '', nextPath);
-    setPathname(nextPath);
+    window.history.pushState(null, '', normalizedNextPath);
+    setPathname(normalizedNextPath);
   };
 
   const getEmployeeName = (employeeId: string | null) => {
@@ -2566,14 +2572,12 @@ function App() {
     );
   };
 
-  const renderArchive = () => {
+  const renderArchiveContent = () => {
     if (!reviewAdmin) {
       return (
-        <main className="content-grid">
-          <section className="card">
-            <p className="muted-copy">Loading archive controls...</p>
-          </section>
-        </main>
+        <section className="card">
+          <p className="muted-copy">Loading archive controls...</p>
+        </section>
       );
     }
 
@@ -2581,7 +2585,7 @@ function App() {
     const archivedReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'archived');
 
     return (
-      <main className="admin-stack">
+      <>
         <section className="card">
           <div className="section-heading">
             <div>
@@ -2678,9 +2682,11 @@ function App() {
             </div>
           ) : null}
         </section>
-      </main>
+      </>
     );
   };
+
+  const renderArchive = () => <main className="admin-stack">{renderArchiveContent()}</main>;
 
   const renderDashboard = () => (
     <main className="admin-stack">
@@ -3126,8 +3132,8 @@ function App() {
       </div>
     ) : null;
 
-  const renderBackups = () => (
-    <main className="admin-stack">
+  const renderBackupsContent = () => (
+    <>
       <section className="card">
         <div className="section-heading">
           <div>
@@ -3305,6 +3311,32 @@ function App() {
             </button>
           ))}
         </div>
+      </section>
+    </>
+  );
+
+  const renderBackups = () => <main className="admin-stack">{renderBackupsContent()}</main>;
+
+  const renderFileManagement = () => (
+    <main className="admin-stack">
+      <section className="card">
+        <p className="section-label">Current scope</p>
+        <h3>Archive and backup controls</h3>
+        <p>
+          Archive review periods and run backup or restore tasks from one admin workspace. Remaining import and export
+          tools will move into File Management in the next slice.
+        </p>
+      </section>
+      {renderArchiveContent()}
+      {renderBackupsContent()}
+    </main>
+  );
+
+  const renderWorkflow = () => (
+    <main className="content-grid">
+      <section className="card card-wide workflow-page-card">
+        <p className="section-label">Review lifecycle</p>
+        <MarkdownContent markdown={workflowMarkdown} className="markdown-content workflow-page-markdown" />
       </section>
     </main>
   );
@@ -3809,89 +3841,88 @@ function App() {
       <style>{themeStyleOverrides}</style>
       <div className="app-shell" data-revu-theme={themePreference}>
         <aside className="sidebar">
-        <div className="brand-block">
-          <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
-            <div className="brand-row">
-              <h1>REVU</h1>
-              {companyName ? <span className="brand-company">{companyName}</span> : null}
-            </div>
-          </a>
-        </div>
-
-        <div className="session-card sidebar-session-card">
-          <p className="section-label">Signed in as</p>
-          <h2>{sessionUser.fullName}</h2>
-          <p className="sidebar-session-meta">
-            {sessionUser.role} • {sessionUser.username}
-          </p>
-          <button type="button" className="secondary-button" onClick={handleLogout}>
-            Sign out
-          </button>
-        </div>
-
-        {lastResponseMessage ? (
-          <div className="session-card sidebar-status-card" role="status" aria-live="polite">
-            <p className="section-label">Last Response</p>
-            <p>{lastResponseMessage}</p>
-          </div>
-        ) : null}
-
-        <nav className="sidebar-nav" aria-label="Primary">
-          {navGroups.map((group) => (
-            <section className="nav-group" key={group}>
-              <p className="nav-group-label">{group}</p>
-              <div className="nav-links">
-                {availableSections
-                  .filter((section) => section.group === group)
-                  .map((section) => (
-                    <a
-                      className={`nav-link${section.path === pathname ? ' nav-link-active' : ''}`}
-                      href={section.path}
-                      key={section.id}
-                      onClick={(event) => navigate(event, section.path)}
-                    >
-                      <span>{section.title}</span>
-                    </a>
-                  ))}
+          <div className="brand-block">
+            <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
+              <div className="brand-row">
+                <h1>REVU</h1>
+                {companyName ? <span className="brand-company">{companyName}</span> : null}
               </div>
-            </section>
-          ))}
-        </nav>
-
-        <div className="sidebar-utilities">
-          <div
-            className="session-card utility-inline-card theme-card"
-            role="button"
-            tabIndex={0}
-            aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
-            onClick={cycleTheme}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                cycleTheme();
-              }
-            }}
-          >
-            <p className="section-label">Theme</p>
-            <span className="theme-card-value">
-              {getThemeLabel(themePreference)}
-            </span>
+            </a>
           </div>
 
-          {buildRevision ? (
-            <div className="revision-card">
-              <p className="revision-label">Build</p>
-              <p className="revision-sha" title={buildRevision}>{buildRevision.slice(0, 7)}</p>
+          <div className="session-card sidebar-session-card">
+            <p className="section-label">Signed in as</p>
+            <h2>{sessionUser.fullName}</h2>
+            <p className="sidebar-session-meta">
+              {sessionUser.role} • {sessionUser.username}
+            </p>
+            <button type="button" className="secondary-button" onClick={handleLogout}>
+              Sign out
+            </button>
+          </div>
+
+          {lastResponseMessage ? (
+            <div className="session-card sidebar-status-card" role="status" aria-live="polite">
+              <p className="section-label">Last Response</p>
+              <p>{lastResponseMessage}</p>
             </div>
           ) : null}
 
-          <div className="sidebar-note">
-            <p className="sidebar-note-title">Terminology guardrails</p>
-            <p>{routeLegend.assessments}</p>
-            <p>{routeLegend.reviews}</p>
+          <nav className="sidebar-nav" aria-label="Primary">
+            {navGroups.map((group) => (
+              <section className="nav-group" key={group}>
+                <p className="nav-group-label">{group}</p>
+                <div className="nav-links">
+                  {navigationSections
+                    .filter((section) => section.group === group)
+                    .map((section) => (
+                      <a
+                        className={`nav-link${section.path === pathname ? ' nav-link-active' : ''}`}
+                        href={section.path}
+                        key={section.id}
+                        onClick={(event) => navigate(event, section.path)}
+                      >
+                        <span>{section.title}</span>
+                      </a>
+                    ))}
+                </div>
+              </section>
+            ))}
+          </nav>
+
+          <div className="sidebar-utilities">
+            <div
+              className="session-card utility-inline-card theme-card"
+              role="button"
+              tabIndex={0}
+              aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
+              onClick={cycleTheme}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  cycleTheme();
+                }
+              }}
+            >
+              <p className="section-label">Theme</p>
+              <span className="theme-card-value">
+                {getThemeLabel(themePreference)}
+              </span>
+            </div>
+
+            {buildRevision ? (
+              <div className="revision-card">
+                <p className="revision-label">Build</p>
+                <p className="revision-sha" title={buildRevision}>{buildRevision.slice(0, 7)}</p>
+              </div>
+            ) : null}
+
+            <a className="sidebar-note workflow-card" href="/workflow" onClick={(event) => navigate(event, '/workflow')}>
+              <p className="sidebar-note-title">Workflow</p>
+              <MarkdownContent markdown={workflowMarkdown} className="markdown-content workflow-card-markdown" />
+            </a>
           </div>
-        </div>
-      </aside>
+        </aside>
 
       <div className="content">
         {pathname === '/dashboard' ? null : (
@@ -3924,11 +3955,15 @@ function App() {
             ? renderEmployees()
             : pathname === '/questions'
               ? renderQuestions()
-              : pathname === '/archive'
-                ? renderArchive()
-                : pathname === '/backups'
-                  ? renderBackups()
-                  : renderPlaceholderSection()}
+              : pathname === '/file-management'
+                ? renderFileManagement()
+                : pathname === '/workflow'
+                  ? renderWorkflow()
+                  : pathname === '/archive'
+                    ? renderArchive()
+                    : pathname === '/backups'
+                      ? renderBackups()
+                      : renderPlaceholderSection()}
 
         {renderReviewDialog()}
 
