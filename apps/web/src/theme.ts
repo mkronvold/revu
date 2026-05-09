@@ -330,6 +330,16 @@ const themedInteractiveSurfaceSelectors = [
   '.review-queue-item',
 ];
 
+const themedActionButtonSelectors = [
+  'button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)',
+  '.button-link',
+];
+
+const themedActionButtonHoverSelectors = themedActionButtonSelectors.flatMap((selector) => [
+  `${selector}:hover`,
+  `${selector}:focus-visible`,
+]);
+
 function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: ThemePalette) {
   return `
   [data-revu-theme='${theme}'] {
@@ -421,6 +431,16 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.pillBackground};
   }
 
+  [data-revu-theme='${theme}'] .employee-status-pill-active {
+    color: ${palette.successText};
+    background: ${palette.successBackground};
+  }
+
+  [data-revu-theme='${theme}'] .employee-status-pill-inactive {
+    color: ${palette.errorText};
+    background: ${palette.errorBackground};
+  }
+
   [data-revu-theme='${theme}'] input,
   [data-revu-theme='${theme}'] select,
   [data-revu-theme='${theme}'] textarea {
@@ -429,17 +449,16 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.inputBackground};
   }
 
-  [data-revu-theme='${theme}'] button:not(.secondary-button):not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.section-toggle),
-  [data-revu-theme='${theme}'] .button-link {
-    color: ${palette.primaryButtonText};
-    border-color: ${palette.primaryButtonBorder};
-    background: linear-gradient(135deg, ${palette.primaryButtonStart}, ${palette.primaryButtonEnd});
-  }
-
-  [data-revu-theme='${theme}'] button.secondary-button {
+  [data-revu-theme='${theme}'] ${themedActionButtonSelectors.join(`,\n  [data-revu-theme='${theme}'] `)} {
     color: ${palette.secondaryButtonText};
     border-color: ${palette.secondaryButtonBorder};
     background: ${palette.secondaryButtonBackground};
+  }
+
+  [data-revu-theme='${theme}'] ${themedActionButtonHoverSelectors.join(`,\n  [data-revu-theme='${theme}'] `)} {
+    color: ${palette.primaryButtonText};
+    border-color: ${palette.primaryButtonBorder};
+    background: linear-gradient(135deg, ${palette.primaryButtonStart}, ${palette.primaryButtonEnd});
   }
 
   [data-revu-theme='${theme}'] .temporary-password {

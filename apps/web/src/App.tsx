@@ -405,10 +405,6 @@ function App() {
   const [reviewAssessorDraft, setReviewAssessorDraft] = useState('');
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
-  const [employeeRosterExpanded, setEmployeeRosterExpanded] = useState({
-    active: true,
-    inactive: false,
-  });
   const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
     active: true,
     archived: true,
@@ -416,17 +412,10 @@ function App() {
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
-  const employeeDetailRef = useRef<HTMLElement | null>(null);
   const questionSetEditorRef = useRef<HTMLElement | null>(null);
 
   const cycleTheme = () => {
     setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
-  };
-
-  const scrollEmployeeView = () => {
-    window.setTimeout(() => {
-      employeeDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 0);
   };
 
   const scrollQuestionSetEditorView = () => {
@@ -531,6 +520,17 @@ function App() {
   );
   const inactiveEmployees = useMemo(
     () => employees.filter((employee) => employee.status === 'inactive'),
+    [employees],
+  );
+  const directoryEmployees = useMemo(
+    () =>
+      [...employees].sort((left, right) => {
+        if (left.status !== right.status) {
+          return left.status === 'active' ? -1 : 1;
+        }
+
+        return left.fullName.localeCompare(right.fullName);
+      }),
     [employees],
   );
   const managerOptions = useMemo(
@@ -875,8 +875,10 @@ function App() {
       return;
     }
 
-    setSelectedEmployeeId(activeEmployees[0]?.id ?? inactiveEmployees[0]?.id ?? null);
-  }, [activeEmployees, draftEmployee, employees, inactiveEmployees, selectedEmployeeId, sessionUser]);
+    if (selectedEmployeeId) {
+      setSelectedEmployeeId(null);
+    }
+  }, [draftEmployee, employees, selectedEmployeeId, sessionUser]);
 
   useEffect(() => {
     setPasswordDraft('');
@@ -885,16 +887,9 @@ function App() {
   }, [selectedEmployeeId]);
 
   useEffect(() => {
-    if (!authoredAssessmentIds.length) {
+    if (selectedAssessmentId && !authoredAssessmentIds.includes(selectedAssessmentId)) {
       setSelectedAssessmentId(null);
-      return;
     }
-
-    if (selectedAssessmentId && authoredAssessmentIds.includes(selectedAssessmentId)) {
-      return;
-    }
-
-    setSelectedAssessmentId(authoredAssessmentIds[0] ?? null);
   }, [authoredAssessmentIds, selectedAssessmentId]);
 
   useEffect(() => {
@@ -1042,19 +1037,37 @@ function App() {
     setFormError('');
   };
 
+  const closeEmployeeDialog = () => {
+    resetEditingState();
+    setSelectedEmployeeId(null);
+    setSelectedEmployeeDetail(null);
+  };
+
   const closePasswordDialog = () => {
     setPasswordDialogEmployeeId(null);
+    setSelectedEmployeeId(null);
     setPasswordDraft('');
     setPasswordStatus('');
     setTemporaryPassword(null);
+  };
+
+  const closeAssessmentDialog = () => {
+    setSelectedAssessmentId(null);
   };
 
   const closeReviewDialog = () => {
     setSelectedReviewAssessmentId(null);
   };
 
+  const openEmployeeDialog = (employeeId: string) => {
+    resetEditingState();
+    setSelectedEmployeeDetail(null);
+    setSelectedEmployeeId(employeeId);
+  };
+
   const openPasswordDialog = (employeeId: string) => {
     resetEditingState();
+    setSelectedEmployeeDetail(null);
     setSelectedEmployeeId(employeeId);
     setPasswordDialogEmployeeId(employeeId);
   };
@@ -1103,10 +1116,6 @@ function App() {
     setReviewAssessorDraft('');
     setWorkflowNotice('');
     setAreReviewQueuesExpanded(true);
-    setEmployeeRosterExpanded({
-      active: true,
-      inactive: false,
-    });
     setArchivePanelsExpanded({
       active: true,
       archived: true,
@@ -1456,6 +1465,8 @@ function App() {
   };
 
   const startEditingEmployee = (employee: Employee | EmployeeAdmin) => {
+    setSelectedEmployeeDetail('auth' in employee ? employee : null);
+    setSelectedEmployeeId(employee.id);
     setEditingEmployeeId(employee.id);
     setDraftEmployee(toDraft(employee));
     setFormError('');
@@ -2750,99 +2761,107 @@ function App() {
           </div>
         ) : null}
       </section>
-
-      <section className="card">
-        <p className="section-label">Assessment editor</p>
-        {selectedAssessmentEditor ? (
-          <div className="review-layout">
-            <div className="subcard">
-              <div className="section-heading">
-                <div>
-                  <h3>{selectedAssessmentEditor.title}</h3>
-                  <p className="muted-copy">{selectedAssessmentEditor.detail}</p>
-                </div>
-                <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
-              </div>
-              <dl className="detail-grid compact-detail-grid">
-                <div>
-                  <dt>Review period</dt>
-                  <dd>{selectedAssessmentEditor.reviewPeriodLabel}</dd>
-                </div>
-                <div>
-                  <dt>Due date</dt>
-                  <dd>{selectedAssessmentEditor.dueDate}</dd>
-                </div>
-                <div>
-                  <dt>Assessment type</dt>
-                  <dd>{selectedAssessmentEditor.targetLabel}</dd>
-                </div>
-                <div>
-                  <dt>Manager</dt>
-                  <dd>{selectedAssessmentEditor.managerName}</dd>
-                </div>
-              </dl>
-              {selectedAssessmentEditor.headerMarkdown ? (
-                <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content" />
-              ) : null}
-              <div className="question-list">
-                {selectedAssessmentEditor.questions.map((question) => (
-                  <label className="subcard" key={question.questionId}>
-                    <div className="question-prompt-block">
-                      <span className="question-order">#{question.order}</span>
-                      <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
-                    </div>
-                    <small className="muted-copy">
-                      {question.type}
-                      {question.category ? ` • ${question.category}` : ''}
-                    </small>
-                     <textarea
-                       rows={question.type === 'narrative' ? 4 : 3}
-                       disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
-                       value={assessmentResponsesDraft[question.questionId] ?? ''}
-                       onChange={(event) =>
-                         setAssessmentResponsesDraft((currentDraft) => ({
-                           ...currentDraft,
-                          [question.questionId]: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-              {selectedAssessmentEditor.managerNotes ? (
-                <div className="toolbar-note">
-                  <p>
-                    <strong>Review notes:</strong> {selectedAssessmentEditor.managerNotes}
-                  </p>
-                </div>
-              ) : null}
-              {selectedAssessmentEditor.footerMarkdown ? (
-                <MarkdownContent markdown={selectedAssessmentEditor.footerMarkdown} className="markdown-content muted-copy" />
-              ) : null}
-              <div className="action-row">
-                <button
-                  type="button"
-                  disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
-                  onClick={() => void handleSaveAssessmentForLater()}
-                >
-                  Save for later
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedAssessmentEditor.canSubmit || isSavingAssessmentWorkflow}
-                  onClick={() => void handleSubmitAssessment()}
-                >
-                  Submit
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="muted-copy">Select an assessment queue item to edit or review your submission.</p>
-        )}
-      </section>
     </main>
   );
+
+  const renderAssessmentDialog = () =>
+    selectedAssessmentEditor ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeAssessmentDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card review-dialog-card"
+          role="dialog"
+          aria-labelledby="assessment-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Assessment editor</p>
+              <h3 id="assessment-dialog-title">{selectedAssessmentEditor.title}</h3>
+              <p className="muted-copy">{selectedAssessmentEditor.detail}</p>
+            </div>
+            <div className="action-row">
+              <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
+              <button type="button" className="secondary-button" onClick={closeAssessmentDialog}>
+                Close
+              </button>
+            </div>
+          </div>
+          <dl className="detail-grid compact-detail-grid">
+            <div>
+              <dt>Review period</dt>
+              <dd>{selectedAssessmentEditor.reviewPeriodLabel}</dd>
+            </div>
+            <div>
+              <dt>Due date</dt>
+              <dd>{selectedAssessmentEditor.dueDate}</dd>
+            </div>
+            <div>
+              <dt>Assessment type</dt>
+              <dd>{selectedAssessmentEditor.targetLabel}</dd>
+            </div>
+            <div>
+              <dt>Manager</dt>
+              <dd>{selectedAssessmentEditor.managerName}</dd>
+            </div>
+          </dl>
+          {selectedAssessmentEditor.headerMarkdown ? (
+            <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content" />
+          ) : null}
+          <div className="question-list">
+            {selectedAssessmentEditor.questions.map((question) => (
+              <label className="subcard" key={question.questionId}>
+                <div className="question-prompt-block">
+                  <span className="question-order">#{question.order}</span>
+                  <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                </div>
+                <small className="muted-copy">
+                  {question.type}
+                  {question.category ? ` • ${question.category}` : ''}
+                </small>
+                <textarea
+                  rows={question.type === 'narrative' ? 4 : 3}
+                  disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
+                  value={assessmentResponsesDraft[question.questionId] ?? ''}
+                  onChange={(event) =>
+                    setAssessmentResponsesDraft((currentDraft) => ({
+                      ...currentDraft,
+                      [question.questionId]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          {selectedAssessmentEditor.managerNotes ? (
+            <div className="toolbar-note">
+              <p>
+                <strong>Review notes:</strong> {selectedAssessmentEditor.managerNotes}
+              </p>
+            </div>
+          ) : null}
+          {selectedAssessmentEditor.footerMarkdown ? (
+            <MarkdownContent markdown={selectedAssessmentEditor.footerMarkdown} className="markdown-content muted-copy" />
+          ) : null}
+          <div className="action-row">
+            <button
+              type="button"
+              disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
+              onClick={() => void handleSaveAssessmentForLater()}
+            >
+              Save for later
+            </button>
+            <button
+              type="button"
+              disabled={!selectedAssessmentEditor.canSubmit || isSavingAssessmentWorkflow}
+              onClick={() => void handleSubmitAssessment()}
+            >
+              Submit
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null;
 
   const renderReviews = () => (
     <main className="admin-stack">
@@ -3290,14 +3309,13 @@ function App() {
     </main>
   );
 
-  const renderEmployeeDetail = () => {
+  const renderEmployeeDialog = () => {
+    if (pathname !== '/employees' || passwordDialogEmployeeId) {
+      return null;
+    }
+
     if (!selectedEmployee && !draftEmployee) {
-      return (
-        <section className="card" ref={employeeDetailRef}>
-          <p className="section-label">Employee detail</p>
-          <p>Select an employee to review or edit the record.</p>
-        </section>
-      );
+      return null;
     }
 
     if (draftEmployee && editingEmployeeId) {
@@ -3310,383 +3328,364 @@ function App() {
         : '';
 
       return (
-        <section className="card" ref={employeeDetailRef}>
-          <p className="section-label">{draftEmployee.id ? 'Edit employee' : 'Add employee'}</p>
-          <form className="stack-form" onSubmit={saveEmployee}>
-            <label>
-              Username
-              <input
-                value={draftEmployee.username}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, username: event.target.value })}
-              />
-            </label>
-            <label>
-              Full name
-              <input
-                value={draftEmployee.fullName}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, fullName: event.target.value })}
-              />
-            </label>
-            <label>
-              Email
-              <input
-                type="email"
-                value={draftEmployee.email}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, email: event.target.value })}
-              />
-            </label>
-            <label>
-              Manager
-              <select
-                value={selectedManagerId}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, managerId: event.target.value })}
-              >
-                <option value="">Not assigned</option>
-                {managerOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Assessor
-              <select
-                value={selectedAssessorId}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, assessorId: event.target.value })}
-              >
-                <option value="">Not assigned</option>
-                {employeeAssessorOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              App role
-              <select
-                disabled={!isAdmin}
-                value={draftEmployee.role}
-                onChange={(event) => setDraftEmployee({ ...draftEmployee, role: event.target.value as AppRole })}
-              >
-                <option value="employee">employee</option>
-                <option value="manager">manager</option>
-                <option value="admin">admin</option>
-              </select>
-            </label>
-            <label>
-              Status
-              <select
-                value={draftEmployee.status}
-                onChange={(event) =>
-                  setDraftEmployee({
-                    ...draftEmployee,
-                    status: event.target.value as EmployeeDraft['status'],
-                  })
-                }
-              >
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
-              </select>
-            </label>
-            {!draftEmployee.id ? (
-              <label>
-                Initial password (optional)
-                <input
-                  type="password"
-                  value={draftEmployee.initialPassword}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, initialPassword: event.target.value })}
-                  placeholder="Leave blank to set or reset later"
-                />
-              </label>
-            ) : null}
-            {formError ? <p className="form-error">{formError}</p> : null}
-            <div className="action-row">
-              <button type="submit" disabled={isSavingEmployee}>
-                {isSavingEmployee ? 'Saving…' : 'Save employee'}
-              </button>
-              <button type="button" className="secondary-button" onClick={resetEditingState}>
-                Cancel
+        <div className="modal-backdrop" role="presentation" onClick={closeEmployeeDialog}>
+          <section
+            aria-modal="true"
+            className="card modal-card employee-dialog-card"
+            role="dialog"
+            aria-labelledby="employee-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="section-heading">
+              <div>
+                <p className="section-label">{draftEmployee.id ? 'Edit employee' : 'Add employee'}</p>
+                <h3 id="employee-dialog-title">{draftEmployee.fullName || 'Employee record'}</h3>
+              </div>
+              <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                Close
               </button>
             </div>
-          </form>
-        </section>
+            <form className="stack-form" onSubmit={saveEmployee}>
+              <label>
+                Username
+                <input
+                  value={draftEmployee.username}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, username: event.target.value })}
+                />
+              </label>
+              <label>
+                Full name
+                <input
+                  value={draftEmployee.fullName}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, fullName: event.target.value })}
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={draftEmployee.email}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, email: event.target.value })}
+                />
+              </label>
+              <label>
+                Manager
+                <select
+                  value={selectedManagerId}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, managerId: event.target.value })}
+                >
+                  <option value="">Not assigned</option>
+                  {managerOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Assessor
+                <select
+                  value={selectedAssessorId}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessorId: event.target.value })}
+                >
+                  <option value="">Not assigned</option>
+                  {employeeAssessorOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                App role
+                <select
+                  disabled={!isAdmin}
+                  value={draftEmployee.role}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, role: event.target.value as AppRole })}
+                >
+                  <option value="employee">employee</option>
+                  <option value="manager">manager</option>
+                  <option value="admin">admin</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select
+                  value={draftEmployee.status}
+                  onChange={(event) =>
+                    setDraftEmployee({
+                      ...draftEmployee,
+                      status: event.target.value as EmployeeDraft['status'],
+                    })
+                  }
+                >
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                </select>
+              </label>
+              {!draftEmployee.id ? (
+                <label>
+                  Initial password (optional)
+                  <input
+                    type="password"
+                    value={draftEmployee.initialPassword}
+                    onChange={(event) => setDraftEmployee({ ...draftEmployee, initialPassword: event.target.value })}
+                    placeholder="Leave blank to set or reset later"
+                  />
+                </label>
+              ) : null}
+              {formError ? <p className="form-error">{formError}</p> : null}
+              <div className="action-row">
+                <button type="submit" disabled={isSavingEmployee}>
+                  {isSavingEmployee ? 'Saving…' : 'Save employee'}
+                </button>
+                <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       );
     }
 
+    const detailEmployee = selectedEmployeeDetail ?? selectedEmployee;
+
     return (
-      <section className="detail-panel" ref={employeeDetailRef}>
-        <div className="card">
-          <p className="section-label">Employee view</p>
-          <h3>{selectedEmployeeDetail?.fullName ?? selectedEmployee?.fullName}</h3>
-          <dl className="detail-grid">
+      <div className="modal-backdrop" role="presentation" onClick={closeEmployeeDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card employee-dialog-card"
+          role="dialog"
+          aria-labelledby="employee-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
             <div>
-              <dt>Username</dt>
-              <dd>{selectedEmployeeDetail?.username ?? selectedEmployee?.username}</dd>
+              <p className="section-label">Employee detail</p>
+              <h3 id="employee-dialog-title">{detailEmployee?.fullName ?? 'Employee record'}</h3>
             </div>
-            <div>
-              <dt>Email</dt>
-              <dd>{selectedEmployeeDetail?.email ?? selectedEmployee?.email}</dd>
-            </div>
-            <div>
-              <dt>Manager</dt>
-              <dd>{getEmployeeName((selectedEmployeeDetail ?? selectedEmployee)?.managerId ?? null)}</dd>
-            </div>
-            <div>
-              <dt>Assessor</dt>
-              <dd>{getEmployeeName((selectedEmployeeDetail ?? selectedEmployee)?.assessorId ?? null)}</dd>
-            </div>
-            <div>
-              <dt>Role</dt>
-              <dd>{selectedEmployeeDetail?.role ?? selectedEmployee?.role}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{selectedEmployeeDetail?.status ?? selectedEmployee?.status}</dd>
-            </div>
-            <div>
-              <dt>Password configured</dt>
-              <dd>{selectedEmployeeDetail?.auth.passwordConfigured ? 'Yes' : 'No'}</dd>
-            </div>
-            <div>
-              <dt>Password reset required</dt>
-              <dd>{selectedEmployeeDetail?.auth.passwordResetRequired ? 'Yes' : 'No'}</dd>
-            </div>
-            <div>
-              <dt>Last password change</dt>
-              <dd>{formatLocalizedDateTime(selectedEmployeeDetail?.auth.lastPasswordChangeAt ?? null)}</dd>
-            </div>
-          </dl>
-          <div className="action-row">
-            {canManageEmployees && canEditSelectedEmployee ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const employeeToEdit = selectedEmployeeDetail ?? selectedEmployee;
-                  if (employeeToEdit) {
-                    startEditingEmployee(employeeToEdit);
-                  }
-                }}
-              >
-                Edit
+            <div className="action-row">
+              <span className={`pill employee-status-pill employee-status-pill-${detailEmployee?.status ?? 'active'}`}>
+                {detailEmployee?.status ?? 'active'}
+              </span>
+              <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                Close
               </button>
-            ) : null}
-            {isAdmin && (selectedEmployeeDetail ?? selectedEmployee) ? (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => openPasswordDialog((selectedEmployeeDetail ?? selectedEmployee)!.id)}
-              >
-                Manage password
-              </button>
-            ) : null}
-            {isAdmin ? (
-              <button type="button" className="secondary-button" onClick={markEmployeeInactive}>
-                Remove
-              </button>
-            ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+
+          {detailEmployee ? (
+            <>
+              <dl className="detail-grid">
+                <div>
+                  <dt>Username</dt>
+                  <dd>{detailEmployee.username}</dd>
+                </div>
+                <div>
+                  <dt>Email</dt>
+                  <dd>{detailEmployee.email}</dd>
+                </div>
+                <div>
+                  <dt>Manager</dt>
+                  <dd>{getEmployeeName(detailEmployee.managerId)}</dd>
+                </div>
+                <div>
+                  <dt>Assessor</dt>
+                  <dd>{getEmployeeName(detailEmployee.assessorId)}</dd>
+                </div>
+                <div>
+                  <dt>Role</dt>
+                  <dd>{detailEmployee.role}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{detailEmployee.status}</dd>
+                </div>
+                <div>
+                  <dt>Password configured</dt>
+                  <dd>{selectedEmployeeDetail ? (selectedEmployeeDetail.auth.passwordConfigured ? 'Yes' : 'No') : 'Loading…'}</dd>
+                </div>
+                <div>
+                  <dt>Password reset required</dt>
+                  <dd>{selectedEmployeeDetail ? (selectedEmployeeDetail.auth.passwordResetRequired ? 'Yes' : 'No') : 'Loading…'}</dd>
+                </div>
+                <div>
+                  <dt>Last password change</dt>
+                  <dd>
+                    {selectedEmployeeDetail
+                      ? formatLocalizedDateTime(selectedEmployeeDetail.auth.lastPasswordChangeAt ?? null)
+                      : 'Loading…'}
+                  </dd>
+                </div>
+              </dl>
+              <div className="action-row">
+                {canManageEmployees && canEditSelectedEmployee ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (detailEmployee) {
+                        startEditingEmployee(detailEmployee);
+                      }
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                {isAdmin ? (
+                  <button type="button" className="secondary-button" onClick={() => openPasswordDialog(detailEmployee.id)}>
+                    Manage password
+                  </button>
+                ) : null}
+                {isAdmin && detailEmployee.status === 'active' ? (
+                  <button type="button" className="secondary-button" onClick={() => void markEmployeeInactive()}>
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className="muted-copy">Loading employee details…</p>
+          )}
+        </section>
+      </div>
     );
   };
 
-  const renderEmployees = () => (
-    <main className="admin-stack">
-      <section className="card">
-        {(() => {
-          const renderEmployeeRosterRow = (employee: Employee) => {
-            const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
+  const renderEmployees = () => {
+    const renderEmployeeRosterRow = (employee: Employee) => {
+      const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
 
-            return (
-              <div className="employee-row-card" key={employee.id}>
-                <button
-                  type="button"
-                  className="employee-row-summary"
-                  onClick={() => {
-                    setSelectedEmployeeId(employee.id);
-                    resetEditingState();
-                    scrollEmployeeView();
-                  }}
-                >
-                  <span className="employee-row-cell employee-row-name">
-                    <strong>{employee.fullName}</strong>
-                  </span>
-                  <span className="employee-row-cell">{employee.role}</span>
-                  <span className="employee-row-cell">{employee.email}</span>
-                  <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
-                  <span className="employee-row-cell">{getEmployeeName(employee.assessorId)}</span>
-                </button>
-                <div className="employee-row-actions">
-                  {canManageEmployees && canEditEmployeeRow ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        setSelectedEmployeeId(employee.id);
-                        startEditingEmployee(employee);
-                        scrollEmployeeView();
-                      }}
-                    >
-                      Edit
-                    </button>
-                  ) : null}
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => openPasswordDialog(employee.id)}
-                    >
-                      Password
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          };
-
-          const renderEmployeeRosterTable = (employees: Employee[], emptyMessage: string, label: string) =>
-            employees.length ? (
-              <div className="employee-roster-table-scroll" role="region" aria-label={label}>
-                <div className="employee-roster-table" aria-label={label}>
-                  <div className="employee-roster-header">
-                    <span>Name</span>
-                    <span>Role</span>
-                    <span>Email</span>
-                    <span>Manager</span>
-                    <span>Assessor</span>
-                    <span>Actions</span>
-                  </div>
-                  {employees.map(renderEmployeeRosterRow)}
-                </div>
-              </div>
-            ) : (
-              <p className="muted-copy">{emptyMessage}</p>
-            );
-
-          return (
-            <>
-        <div className="section-heading">
-          <p className="section-label">Employee roster</p>
-          {isAdmin ? (
-            <button type="button" onClick={startAddingEmployee}>
-              Add employee
-            </button>
-          ) : null}
-        </div>
-
-        {isLoadingEmployees ? <p className="muted-copy">Loading employee roster...</p> : null}
-
-        <div className="employee-roster-group">
-          <button
-            type="button"
-            className="section-toggle"
-            onClick={() =>
-              setEmployeeRosterExpanded((currentState) => ({
-                ...currentState,
-                active: !currentState.active,
-              }))
-            }
-          >
-            <span>Active employees</span>
-            <span className="muted-copy">
-              {activeEmployees.length} {activeEmployees.length === 1 ? 'employee' : 'employees'} •{' '}
-              {employeeRosterExpanded.active ? 'Collapse' : 'Expand'}
+      return (
+        <div className="employee-row-card" key={employee.id}>
+          <button type="button" className="employee-row-summary" onClick={() => openEmployeeDialog(employee.id)}>
+            <span className="employee-row-cell employee-row-name">
+              <strong>{employee.fullName}</strong>
+              <span className="muted-copy employee-row-subcopy">{employee.username}</span>
+            </span>
+            <span className="employee-row-cell">{employee.role}</span>
+            <span className="employee-row-cell">{employee.email}</span>
+            <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
+            <span className="employee-row-cell">{getEmployeeName(employee.assessorId)}</span>
+            <span className="employee-row-cell">
+              <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
             </span>
           </button>
-          {employeeRosterExpanded.active ? (
-            renderEmployeeRosterTable(activeEmployees, 'No active employees.', 'Active employees')
-          ) : null}
+          <div className="employee-row-actions">
+            {canManageEmployees && canEditEmployeeRow ? (
+              <button type="button" className="secondary-button" onClick={() => startEditingEmployee(employee)}>
+                Edit
+              </button>
+            ) : null}
+            {isAdmin ? (
+              <button type="button" className="secondary-button" onClick={() => openPasswordDialog(employee.id)}>
+                Password
+              </button>
+            ) : null}
+          </div>
         </div>
+      );
+    };
 
-        <div className="employee-roster-group">
-          <button
-            type="button"
-            className="section-toggle"
-            onClick={() =>
-              setEmployeeRosterExpanded((currentState) => ({
-                ...currentState,
-                inactive: !currentState.inactive,
-              }))
-            }
-          >
-            <span>Inactive employees</span>
-            <span className="muted-copy">
-              {inactiveEmployees.length} {inactiveEmployees.length === 1 ? 'employee' : 'employees'} •{' '}
-              {employeeRosterExpanded.inactive ? 'Collapse' : 'Expand'}
-            </span>
-          </button>
-          {employeeRosterExpanded.inactive ? (
-            renderEmployeeRosterTable(inactiveEmployees, 'No inactive employees.', 'Inactive employees')
-          ) : null}
-        </div>
-            </>
-          );
-        })()}
-      </section>
-
-      {renderEmployeeDetail()}
-
-      {isAdmin ? (
+    return (
+      <main className="admin-stack">
         <section className="card">
           <div className="section-heading">
             <div>
-              <p className="section-label">Import/Export users</p>
+              <p className="section-label">Employee directory</p>
+              <p className="muted-copy">
+                {activeEmployees.length} active • {inactiveEmployees.length} inactive
+              </p>
             </div>
+            {isAdmin ? (
+              <button type="button" onClick={startAddingEmployee}>
+                Add employee
+              </button>
+            ) : null}
           </div>
-          <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
-            {localUserExportModeOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`local-user-export-mode-option${localUserExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="local-user-export-mode"
-                  value={option.value}
-                  checked={localUserExportMode === option.value}
-                  onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
-                />
-                <span className="local-user-export-mode-copy">
-                  <strong>{option.label}</strong>
-                  <span className="muted-copy">{option.description}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <div className="action-row">
-            <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
-              {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isSyncingLocalUsers}
-              onClick={() => void handleLocalUserExport('csv')}
-            >
-              Export CSV
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isSyncingLocalUsers}
-              onClick={() => void handleLocalUserImport()}
-            >
-              Import Users
-            </button>
-            <input
-              ref={localUserImportInputRef}
-              type="file"
-              accept=".json,.csv,application/json,text/csv,text/plain"
-              style={{ display: 'none' }}
-              onChange={(event) => void handleLocalUserImportFileChange(event)}
-            />
-          </div>
+
+          {isLoadingEmployees ? <p className="muted-copy">Loading employee roster...</p> : null}
+
+          {directoryEmployees.length ? (
+            <div className="employee-roster-table-scroll" role="region" aria-label="Employee directory">
+              <div className="employee-roster-table" aria-label="Employee directory">
+                <div className="employee-roster-header">
+                  <span>Name</span>
+                  <span>Role</span>
+                  <span>Email</span>
+                  <span>Manager</span>
+                  <span>Assessor</span>
+                  <span>Status</span>
+                  <span>Actions</span>
+                </div>
+                {directoryEmployees.map(renderEmployeeRosterRow)}
+              </div>
+            </div>
+          ) : (
+            <p className="muted-copy">No employees in the directory.</p>
+          )}
         </section>
-      ) : null}
-    </main>
-  );
+
+        {isAdmin ? (
+          <section className="card">
+            <div className="section-heading">
+              <div>
+                <p className="section-label">Import/Export users</p>
+              </div>
+            </div>
+            <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
+              {localUserExportModeOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className={`local-user-export-mode-option${localUserExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="local-user-export-mode"
+                    value={option.value}
+                    checked={localUserExportMode === option.value}
+                    onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
+                  />
+                  <span className="local-user-export-mode-copy">
+                    <strong>{option.label}</strong>
+                    <span className="muted-copy">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="action-row">
+              <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
+                {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSyncingLocalUsers}
+                onClick={() => void handleLocalUserExport('csv')}
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSyncingLocalUsers}
+                onClick={() => void handleLocalUserImport()}
+              >
+                Import Users
+              </button>
+              <input
+                ref={localUserImportInputRef}
+                type="file"
+                accept=".json,.csv,application/json,text/csv,text/plain"
+                style={{ display: 'none' }}
+                onChange={(event) => void handleLocalUserImportFileChange(event)}
+              />
+            </div>
+          </section>
+        ) : null}
+      </main>
+    );
+  };
 
   if (!sessionUser) {
     return (
@@ -3932,6 +3931,10 @@ function App() {
                   : renderPlaceholderSection()}
 
         {renderReviewDialog()}
+
+        {renderAssessmentDialog()}
+
+        {renderEmployeeDialog()}
 
         {isAdmin && passwordDialogEmployeeId ? (
           <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>

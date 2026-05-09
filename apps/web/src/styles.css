@@ -395,14 +395,17 @@ button {
 button,
 .button-link {
   padding: 0.35rem 0.75rem;
-  border: 1px solid transparent;
+  border: 1px solid rgba(148, 163, 184, 0.45);
   font-size: 0.85rem;
   font-weight: 700;
   line-height: 1.2;
-  color: white;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #0f172a;
+  background: white;
   transition:
     transform 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
     opacity 120ms ease;
 }
 
@@ -411,6 +414,9 @@ button:focus-visible,
 .button-link:hover,
 .button-link:focus-visible {
   transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.32);
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   outline: none;
 }
 
@@ -709,10 +715,10 @@ button.employee-row:focus-visible {
 }
 
 .employee-roster-table {
-  --employee-roster-columns: minmax(150px, 1.2fr) minmax(90px, 0.75fr) minmax(240px, 1.85fr) minmax(150px, 1.1fr)
-    minmax(150px, 1.1fr);
+  --employee-roster-columns: minmax(180px, 1.3fr) minmax(90px, 0.7fr) minmax(240px, 1.65fr) minmax(150px, 0.95fr)
+    minmax(150px, 0.95fr) minmax(110px, 0.7fr);
   --employee-roster-actions-column: 180px;
-  min-width: 1080px;
+  min-width: 1180px;
   display: grid;
   gap: 0.15rem;
 }
@@ -748,9 +754,7 @@ button.employee-row:focus-visible {
 
 .employee-row-summary,
 .review-queue-item {
-  grid-column: 1 / span 5;
   display: grid;
-  grid-template-columns: var(--employee-roster-columns);
   align-items: center;
   gap: 0.75rem;
   padding: 0.55rem 0.35rem;
@@ -759,6 +763,12 @@ button.employee-row:focus-visible {
   color: #0f172a;
   text-align: left;
   background: transparent;
+}
+
+.employee-row-summary {
+  grid-column: 1 / span 6;
+  display: grid;
+  grid-template-columns: var(--employee-roster-columns);
 }
 
 .review-queue-item {
@@ -786,11 +796,36 @@ button.employee-row:focus-visible {
   color: inherit;
 }
 
+.employee-row-name {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.employee-row-subcopy {
+  display: block;
+}
+
 .employee-row-actions {
-  grid-column: 6;
+  grid-column: 7;
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+
+.employee-status-pill {
+  min-width: 5.5rem;
+  justify-content: center;
+  text-transform: capitalize;
+}
+
+.employee-status-pill-active {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.employee-status-pill-inactive {
+  color: #991b1b;
+  background: #fee2e2;
 }
 
 .local-user-export-mode-grid {
@@ -896,6 +931,12 @@ button.employee-row:focus-visible {
   border: none;
   color: #0f172a;
   text-align: left;
+  background: transparent;
+}
+
+.section-toggle:hover,
+.section-toggle:focus-visible {
+  color: #0f172a;
   background: transparent;
 }
 
@@ -1320,6 +1361,12 @@ button.employee-row:focus-visible {
   width: min(640px, 100%);
   display: grid;
   gap: 1rem;
+}
+
+.employee-dialog-card {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
 }
 
 .sr-only {

@@ -73,7 +73,9 @@ import {
   listEmployees,
   listQuestionCategories,
   me,
+  resetEmployeePassword,
   restoreBackup,
+  updateEmployee,
 } from './api';
 
 function cloneQuestionSlice() {
@@ -133,11 +135,45 @@ function createManagerSession(): AuthSession {
   };
 }
 
+function createEmployeeSession(): AuthSession {
+  return {
+    ...adminLoginExample.session,
+    permissions: ['assessments:read'],
+    user: employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!,
+  };
+}
+
+function createEmployeeDetail(employeeId: string) {
+  const employee = employeesListExample.items.find((candidate) => candidate.id === employeeId)!;
+  return {
+    item: {
+      ...employee,
+      auth: {
+        passwordConfigured: true,
+        passwordResetRequired: false,
+        lastPasswordChangeAt: '2026-01-15T12:00:00.000Z',
+      },
+    },
+  };
+}
+
 async function flushRender() {
   await act(async () => {
     await Promise.resolve();
     await new Promise((resolve) => window.setTimeout(resolve, 0));
   });
+}
+
+function setFieldValue(field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
+  const prototype =
+    field instanceof window.HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : field instanceof window.HTMLSelectElement
+        ? window.HTMLSelectElement.prototype
+        : window.HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(field, value);
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 async function waitFor(check: () => boolean, attempts = 20) {
@@ -541,5 +577,275 @@ describe('reviews screen', () => {
 
     await waitFor(() => container.textContent?.includes('In review') ?? false);
     expect(container.textContent).toContain('Assessment accepted and moved into the review stage.');
+  });
+});
+
+describe('dashboard screen', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/dashboard');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('keeps the queue on the dashboard and opens assessment editing in a dialog', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    expect(container.textContent).toContain('Assessment Queue');
+    expect(container.textContent).not.toContain('Assessment editor');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+    const openButton = container.querySelector('.dashboard-queue-row button');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    expect(container.textContent).toContain('Assessment editor');
+    expect(container.textContent).toContain('Save for later');
+
+    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    expect(closeButton).toBeTruthy();
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe('employees screen', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/employees');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('uses a single employee table and keeps edit and password actions in dialogs', async () => {
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const pat = employeesListExample.items.find((employee) => employee.username === 'pat.peer')!;
+    const updatedEmployee = {
+      ...createEmployeeDetail(elliot.id).item,
+      fullName: 'Elliot Updated',
+      assessorId: pat.id,
+    };
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+    vi.mocked(updateEmployee).mockResolvedValue({ item: updatedEmployee });
+    vi.mocked(resetEmployeePassword).mockResolvedValue({
+      employeeId: elliot.id,
+      passwordResetRequired: true,
+      temporaryPassword: 'OneTime123!',
+      lastPasswordChangeAt: '2026-02-01T08:00:00.000Z',
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    expect(container.textContent).toContain('Status');
+    expect(container.textContent).not.toContain('Active employees');
+    expect(container.textContent).not.toContain('Inactive employees');
+
+    const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Employee'),
+    );
+    expect(elliotRow).toBeTruthy();
+
+    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    expect(summaryButton).toBeTruthy();
+
+    await act(async () => {
+      summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    expect(container.textContent).toContain('Employee detail');
+    expect(container.textContent).toContain('Password configured');
+
+    const detailCloseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    expect(detailCloseButton).toBeTruthy();
+
+    await act(async () => {
+      detailCloseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const editButton = Array.from(elliotRow?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Edit');
+    expect(editButton).toBeTruthy();
+
+    await act(async () => {
+      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Edit employee') ?? false);
+
+    const managerSelect = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Manager'))
+      ?.querySelector('select') as HTMLSelectElement | null;
+    const assessorSelect = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Assessor'))
+      ?.querySelector('select') as HTMLSelectElement | null;
+    const fullNameInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Full name'))
+      ?.querySelector('input') as HTMLInputElement | null;
+
+    expect(managerSelect).toBeTruthy();
+    expect(assessorSelect).toBeTruthy();
+    expect(fullNameInput).toBeTruthy();
+    expect(Array.from(managerSelect?.options ?? [], (option) => option.textContent)).toEqual([
+      'Not assigned',
+      'Ada Admin',
+      'Manny Manager',
+    ]);
+    expect(Array.from(assessorSelect?.options ?? [], (option) => option.textContent)).not.toContain('Elliot Employee');
+
+    await act(async () => {
+      if (fullNameInput) {
+        setFieldValue(fullNameInput, 'Elliot Updated');
+      }
+      if (assessorSelect) {
+        setFieldValue(assessorSelect, pat.id);
+      }
+      await flushRender();
+    });
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save employee');
+    expect(saveButton).toBeTruthy();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Elliot Updated') ?? false);
+
+    expect(updateEmployee).toHaveBeenCalledWith('session-token', elliot.id, {
+      username: 'elliot.employee',
+      fullName: 'Elliot Updated',
+      email: 'elliot.employee@example.com',
+      role: 'employee',
+      status: 'active',
+      managerId: mannyManager.id,
+      assessorId: pat.id,
+    });
+
+    const updatedDetailCloseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    await act(async () => {
+      updatedDetailCloseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const updatedRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Updated'),
+    );
+    const passwordButton = Array.from(updatedRow?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Password',
+    );
+    expect(passwordButton).toBeTruthy();
+
+    await act(async () => {
+      passwordButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Password management') ?? false);
+
+    const resetButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Generate one-time passcode',
+    );
+    expect(resetButton).toBeTruthy();
+
+    await act(async () => {
+      resetButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('One-time passcode: OneTime123!') ?? false);
+
+    expect(resetEmployeePassword).toHaveBeenCalledWith('session-token', elliot.id);
+  });
+
+  it('keeps password actions admin-only while managers can still edit non-admin employees', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const employeeActionLabels = Array.from(container.querySelectorAll('.employee-row-actions button'), (button) => button.textContent);
+    expect(employeeActionLabels).not.toContain('Password');
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Add employee')).toBe(false);
+
+    const adaRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) => row.textContent?.includes('Ada Admin'));
+    const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Employee'),
+    );
+
+    expect(Array.from(adaRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
+    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(true);
   });
 });

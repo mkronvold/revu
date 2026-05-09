@@ -40,4 +40,14 @@ describe('theme helpers', () => {
     expect(themeStyleOverrides).toContain(".employee-row-summary:hover");
     expect(themeStyleOverrides).toContain(".review-queue-item:hover");
   });
+
+  it('uses the shared button default color with themed hover gradients', () => {
+    expect(themeStyleOverrides).toContain(
+      "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)",
+    );
+    expect(themeStyleOverrides).toContain(
+      "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle):hover",
+    );
+    expect(themeStyleOverrides).toContain('.button-link:focus-visible');
+  });
 });
