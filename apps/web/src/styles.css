@@ -453,7 +453,6 @@ button:focus-visible,
 .button-link:focus-visible {
   transform: translateY(-1px);
   border-color: rgba(37, 99, 235, 0.32);
-  color: white;
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   outline: none;
 }
