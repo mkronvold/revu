@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Tightened the sidebar brand row, utility panel placement, signed-in card spacing, and global button height
+- Replaced the sidebar light/dark toggle with a cycling multi-theme switcher and added Spring, Summer, Autumn, and Winter Nights palettes
 - Fixed deployed runtime company-name branding so the sidebar title reads the current `.env` value instead of a cached default
 - Refined the Reviews screen terminology, queue density, status display, and subjective response formatting
 - Added a root `test.sh` helper to run the full workspace validation flow

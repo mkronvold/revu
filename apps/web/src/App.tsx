@@ -82,101 +82,19 @@ import {
   type TransferFormat,
 } from './reviewAdminApi';
 import { getRuntimeCompanyName } from './runtimeConfig';
+import {
+  getNextThemePreference,
+  getThemeColorScheme,
+  getThemeLabel,
+  normalizeThemePreference,
+  themeStyleOverrides,
+  type ThemePreference,
+} from './theme';
 
 const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
-const workspaceTitle = companyName ? `Assessment workspace • ${companyName}` : 'Assessment workspace';
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
-const darkThemeStyleOverrides = `
-  [data-revu-theme='dark'] {
-    color: #e2e8f0;
-  }
-
-  [data-revu-theme='dark'].login-shell,
-  [data-revu-theme='dark'].app-shell {
-    background:
-      radial-gradient(circle at top, rgba(14, 165, 233, 0.18), transparent 30%),
-      linear-gradient(180deg, #020617 0%, #0f172a 55%, #111827 100%);
-  }
-
-  [data-revu-theme='dark'] .login-card,
-  [data-revu-theme='dark'] .card,
-  [data-revu-theme='dark'] .subcard,
-  [data-revu-theme='dark'] .modal-card,
-  [data-revu-theme='dark'] .employee-row-card,
-  [data-revu-theme='dark'] .queue-card,
-  [data-revu-theme='dark'] .session-card {
-    color: #e2e8f0;
-    border-color: rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.92);
-    box-shadow: 0 20px 50px rgba(2, 6, 23, 0.35);
-  }
-
-  [data-revu-theme='dark'] .login-copy,
-  [data-revu-theme='dark'] .muted-copy,
-  [data-revu-theme='dark'] .status-caption,
-  [data-revu-theme='dark'] .brand-copy,
-  [data-revu-theme='dark'] .toolbar-note,
-  [data-revu-theme='dark'] .employee-row-summary small {
-    color: #cbd5e1;
-  }
-
-  [data-revu-theme='dark'] .sidebar {
-    background: rgba(2, 6, 23, 0.94);
-  }
-
-  [data-revu-theme='dark'] .nav-link,
-  [data-revu-theme='dark'] .section-toggle,
-  [data-revu-theme='dark'] .demo-account-card,
-  [data-revu-theme='dark'] .employee-row-summary {
-    color: #e2e8f0;
-    border-color: rgba(148, 163, 184, 0.2);
-    background: rgba(30, 41, 59, 0.75);
-  }
-
-  [data-revu-theme='dark'] .nav-link-active {
-    border-color: rgba(56, 189, 248, 0.9);
-    background: rgba(14, 165, 233, 0.24);
-  }
-
-  [data-revu-theme='dark'] .sidebar-note {
-    background: rgba(13, 148, 136, 0.2);
-  }
-
-  [data-revu-theme='dark'] .badge,
-  [data-revu-theme='dark'] .pill {
-    color: #e0f2fe;
-    background: rgba(14, 165, 233, 0.22);
-  }
-
-  [data-revu-theme='dark'] button,
-  [data-revu-theme='dark'] input,
-  [data-revu-theme='dark'] select,
-  [data-revu-theme='dark'] textarea {
-    color: #e2e8f0;
-    border-color: rgba(148, 163, 184, 0.22);
-    background: rgba(15, 23, 42, 0.92);
-  }
-
-  [data-revu-theme='dark'] button.secondary-button {
-    background: rgba(51, 65, 85, 0.92);
-  }
-
-  [data-revu-theme='dark'] .temporary-password {
-    color: #dcfce7;
-    background: rgba(22, 101, 52, 0.32);
-  }
-
-  [data-revu-theme='dark'] .form-error {
-    color: #fecaca;
-    background: rgba(127, 29, 29, 0.34);
-  }
-
-  [data-revu-theme='dark'] .modal-backdrop {
-    background: rgba(2, 6, 23, 0.78);
-  }
-`;
 
 type EmployeeDraft = {
   id: string | null;
@@ -196,8 +114,6 @@ type DemoAccount = {
   username: string;
   password: string;
 };
-
-type ThemePreference = 'light' | 'dark';
 
 type LocalUserTransferPreview = {
   format: TransferFormat;
@@ -275,8 +191,7 @@ function getErrorMessage(error: unknown) {
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-    const storedPreference = window.localStorage.getItem(themeStorageKey);
-    return storedPreference === 'dark' ? 'dark' : 'light';
+    return normalizeThemePreference(window.localStorage.getItem(themeStorageKey));
   });
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -354,7 +269,7 @@ function App() {
 
   useEffect(() => {
     window.localStorage.setItem(themeStorageKey, themePreference);
-    document.documentElement.style.colorScheme = themePreference;
+    document.documentElement.style.colorScheme = getThemeColorScheme(themePreference);
   }, [themePreference]);
 
   useEffect(() => {
@@ -3135,7 +3050,7 @@ function App() {
   if (!sessionUser) {
     return (
       <>
-        <style>{darkThemeStyleOverrides}</style>
+        <style>{themeStyleOverrides}</style>
         <div className="login-shell" data-revu-theme={themePreference}>
           <section className="login-card">
             <p className="eyebrow">Revu</p>
@@ -3215,7 +3130,7 @@ function App() {
   if (passwordResetRequired) {
     return (
       <>
-        <style>{darkThemeStyleOverrides}</style>
+        <style>{themeStyleOverrides}</style>
         <div className="login-shell" data-revu-theme={themePreference}>
           <section className="login-card">
             <p className="eyebrow">Password change required</p>
@@ -3271,18 +3186,19 @@ function App() {
 
   return (
     <>
-      <style>{darkThemeStyleOverrides}</style>
+      <style>{themeStyleOverrides}</style>
       <div className="app-shell" data-revu-theme={themePreference}>
         <aside className="sidebar">
         <div className="brand-block">
-          <p className="eyebrow">Revu</p>
-          <a className="brand-title-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
-            <h1>{workspaceTitle}</h1>
+          <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
+            <div className="brand-row">
+              <h1>REVU</h1>
+              {companyName ? <span className="brand-company">{companyName}</span> : null}
+            </div>
           </a>
-          <p className="brand-copy">API-backed auth, employee administration, and dashboard flows on top of the shell foundation.</p>
         </div>
 
-        <div className="session-card">
+        <div className="session-card sidebar-session-card">
           <p className="section-label">Signed in as</p>
           <h2>{sessionUser.fullName}</h2>
           <p>
@@ -3316,17 +3232,17 @@ function App() {
           ))}
         </nav>
 
-        <div style={{ marginTop: 'auto', display: 'grid', gap: '1rem' }}>
+        <div className="sidebar-utilities">
           <div className="session-card">
             <p className="section-label">Theme</p>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setThemePreference((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
+              aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
+              onClick={() => setThemePreference((currentTheme) => getNextThemePreference(currentTheme))}
             >
-              {themePreference === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              Theme: {getThemeLabel(themePreference)}
             </button>
-            <p className="muted-copy">Saved in this browser.</p>
           </div>
 
           <div className="sidebar-note">

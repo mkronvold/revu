@@ -1,0 +1,33 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  getNextThemePreference,
+  getThemeColorScheme,
+  getThemeLabel,
+  normalizeThemePreference,
+} from './theme';
+
+describe('theme helpers', () => {
+  it('normalizes stored theme preferences and migrates legacy dark mode', () => {
+    expect(normalizeThemePreference('light')).toBe('light');
+    expect(normalizeThemePreference('spring')).toBe('spring');
+    expect(normalizeThemePreference('dark')).toBe('winter-nights');
+    expect(normalizeThemePreference('unknown')).toBe('light');
+    expect(normalizeThemePreference(null)).toBe('light');
+  });
+
+  it('cycles through every theme and wraps to light', () => {
+    expect(getNextThemePreference('light')).toBe('spring');
+    expect(getNextThemePreference('spring')).toBe('summer');
+    expect(getNextThemePreference('summer')).toBe('autumn');
+    expect(getNextThemePreference('autumn')).toBe('winter-nights');
+    expect(getNextThemePreference('winter-nights')).toBe('light');
+  });
+
+  it('exposes readable labels and color scheme metadata', () => {
+    expect(getThemeLabel('autumn')).toBe('Autumn');
+    expect(getThemeLabel('winter-nights')).toBe('Winter Nights');
+    expect(getThemeColorScheme('summer')).toBe('light');
+    expect(getThemeColorScheme('winter-nights')).toBe('dark');
+  });
+});
