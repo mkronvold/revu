@@ -300,6 +300,7 @@ const themedSurfaceSelectors = [
   '.subcard',
   '.modal-card',
   '.employee-roster-table-scroll',
+  '.dashboard-queue-group',
   '.queue-card',
   '.session-card',
   '.assignment-row',
@@ -398,6 +399,10 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.navHoverBackground};
   }
 
+  [data-revu-theme='${theme}'] .employee-row-summary {
+    background: ${palette.inputBackground};
+  }
+
   [data-revu-theme='${theme}'] .sidebar-note {
     background: ${palette.sidebarNoteBackground};
   }
@@ -447,7 +452,6 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.modalBackdrop};
   }
 
-  [data-revu-theme='${theme}'] .employee-row-active,
   [data-revu-theme='${theme}'] .admin-list-item-active {
     border-color: ${palette.activeBorder};
     background: ${palette.activeBackground};

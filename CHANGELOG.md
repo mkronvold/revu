@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Matched Summer Nights employee roster rows to the pulldown tone, removed the persistent selected-row highlight, auto-scrolled roster selections into the employee view, and moved Import/Export users below that detail panel
+- Tinted the dashboard Assessment Queue category cards with the shared themed surface so Summer Nights uses the same sand-in-shadow tone there too
 - Renamed the sidebar status area to Last Response, kept the latest workflow/admin response in one shared card, and let it clear automatically after 2 minutes
 - Moved the remaining workflow result notices into the sidebar, made the full Theme card clickable, and shifted Summer Nights surfaces to a darker sand-in-shade tone
 - Fixed question-set updates to preserve referenced question ids and reject removing questions that already have recorded assessment responses

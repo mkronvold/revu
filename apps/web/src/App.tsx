@@ -262,9 +262,16 @@ function App() {
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const reviewPanelRef = useRef<HTMLElement | null>(null);
+  const employeeDetailRef = useRef<HTMLElement | null>(null);
 
   const cycleTheme = () => {
     setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
+  };
+
+  const scrollEmployeeView = () => {
+    window.setTimeout(() => {
+      employeeDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   };
 
   useEffect(() => {
@@ -2683,7 +2690,7 @@ function App() {
   const renderEmployeeDetail = () => {
     if (!selectedEmployee && !draftEmployee) {
       return (
-        <section className="card">
+        <section className="card" ref={employeeDetailRef}>
           <p className="section-label">Employee detail</p>
           <p>Select an employee to review or edit the record.</p>
         </section>
@@ -2692,7 +2699,7 @@ function App() {
 
     if (draftEmployee && editingEmployeeId) {
       return (
-        <section className="card">
+        <section className="card" ref={employeeDetailRef}>
           <p className="section-label">{draftEmployee.id ? 'Edit employee' : 'Add employee'}</p>
           <form className="stack-form" onSubmit={saveEmployee}>
             <label>
@@ -2798,7 +2805,7 @@ function App() {
     }
 
     return (
-      <section className="detail-panel">
+      <section className="detail-panel" ref={employeeDetailRef}>
         <div className="card">
           <p className="section-label">Employee view</p>
           <h3>{selectedEmployeeDetail?.fullName ?? selectedEmployee?.fullName}</h3>
@@ -2882,16 +2889,14 @@ function App() {
             const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
 
             return (
-              <div
-                className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
-                key={employee.id}
-              >
+              <div className="employee-row-card" key={employee.id}>
                 <button
                   type="button"
                   className="employee-row-summary"
                   onClick={() => {
                     setSelectedEmployeeId(employee.id);
                     resetEditingState();
+                    scrollEmployeeView();
                   }}
                 >
                   <span className="employee-row-cell employee-row-name">
@@ -2910,6 +2915,7 @@ function App() {
                       onClick={() => {
                         setSelectedEmployeeId(employee.id);
                         startEditingEmployee(employee);
+                        scrollEmployeeView();
                       }}
                     >
                       Edit
@@ -3009,6 +3015,8 @@ function App() {
         })()}
       </section>
 
+      {renderEmployeeDetail()}
+
       {isAdmin ? (
         <section className="card">
           <div className="section-heading">
@@ -3020,7 +3028,12 @@ function App() {
             <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
               {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
             </button>
-            <button type="button" className="secondary-button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('csv')}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSyncingLocalUsers}
+              onClick={() => void handleLocalUserExport('csv')}
+            >
               Export CSV
             </button>
             <button
@@ -3041,8 +3054,6 @@ function App() {
           </div>
         </section>
       ) : null}
-
-      {renderEmployeeDetail()}
     </main>
   );
 

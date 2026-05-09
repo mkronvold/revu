@@ -742,11 +742,6 @@ button.employee-row:focus-visible {
   justify-content: flex-end;
 }
 
-.employee-row-active {
-  border-color: rgba(37, 99, 235, 0.58);
-  background: #dbeafe;
-}
-
 .toolbar-note {
   margin-top: 1rem;
   padding: 1rem;
