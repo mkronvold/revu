@@ -1,5 +1,6 @@
 services:
   db:
+    container_name: revu-postgres
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -24,6 +25,7 @@ services:
           - revu-postgres
 
   api:
+    container_name: revu-api
     image: ${REVU_API_IMAGE:-ghcr.io/mkronvold/revu-api}:${REVU_IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
@@ -53,6 +55,7 @@ services:
           - revu-api
 
   web:
+    container_name: revu-web
     image: ${REVU_WEB_IMAGE:-ghcr.io/mkronvold/revu-web}:${REVU_IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
