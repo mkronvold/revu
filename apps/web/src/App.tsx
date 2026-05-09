@@ -3507,19 +3507,7 @@ function App() {
         {renderLocalUserTransferCard()}
         {renderQuestionTransferCard()}
       </div>
-
-      <section className="card">
-        <p className="section-label">Review period lifecycle</p>
-        <h3>Archive review periods</h3>
-        <p>Archive completed cycles or reopen archived ones before editing review data again.</p>
-      </section>
       {renderArchiveContent()}
-
-      <section className="card">
-        <p className="section-label">Backups</p>
-        <h3>Backup and restore</h3>
-        <p>Runtime backup status, full backup downloads, and restore actions remain available here unchanged.</p>
-      </section>
       {renderBackupsContent()}
     </main>
   );

@@ -508,6 +508,8 @@ describe('file management screen', () => {
 
     expect(window.location.pathname).toBe('/file-management');
     expect(container.textContent).not.toContain('Admin workspace');
+    expect(container.textContent).not.toContain('Review period lifecycle');
+    expect(container.textContent).not.toContain('Backup and restore');
     expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Local user transfer files');
     expect(container.textContent).toContain('Question set transfer files');
