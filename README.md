@@ -8,6 +8,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
 - The API currently serves seeded in-memory demo data for local workflow development. Restarting the API resets that data.
 - PostgreSQL migrations in `prisma/migrations/` define the intended schema and can be applied locally for schema validation and future persistence work.
 - Question-set and assignment export routes return metadata stubs today; matching import routes acknowledge supported formats but are still `not_implemented`.
+- GitHub Actions publishes deployment images to `ghcr.io/mkronvold/revu-api` and `ghcr.io/mkronvold/revu-web`.
 
 ## Requirements
 
@@ -15,7 +16,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
 - npm 10+
 - Docker with Docker Compose
 
-## Quick start
+## Quick start for source development
 
 1. Install workspace dependencies:
 
@@ -23,7 +24,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    npm install
    ```
 
-2. Optional: copy the sample environment file if you want to override local ports or database credentials for Docker Compose:
+2. Optional: copy the sample environment file if you want to override local ports or database credentials:
 
    ```bash
    cp .env.example .env
@@ -35,18 +36,18 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    npm run validate
    ```
 
-4. Start the full local stack with Docker Compose:
+4. Start the full local source stack with Docker Compose:
 
    ```bash
    npm run dev
    ```
 
-   This starts:
+   This starts the deployment compose file plus the `docker-compose.dev.yml` override:
    - PostgreSQL on `localhost:5432` by default
    - API on `http://localhost:4000` by default
    - Web on `http://localhost:3000` by default
 
-   Override those defaults by copying `.env.example` to `.env` and editing the values there. If you change `API_PORT`, also update `VITE_API_BASE_URL` so the browser keeps calling the right API origin.
+   Override those defaults by copying `.env.example` to `.env` and editing the values there. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
 
 5. Apply SQL migrations to the local Postgres container when you need a real schema instance:
 
@@ -67,18 +68,61 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
 - Web:
 
   ```bash
-  VITE_API_BASE_URL=http://localhost:4000 npm run dev:web
+  VITE_API_BASE_URL=/api/v1 npm run dev:web
   ```
 
+  The host `dev:web` command automatically proxies `/api` traffic to `http://localhost:4000` unless you override `VITE_PROXY_TARGET`.
+
 The direct workspace commands are useful for frontend or API-only iteration after `npm install`.
+
+## Deploy from GHCR
+
+1. Copy the sample environment file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Set the image names and tag you want to deploy. The defaults point at:
+
+   - `ghcr.io/mkronvold/revu-api`
+   - `ghcr.io/mkronvold/revu-web`
+   - tag `latest`
+
+3. If the repository or packages are private, authenticate the Docker host to GHCR before pulling:
+
+   ```bash
+   echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+   ```
+
+4. Pull and start the deployment stack:
+
+   ```bash
+   npm run deploy:pull
+   npm run deploy:up
+   ```
+
+   This uses `docker-compose.yml` as the deployment definition, runs PostgreSQL locally, exposes the API on `http://localhost:4000`, and serves the web UI on `http://localhost:3000`. The published web image proxies `/api/*` requests to the `api` service inside Compose, so no browser-side API host override is required for standard deployments.
+
+## Container publishing
+
+- Workflow: `.github/workflows/publish-images.yml`
+- Triggers:
+  - pull requests run workspace validation plus Docker builds without pushing
+  - pushes to `main`, version tags, and manual dispatch publish images to GHCR
+- Published images:
+  - `ghcr.io/mkronvold/revu-api`
+  - `ghcr.io/mkronvold/revu-web`
 
 ## Local scripts
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Starts `db`, `api`, and `web` with Docker Compose. |
+| `npm run dev` | Starts `db`, `api`, and `web` from source with the dev compose override. |
 | `npm run dev:api` | Runs the API workspace in watch mode on the host. |
 | `npm run dev:web` | Runs the Vite web workspace on the host. |
+| `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
+| `npm run deploy:up` | Starts the deployment stack from published images. |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
 | `npm run db:down` | Stops Compose services. |
@@ -87,6 +131,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run build` | Builds all workspaces. |
 | `npm run validate` | Runs tests, typecheck, and build in sequence. |
 | `npm run compose:config` | Verifies Docker Compose configuration renders cleanly. |
+| `npm run compose:config:dev` | Verifies the development compose override renders cleanly. |
 
 ## Demo accounts
 
@@ -105,6 +150,7 @@ These credentials are for local development only and live in the in-memory demo 
 
 - `DATABASE_URL` is used by the containerized API configuration and future persistence work.
 - The running API does not write the seeded demo workflows into Postgres yet.
+- `.env.example` defaults `DATABASE_URL` to the Compose network host (`db`). If you run API tooling directly on the host instead of in Compose, switch that hostname to `localhost`.
 - If you need a clean local schema, run:
 
   ```bash

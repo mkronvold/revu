@@ -62,13 +62,13 @@ const errorResponseSchema = z.object({
   message: z.string().min(1),
 });
 
-const defaultApiOrigin = 'http://localhost:4000';
-const configuredApiOrigin =
+const defaultApiBaseUrl = '/api/v1';
+const configuredApiBaseUrl =
   typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
     ? import.meta.env.VITE_API_BASE_URL
-    : defaultApiOrigin;
+    : defaultApiBaseUrl;
 
-export const apiBaseUrl = `${configuredApiOrigin.replace(/\/$/, '')}/api/v1`;
+export const apiBaseUrl = configuredApiBaseUrl.replace(/\/$/, '');
 
 export class ApiClientError extends Error {
   constructor(

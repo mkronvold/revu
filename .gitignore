@@ -4,6 +4,11 @@ coverage/
 .vite/
 .DS_Store
 *.log
+*~
+*.swp
+*.swo
+*.docx
+*.xlsx
 .env
 .env.local
 .env.development.local

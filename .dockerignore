@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.github
+.mycelium
+.copilot
+coverage
+*.log
+*.docx
+*.xlsx
+goal.md
+goal.md~
