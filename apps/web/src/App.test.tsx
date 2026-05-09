@@ -483,6 +483,43 @@ describe('workflow entry', () => {
     expect(window.location.pathname).toBe('/workflow');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
+
+  it('toggles the sidebar width without removing navigation or utility controls', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('File Management') ?? false);
+
+    const shell = container.querySelector('.app-shell');
+    const toggleButton = container.querySelector('button[aria-label="Collapse sidebar"]') as HTMLButtonElement | null;
+    expect(shell?.getAttribute('data-sidebar-collapsed')).toBe('false');
+    expect(toggleButton).toBeTruthy();
+
+    await act(async () => {
+      toggleButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(shell?.getAttribute('data-sidebar-collapsed')).toBe('true');
+    expect(window.localStorage.getItem('revu-sidebar-collapsed')).toBe('true');
+    expect(container.querySelector('button[aria-label="Expand sidebar"]')).toBeTruthy();
+
+    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    expect(navLinkLabels).toContain('Reviews');
+    expect(navLinkLabels).toContain('Workflow');
+    expect(navLinkLabels).toContain('File Management');
+    expect(Array.from(container.querySelectorAll('.sidebar button')).some((button) => button.textContent === 'Sign out')).toBe(true);
+    expect(container.querySelector('.theme-card')).toBeTruthy();
+  });
 });
 
 describe('file management screen', () => {

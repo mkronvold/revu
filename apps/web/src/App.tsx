@@ -114,6 +114,7 @@ const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
 const workflowStorageKey = 'revu-workflow-markdown';
 const workflowVisibilityStorageKey = 'revu-workflow-visibility';
+const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
 const lastResponseTimeoutMs = 120000;
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
@@ -204,6 +205,10 @@ function normalizeStoredWorkflowVisibility(value: string | null): WorkflowVisibi
 
 function getStoredWorkflowVisibility(): WorkflowVisibility {
   return normalizeStoredWorkflowVisibility(window.localStorage.getItem(workflowVisibilityStorageKey));
+}
+
+function getStoredSidebarCollapsed() {
+  return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
 }
 
 type BackupRestoreAction = {
@@ -430,6 +435,7 @@ function App() {
   const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getStoredSidebarCollapsed());
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
@@ -442,6 +448,10 @@ function App() {
 
   const cycleTheme = () => {
     setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
+  };
+
+  const toggleSidebarCollapsed = () => {
+    setIsSidebarCollapsed((currentValue) => !currentValue);
   };
 
   useEffect(() => {
@@ -473,6 +483,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(workflowVisibilityStorageKey, workflowVisibility);
   }, [workflowVisibility]);
+
+  useEffect(() => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4045,15 +4059,31 @@ function App() {
   return (
     <>
       <style>{themeStyleOverrides}</style>
-      <div className="app-shell" data-revu-theme={themePreference}>
-        <aside className="sidebar">
-          <div className="brand-block">
-            <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
-              <div className="brand-row">
-                <h1>REVU</h1>
-                {companyName ? <span className="brand-company">{companyName}</span> : null}
-              </div>
-            </a>
+      <div
+        className="app-shell"
+        data-revu-theme={themePreference}
+        data-sidebar-collapsed={isSidebarCollapsed ? 'true' : 'false'}
+      >
+        <aside className="sidebar" data-collapsed={isSidebarCollapsed ? 'true' : 'false'}>
+          <div className="sidebar-header">
+            <div className="brand-block">
+              <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
+                <div className="brand-row">
+                  <h1>REVU</h1>
+                  {companyName ? <span className="brand-company">{companyName}</span> : null}
+                </div>
+              </a>
+            </div>
+            <button
+              type="button"
+              className="sidebar-toggle"
+              aria-expanded={!isSidebarCollapsed}
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={toggleSidebarCollapsed}
+            >
+              <span aria-hidden="true">{isSidebarCollapsed ? '›' : '‹'}</span>
+            </button>
           </div>
 
           <div className="session-card sidebar-session-card">

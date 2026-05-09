@@ -108,10 +108,17 @@ button {
 .app-shell {
   display: grid;
   min-height: 100vh;
-  grid-template-columns: minmax(260px, 320px) 1fr;
+  --sidebar-width: clamp(16.25rem, 22vw, 20rem);
+  --modal-available-width: calc(100vw - 4rem);
+  grid-template-columns: minmax(13.5rem, var(--sidebar-width)) minmax(0, 1fr);
   background:
     radial-gradient(circle at top, rgba(59, 130, 246, 0.16), transparent 32%),
     linear-gradient(180deg, #eff6ff 0%, #e2e8f0 50%, #f8fafc 100%);
+}
+
+.app-shell[data-sidebar-collapsed='true'] {
+  --sidebar-width: clamp(12.75rem, 17vw, 14rem);
+  --modal-available-width: calc(100vw - 3rem);
 }
 
 .sidebar {
@@ -121,6 +128,18 @@ button {
   padding: 2rem 1.5rem;
   background: rgba(15, 23, 42, 0.94);
   color: #e2e8f0;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sidebar-header .brand-block {
+  min-width: 0;
+  flex: 1;
 }
 
 .brand-block h1,
@@ -181,6 +200,31 @@ button {
   text-align: right;
 }
 
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: inherit;
+  background: rgba(148, 163, 184, 0.12);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.8);
+  background: rgba(14, 165, 233, 0.18);
+  outline: none;
+}
+
 .brand-title-link:hover h1,
 .brand-title-link:focus-visible h1 {
   text-decoration: underline;
@@ -237,6 +281,39 @@ button {
 .sidebar-utilities {
   display: grid;
   gap: 1rem;
+}
+
+.sidebar[data-collapsed='true'] {
+  gap: 1rem;
+  padding: 1.5rem 1rem;
+}
+
+.sidebar[data-collapsed='true'] .brand-company,
+.sidebar[data-collapsed='true'] .nav-group-label,
+.sidebar[data-collapsed='true'] .sidebar-session-meta,
+.sidebar[data-collapsed='true'] .sidebar-status-card .section-label,
+.sidebar[data-collapsed='true'] .revision-label {
+  display: none;
+}
+
+.sidebar[data-collapsed='true'] .brand-row {
+  align-items: center;
+}
+
+.sidebar[data-collapsed='true'] .nav-link {
+  padding: 0.7rem 0.85rem;
+}
+
+.sidebar[data-collapsed='true'] .sidebar-session-card,
+.sidebar[data-collapsed='true'] .sidebar-status-card,
+.sidebar[data-collapsed='true'] .revision-card {
+  padding-inline: 0.75rem;
+}
+
+.sidebar[data-collapsed='true'] .utility-inline-card {
+  align-items: start;
+  justify-content: flex-start;
+  flex-direction: column;
 }
 
 .utility-inline-card {
@@ -1100,8 +1177,8 @@ button.employee-row:focus-visible {
 }
 
 .review-dialog-card {
-  width: min(1360px, calc(100vw - 2rem));
-  max-width: calc(100vw - 2rem);
+  width: min(96%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
 }
@@ -1282,7 +1359,8 @@ button.employee-row:focus-visible {
 }
 
 .workflow-editor-dialog {
-  width: min(1080px, 100%);
+  width: min(90%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
 }
 
 .workflow-editor-grid {
@@ -1401,7 +1479,8 @@ button.employee-row:focus-visible {
 }
 
 .question-set-dialog {
-  width: min(1080px, 100%);
+  width: min(90%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
 }
@@ -1482,7 +1561,8 @@ button.employee-row:focus-visible {
 }
 
 .question-edit-dialog {
-  width: min(720px, 100%);
+  width: min(80%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
 }
@@ -1541,15 +1621,16 @@ button.employee-row:focus-visible {
 }
 
 .modal-card {
-  width: min(640px, 100%);
+  width: min(72%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
   display: grid;
   gap: 1rem;
   background: #ffffff;
 }
 
 .employee-dialog-card {
-  width: min(1040px, calc(100vw - 4rem));
-  max-width: calc(100vw - 4rem);
+  width: min(92%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
 }
@@ -1568,11 +1649,16 @@ button.employee-row:focus-visible {
 
 @media (max-width: 960px) {
   .app-shell {
+    --modal-available-width: calc(100vw - 2rem);
     grid-template-columns: 1fr;
   }
 
   .sidebar {
     gap: 1.5rem;
+  }
+
+  .modal-backdrop {
+    padding: 1rem;
   }
 
   .content-grid {
