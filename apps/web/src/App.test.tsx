@@ -327,6 +327,80 @@ describe('questions screen', () => {
 
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('longer free-form response');
   });
+
+  it('keeps archived question-set dialogs read-only and dismissible from the backdrop', async () => {
+    const archivedSnapshot = cloneQuestionSlice();
+    archivedSnapshot.reviewPeriods[0] = {
+      ...archivedSnapshot.reviewPeriods[0]!,
+      status: 'archived',
+    };
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(archivedSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const questionSetCard = container.querySelector('.question-set-card');
+    expect(questionSetCard).toBeTruthy();
+
+    await act(async () => {
+      questionSetCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const editor = container.querySelector('.question-set-dialog');
+    expect(editor).toBeTruthy();
+    expect(editor?.textContent).toContain('Read only');
+    expect(editor?.textContent).toContain('Archived review periods keep question sets visible, but editing stays disabled.');
+
+    const titleInput = Array.from(editor?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Title'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const statusField = Array.from(editor?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Status'))
+      ?.querySelector('select') as HTMLSelectElement | null;
+    const headerField = Array.from(editor?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Header markdown'))
+      ?.querySelector('textarea') as HTMLTextAreaElement | null;
+    const footerField = Array.from(editor?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Footer markdown'))
+      ?.querySelector('textarea') as HTMLTextAreaElement | null;
+    const removeButtons = Array.from(editor?.querySelectorAll('button') ?? []).filter(
+      (button) => button.textContent === 'Remove',
+    );
+    const addQuestionButton = Array.from(editor?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Add question',
+    );
+
+    expect(titleInput?.disabled).toBe(true);
+    expect(statusField?.disabled).toBe(true);
+    expect(headerField?.disabled).toBe(true);
+    expect(footerField?.disabled).toBe(true);
+    expect(removeButtons.length).toBeGreaterThan(0);
+    expect(removeButtons.every((button) => button.disabled)).toBe(true);
+    expect(addQuestionButton?.disabled).toBe(true);
+    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Save question set')).toBe(
+      false,
+    );
+    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Cancel')).toBe(false);
+    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Close')).toBe(true);
+
+    await act(async () => {
+      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('.question-set-dialog')).toBeNull();
+  });
 });
 
 describe('workflow entry', () => {
@@ -815,6 +889,60 @@ describe('reviews screen', () => {
 
     await act(async () => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('collapses the review queue and closes the assessment dialog from the backdrop', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('waiting to be accepted') ?? false);
+
+    const sectionToggle = container.querySelector('.section-toggle') as HTMLButtonElement | null;
+    expect(sectionToggle?.textContent).toContain('Review Queue');
+    expect(sectionToggle?.textContent).toContain('Collapse');
+    expect(container.querySelector('[aria-label="Review queue"]')).toBeTruthy();
+
+    await act(async () => {
+      sectionToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[aria-label="Review queue"]')).toBeNull();
+    expect(container.querySelector('.section-toggle')?.textContent).toContain('Expand');
+
+    await act(async () => {
+      container.querySelector('.section-toggle')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const submittedRow = Array.from(container.querySelectorAll('.review-queue-item')).find(
+      (button) =>
+        button.textContent?.includes('Elliot Employee') &&
+        button.textContent?.includes('Self assessment') &&
+        button.textContent?.includes('waiting to be accepted'),
+    );
+    expect(submittedRow).toBeTruthy();
+
+    await act(async () => {
+      submittedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    await act(async () => {
+      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 

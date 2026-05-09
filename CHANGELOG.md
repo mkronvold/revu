@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Polished Questions, Reviews, and Employees together by moving question-set editing into modal dialogs with nested question editing, tightening the review and employee directories into denser single-table layouts, and shifting review/password actions fully into the corresponding dialogs
 - Made modal window surfaces fully opaque across every theme while leaving the shared modal backdrop behavior unchanged
 - Moved more sidebar, workflow, review-response, question-set, and warning surfaces onto the shared theme palette so non-light themes no longer leak hardcoded light/slate colors
 - Added editable workflow markdown in File Management with a preview/edit modal, removed the old File Management scope card, and made the Workflow page plus sidebar card render from the shared saved content
