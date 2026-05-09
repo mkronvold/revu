@@ -416,7 +416,6 @@ function App() {
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
-  const reviewPanelRef = useRef<HTMLElement | null>(null);
   const employeeDetailRef = useRef<HTMLElement | null>(null);
   const questionSetEditorRef = useRef<HTMLElement | null>(null);
 
@@ -581,7 +580,7 @@ function App() {
     [assessmentWorkflow, sessionUser, workflowEmployees],
   );
   const reviewAssessmentIds = useMemo(
-    () => reviewQueues.flatMap((queue) => queue.items.map((item) => item.assessmentId)),
+    () => reviewQueues.map((item) => item.assessmentId),
     [reviewQueues],
   );
   const selectedAssessmentEditor = useMemo(
@@ -910,16 +909,9 @@ function App() {
   }, [selectedAssessmentEditor]);
 
   useEffect(() => {
-    if (!reviewAssessmentIds.length) {
+    if (selectedReviewAssessmentId && !reviewAssessmentIds.includes(selectedReviewAssessmentId)) {
       setSelectedReviewAssessmentId(null);
-      return;
     }
-
-    if (selectedReviewAssessmentId && reviewAssessmentIds.includes(selectedReviewAssessmentId)) {
-      return;
-    }
-
-    setSelectedReviewAssessmentId(reviewAssessmentIds[0] ?? null);
   }, [reviewAssessmentIds, selectedReviewAssessmentId]);
 
   useEffect(() => {
@@ -934,18 +926,6 @@ function App() {
     setReviewManagerDraft(selectedReviewPanel.currentManagerId ?? '');
     setReviewAssessorDraft(selectedReviewPanel.currentAssessorId);
   }, [selectedReviewPanel]);
-
-  useEffect(() => {
-    if (!selectedReviewAssessmentId || !selectedReviewPanel) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      reviewPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [selectedReviewAssessmentId, selectedReviewPanel]);
 
   useEffect(() => {
     if (!selectedEmployeeId || !sessionToken || !hasEmployeeReadAccess || draftEmployee) {
@@ -1067,6 +1047,10 @@ function App() {
     setPasswordDraft('');
     setPasswordStatus('');
     setTemporaryPassword(null);
+  };
+
+  const closeReviewDialog = () => {
+    setSelectedReviewAssessmentId(null);
   };
 
   const openPasswordDialog = (employeeId: string) => {
@@ -2863,142 +2847,205 @@ function App() {
   const renderReviews = () => (
     <main className="admin-stack">
       <section className="card review-sidebar">
-        <div className="section-heading">
-          <h3>Review Queue</h3>
-          <div className="action-row">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAreReviewQueuesExpanded(false)}
-            >
-              Collapse
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setAreReviewQueuesExpanded(true)}
-            >
-              Expand
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          className="section-toggle"
+          onClick={() => setAreReviewQueuesExpanded((currentState) => !currentState)}
+        >
+          <span>Review Queue</span>
+          <span className="muted-copy">
+            {reviewQueues.length} {reviewQueues.length === 1 ? 'item' : 'items'} •{' '}
+            {areReviewQueuesExpanded ? 'Collapse' : 'Expand'}
+          </span>
+        </button>
+        <p className="muted-copy">Open an assessment to review responses, notes, and workflow actions.</p>
 
-        <div className="review-queue-stack">
-          {reviewQueues.map((queue) => (
-            <div className="subcard review-queue-group" key={queue.title}>
-              <div className="review-queue-group-heading">
-                <strong>{queue.title}</strong>
-                <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
-              </div>
-              {areReviewQueuesExpanded ? (
-                queue.items.length ? (
-                  <div className="review-queue-list">
-                    {queue.items.map((item) => (
-                      <button
-                        type="button"
-                        className={`admin-list-item review-queue-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
-                        key={item.assessmentId}
-                        onClick={() => handleSelectReviewAssessment(item.assessmentId)}
-                      >
-                        <span className="review-queue-line">
-                          <strong>{item.title}</strong>
-                          <span className="review-queue-separator" aria-hidden="true">
-                            |
-                          </span>
-                          <span>{item.assessorLabel}</span>
-                          <span className="review-queue-separator" aria-hidden="true">
-                            |
-                          </span>
-                          <span>{item.statusLabel}</span>
-                        </span>
-                      </button>
-                    ))}
+        {areReviewQueuesExpanded ? (
+          reviewQueues.length ? (
+            <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label="Review queue">
+              <div className="review-queue-table" aria-label="Review queue">
+                <div className="review-queue-header">
+                  <span>Name</span>
+                  <span>Review type</span>
+                  <span>Assessor</span>
+                  <span>Review period</span>
+                  <span>Next step</span>
+                </div>
+                {reviewQueues.map((item) => (
+                  <div className="review-queue-row-card" key={item.assessmentId}>
+                    <button
+                      type="button"
+                      className={`review-queue-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
+                      onClick={() => handleSelectReviewAssessment(item.assessmentId)}
+                    >
+                      <span className="employee-row-cell review-queue-primary">
+                        <strong>{item.subjectName}</strong>
+                        <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                      </span>
+                      <span className="employee-row-cell">{item.targetLabel}</span>
+                      <span className="employee-row-cell">{item.assessorLabel}</span>
+                      <span className="employee-row-cell">{item.reviewPeriodLabel}</span>
+                      <span className="employee-row-cell review-queue-step-cell">
+                        <span className="pill">{item.nextStepLabel}</span>
+                      </span>
+                    </button>
                   </div>
-                ) : (
-                  <p className="muted-copy">No items in this queue right now.</p>
-                )
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {selectedReviewPanel ? (
-        <>
-          <section className="card" ref={reviewPanelRef}>
-              <div className="section-heading">
-                <div>
-                  <p className="section-label">Review panel</p>
-                  <h3>{selectedReviewPanel.title}</h3>
-                </div>
-                <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
-              </div>
-              <p>{selectedReviewPanel.detail}</p>
-              <dl className="detail-grid">
-                <div>
-                  <dt>Review period</dt>
-                  <dd>{selectedReviewPanel.reviewPeriodLabel}</dd>
-                </div>
-                <div>
-                  <dt>Due date</dt>
-                  <dd>{selectedReviewPanel.dueDate}</dd>
-                </div>
-                <div>
-                  <dt>Subject</dt>
-                  <dd>{selectedReviewPanel.subjectName}</dd>
-                </div>
-                <div>
-                  <dt>Assessor</dt>
-                  <dd>{selectedReviewPanel.assessorName}</dd>
-                </div>
-                <div>
-                  <dt>Manager</dt>
-                  <dd>{selectedReviewPanel.managerName}</dd>
-                </div>
-                <div>
-                  <dt>Review type</dt>
-                  <dd>{selectedReviewPanel.targetLabel}</dd>
-                </div>
-                <div>
-                  <dt>Assessment status</dt>
-                  <dd>{selectedReviewPanel.assessmentStatusLabel}</dd>
-                </div>
-                <div>
-                  <dt>Review status</dt>
-                  <dd>{selectedReviewPanel.reviewStatusLabel}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="card">
-              <p className="section-label">Responses</p>
-              <div className="question-list review-response-list">
-                {selectedReviewPanel.questions.map((question) => (
-                  <article className="subcard review-response-row" key={question.questionId}>
-                    <div className="question-prompt-block">
-                      <span className="question-order">#{question.order}</span>
-                      <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
-                    </div>
-                    <small className="muted-copy">
-                      {question.type}
-                      {question.category ? ` • ${question.category}` : ''}
-                    </small>
-                    <p>
-                      {question.response
-                        ? question.type === 'subjective'
-                          ? formatSubjectiveResponse(question.response)
-                          : question.response
-                        : 'No response provided yet.'}
-                    </p>
-                  </article>
                 ))}
               </div>
-            </section>
+            </div>
+          ) : (
+            <p className="muted-copy">No review items right now.</p>
+          )
+        ) : null}
+      </section>
+    </main>
+  );
 
-            <section className="card">
-              <p className="section-label">Review notes</p>
-              <div className="review-notes-form">
-                <label className="stack-form">
+  const renderReviewDialog = () =>
+    selectedReviewPanel ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeReviewDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card review-dialog-card"
+          role="dialog"
+          aria-labelledby="review-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Assessment review</p>
+              <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
+            </div>
+            <div className="action-row">
+              <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
+              <button type="button" className="secondary-button" onClick={closeReviewDialog}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <section className="review-dialog-section">
+            <p className="review-dialog-copy">{selectedReviewPanel.detail}</p>
+            <dl className="detail-grid compact-detail-grid">
+              <div>
+                <dt>Subject</dt>
+                <dd>{selectedReviewPanel.subjectName}</dd>
+              </div>
+              <div>
+                <dt>Review type</dt>
+                <dd>{selectedReviewPanel.targetLabel}</dd>
+              </div>
+              <div>
+                <dt>Assessor</dt>
+                <dd>{selectedReviewPanel.assessorName}</dd>
+              </div>
+              <div>
+                <dt>Manager</dt>
+                <dd>{selectedReviewPanel.managerName}</dd>
+              </div>
+              <div>
+                <dt>Review period</dt>
+                <dd>{selectedReviewPanel.reviewPeriodLabel}</dd>
+              </div>
+              <div>
+                <dt>Due date</dt>
+                <dd>{selectedReviewPanel.dueDate}</dd>
+              </div>
+              <div>
+                <dt>Assessment status</dt>
+                <dd>{selectedReviewPanel.assessmentStatusLabel}</dd>
+              </div>
+              <div>
+                <dt>Review status</dt>
+                <dd>{selectedReviewPanel.reviewStatusLabel}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="review-dialog-section">
+            <p className="section-label">Responses</p>
+            <div className="review-response-table">
+              <div className="review-response-header">
+                <span>Question</span>
+                <span>Response</span>
+                <span>Details</span>
+              </div>
+              {selectedReviewPanel.questions.map((question) => (
+                <div className="review-response-row" key={question.questionId}>
+                  <div className="review-response-question">
+                    <span className="question-order">#{question.order}</span>
+                    <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                  </div>
+                  <div className="review-response-answer">
+                    {question.response
+                      ? question.type === 'subjective'
+                        ? formatSubjectiveResponse(question.response)
+                        : question.response
+                      : 'No response provided yet.'}
+                  </div>
+                  <div className="review-response-meta">
+                    <span>{question.type}</span>
+                    <span>{question.category ?? 'Uncategorized'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="review-dialog-section">
+            <p className="section-label">Adjust assignments</p>
+            <div className="form-columns">
+              <label className="inline-field">
+                <span>Manager</span>
+                <select
+                  disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                  value={reviewManagerDraft}
+                  onChange={(event) => setReviewManagerDraft(event.target.value)}
+                >
+                  <option value="">Not assigned</option>
+                  {managerOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedReviewPanel.targetLabel === 'Peer assessment' ? (
+                <label className="inline-field">
+                  <span>Peer reviewer</span>
+                  <select
+                    disabled={
+                      !selectedReviewPanel.canReassignAssessor ||
+                      selectedReviewPanel.isArchived ||
+                      isSavingAssessmentWorkflow
+                    }
+                    value={reviewAssessorDraft}
+                    onChange={(event) => setReviewAssessorDraft(event.target.value)}
+                  >
+                    {activeEmployees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            <div className="action-row">
+              <button
+                type="button"
+                disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                onClick={() => void handleReassignReview()}
+              >
+                Save assignment changes
+              </button>
+            </div>
+          </section>
+
+          <section className="review-dialog-section">
+            <p className="section-label">Review notes</p>
+            <div className="review-notes-form">
+              <label className="stack-form">
                 <textarea
                   aria-label="Review notes"
                   rows={5}
@@ -3011,7 +3058,7 @@ function App() {
                   value={reviewNotesDraft}
                   onChange={(event) => setReviewNotesDraft(event.target.value)}
                 />
-                </label>
+              </label>
               <div className="action-row review-notes-actions">
                 <button
                   type="button"
@@ -3054,67 +3101,11 @@ function App() {
                   Mark reviewed
                 </button>
               </div>
-              </div>
-            </section>
-
-            <section className="card">
-              <div className="section-heading">
-                <h3>Adjust Assignments</h3>
-              </div>
-              <div className="form-columns">
-                <label className="inline-field">
-                  <span>Manager</span>
-                  <select
-                    disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                    value={reviewManagerDraft}
-                    onChange={(event) => setReviewManagerDraft(event.target.value)}
-                  >
-                    <option value="">Not assigned</option>
-                    {managerOptions.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="inline-field">
-                  <span>Peer reviewer</span>
-                  <select
-                    disabled={
-                      !selectedReviewPanel.canReassignAssessor ||
-                      selectedReviewPanel.isArchived ||
-                      isSavingAssessmentWorkflow
-                    }
-                    value={reviewAssessorDraft}
-                    onChange={(event) => setReviewAssessorDraft(event.target.value)}
-                  >
-                    {activeEmployees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="action-row">
-                <button
-                  type="button"
-                  disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                  onClick={() => void handleReassignReview()}
-                >
-                  Save assignment changes
-                </button>
-              </div>
+            </div>
           </section>
-        </>
-      ) : (
-        <section className="card">
-          <p className="section-label">Review panel</p>
-          <p>Select a submitted or accepted assessment to review it.</p>
         </section>
-      )}
-    </main>
-  );
+      </div>
+    ) : null;
 
   const renderBackups = () => (
     <main className="admin-stack">
@@ -3939,6 +3930,8 @@ function App() {
                 : pathname === '/backups'
                   ? renderBackups()
                   : renderPlaceholderSection()}
+
+        {renderReviewDialog()}
 
         {isAdmin && passwordDialogEmployeeId ? (
           <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>

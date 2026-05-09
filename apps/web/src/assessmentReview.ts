@@ -30,15 +30,13 @@ export type AssessmentQueueGroup = {
 export type ReviewQueueItem = {
   assessmentId: string;
   title: string;
+  subjectName: string;
+  reviewPeriodLabel: string;
+  targetLabel: string;
   assessorLabel: string;
+  nextStepLabel: string;
   statusLabel: string;
   actionLabel: string;
-};
-
-export type ReviewQueueGroup = {
-  id: 'submitted' | 'accepted' | 'reviewed';
-  title: string;
-  items: ReviewQueueItem[];
 };
 
 export type AssessmentEditorQuestion = {
@@ -129,6 +127,14 @@ function getQuestionSet(snapshot: AssessmentWorkflowSnapshot, assessment: Assess
   return snapshot.questionSets.find((questionSet) => questionSet.id === assessment.questionSetId) ?? null;
 }
 
+function getAssignment(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
+  if (!assessment.assignmentId) {
+    return null;
+  }
+
+  return snapshot.assignments.find((assignment) => assignment.id === assessment.assignmentId) ?? null;
+}
+
 function getEmployeeName(employeesById: Map<string, Employee>, employeeId: string | null) {
   if (!employeeId) {
     return 'Not assigned';
@@ -161,6 +167,42 @@ function buildReviewTitle(
   employeesById: Map<string, Employee>,
 ) {
   return buildAssessmentTitle(assessment, snapshot, employeesById);
+}
+
+function getReviewPeriodLabel(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
+  return getReviewPeriod(snapshot, assessment.reviewPeriodId)?.label ?? 'Current review period';
+}
+
+function getCurrentManagerId(
+  snapshot: AssessmentWorkflowSnapshot,
+  assessment: Assessment,
+  employeesById: Map<string, Employee>,
+) {
+  return getAssignment(snapshot, assessment)?.managerId ?? employeesById.get(assessment.employeeId)?.managerId ?? null;
+}
+
+function getCurrentAssessorId(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
+  return getAssignment(snapshot, assessment)?.assessorId ?? assessment.assessorId;
+}
+
+function getAssessmentManagerIds(
+  snapshot: AssessmentWorkflowSnapshot,
+  assessment: Assessment,
+  employeesById: Map<string, Employee>,
+) {
+  const managerIds = new Set<string>();
+  const assignmentManagerId = getAssignment(snapshot, assessment)?.managerId;
+  const employeeManagerId = employeesById.get(assessment.employeeId)?.managerId;
+
+  if (assignmentManagerId) {
+    managerIds.add(assignmentManagerId);
+  }
+
+  if (employeeManagerId) {
+    managerIds.add(employeeManagerId);
+  }
+
+  return managerIds;
 }
 
 function toResponseMap(assessment: Assessment) {
@@ -281,6 +323,34 @@ function buildReviewStatusLabel(assessment: Assessment) {
   }
 }
 
+function buildReviewNextStepLabel(assessment: Assessment) {
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return 'waiting to be accepted';
+    case 'accepted':
+      return 'waiting to be reviewed';
+    case 'reviewed':
+      return 'review complete';
+    case 'new':
+    case 'draft':
+      return 'not started';
+  }
+}
+
+function getReviewQueuePriority(assessment: Assessment) {
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return 0;
+    case 'accepted':
+      return 1;
+    case 'reviewed':
+      return 2;
+    case 'new':
+    case 'draft':
+      return 3;
+  }
+}
+
 export function formatSubjectiveResponse(response: string) {
   const normalized = response.trim().toLowerCase();
 
@@ -327,10 +397,16 @@ function toReviewQueueItem(
   snapshot: AssessmentWorkflowSnapshot,
   employeesById: Map<string, Employee>,
 ): ReviewQueueItem {
+  const subjectName = getEmployeeName(employeesById, assessment.employeeId);
+
   return {
     assessmentId: assessment.id,
     title: buildReviewTitle(assessment, snapshot, employeesById),
+    subjectName,
+    reviewPeriodLabel: getReviewPeriodLabel(snapshot, assessment),
+    targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
     assessorLabel: getAssessorLabel(assessment, employeesById),
+    nextStepLabel: buildReviewNextStepLabel(assessment),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     actionLabel: 'Open',
   };
@@ -467,60 +543,55 @@ function getReviewableAssessments(
   snapshot: AssessmentWorkflowSnapshot,
   employees: Employee[],
 ) {
-  const directReportIds = new Set(
-    employees.filter((employee) => employee.managerId === user.id).map((employee) => employee.id),
-  );
+  const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
 
-  return orderAssessments(
-    snapshot.assessments.filter((assessment) => {
-      if (assessment.archiveState !== 'active') {
-        return false;
-      }
+  return snapshot.assessments.filter((assessment) => {
+    if (assessment.archiveState !== 'active') {
+      return false;
+    }
 
-      if (user.role === 'admin') {
-        return assessment.reviewState === 'submitted' || assessment.reviewState === 'accepted' || assessment.reviewState === 'reviewed';
-      }
+    if (
+      assessment.reviewState !== 'submitted' &&
+      assessment.reviewState !== 'accepted' &&
+      assessment.reviewState !== 'reviewed'
+    ) {
+      return false;
+    }
 
-      return (
-        directReportIds.has(assessment.employeeId) &&
-        (assessment.reviewState === 'submitted' || assessment.reviewState === 'accepted' || assessment.reviewState === 'reviewed')
-      );
-    }),
-    snapshot,
-  );
+    if (user.role === 'admin') {
+      return true;
+    }
+
+    return getAssessmentManagerIds(snapshot, assessment, employeesById).has(user.id);
+  });
 }
 
 export function buildReviewQueues(
   user: Employee,
   snapshot: AssessmentWorkflowSnapshot,
   employees: Employee[],
-): ReviewQueueGroup[] {
+): ReviewQueueItem[] {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const reviewableAssessments = getReviewableAssessments(user, snapshot, employees);
 
-  return [
-    {
-      id: 'submitted',
-      title: 'Submitted and waiting for acceptance',
-      items: reviewableAssessments
-        .filter((assessment) => assessment.reviewState === 'submitted')
-        .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById)),
-    },
-    {
-      id: 'accepted',
-      title: 'Accepted and waiting for final review',
-      items: reviewableAssessments
-        .filter((assessment) => assessment.reviewState === 'accepted')
-        .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById)),
-    },
-    {
-      id: 'reviewed',
-      title: 'Reviewed',
-      items: reviewableAssessments
-        .filter((assessment) => assessment.reviewState === 'reviewed')
-        .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById)),
-    },
-  ];
+  return reviewableAssessments
+    .slice()
+    .sort((left, right) => {
+      const queuePriorityDifference = getReviewQueuePriority(left) - getReviewQueuePriority(right);
+      if (queuePriorityDifference !== 0) {
+        return queuePriorityDifference;
+      }
+
+      const subjectNameDifference = getEmployeeName(employeesById, left.employeeId).localeCompare(
+        getEmployeeName(employeesById, right.employeeId),
+      );
+      if (subjectNameDifference !== 0) {
+        return subjectNameDifference;
+      }
+
+      return buildReviewTitle(left, snapshot, employeesById).localeCompare(buildReviewTitle(right, snapshot, employeesById));
+    })
+    .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById));
 }
 
 export function getReviewPanel(
@@ -536,7 +607,7 @@ export function getReviewPanel(
 
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
-  const currentManagerId = employeesById.get(assessment.employeeId)?.managerId ?? null;
+  const currentManagerId = getCurrentManagerId(snapshot, assessment, employeesById);
 
   return {
     assessmentId: assessment.id,
@@ -551,7 +622,7 @@ export function getReviewPanel(
     subjectName: getEmployeeName(employeesById, assessment.employeeId),
     assessorName: getAssessorLabel(assessment, employeesById),
     managerName: getEmployeeName(employeesById, currentManagerId),
-    currentAssessorId: assessment.assessorId,
+    currentAssessorId: getCurrentAssessorId(snapshot, assessment),
     currentManagerId,
     managerNotes: assessment.managerNotes ?? '',
     canAccept: assessment.reviewState === 'submitted',

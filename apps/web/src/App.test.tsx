@@ -64,7 +64,17 @@ vi.mock('./api', () => {
 });
 
 import App from './App';
-import { exportBackup, getBackupStatus, getEmployee, getFoundation, listEmployees, listQuestionCategories, me, restoreBackup } from './api';
+import {
+  acceptAssessment,
+  exportBackup,
+  getBackupStatus,
+  getEmployee,
+  getFoundation,
+  listEmployees,
+  listQuestionCategories,
+  me,
+  restoreBackup,
+} from './api';
 
 function cloneQuestionSlice() {
   const snapshot = structuredClone(foundationSnapshotExample);
@@ -110,6 +120,16 @@ function createBackupExample() {
       ],
     },
     reviewData,
+  };
+}
+
+const mannyManager = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
+
+function createManagerSession(): AuthSession {
+  return {
+    ...adminLoginExample.session,
+    permissions: ['employees:read', 'assessments:read', 'assessments:accept', 'assessments:review', 'assessments:reassign'],
+    user: mannyManager,
   };
 }
 
@@ -365,5 +385,161 @@ describe('backups screen', () => {
       target: 'questions',
       mode: 'replace',
     });
+  });
+});
+
+describe('reviews screen', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/reviews');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('renders a single review table and opens the selected assessment in a dialog', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('waiting to be accepted') ?? false);
+
+    expect(container.textContent).toContain('Review Queue');
+    expect(container.textContent).toContain('Name');
+    expect(container.textContent).toContain('Review type');
+    expect(container.textContent).toContain('Assessor');
+    expect(container.textContent).toContain('Review period');
+    expect(container.textContent).toContain('Next step');
+    expect(container.textContent).not.toContain('Submitted and waiting for acceptance');
+
+    const standaloneCollapseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Collapse');
+    const standaloneExpandButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Expand');
+    expect(standaloneCollapseButton).toBeUndefined();
+    expect(standaloneExpandButton).toBeUndefined();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+    const submittedRow = Array.from(container.querySelectorAll('.review-queue-item')).find(
+      (button) =>
+        button.textContent?.includes('Elliot Employee') &&
+        button.textContent?.includes('Self assessment') &&
+        button.textContent?.includes('waiting to be accepted'),
+    );
+    expect(submittedRow).toBeTruthy();
+
+    await act(async () => {
+      submittedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    expect(container.textContent).toContain('Assessment review');
+    expect(container.textContent).toContain('Responses');
+    expect(container.textContent).toContain('Review notes');
+    expect(container.textContent).not.toContain('Review panel');
+
+    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    expect(closeButton).toBeTruthy();
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('keeps accept workflow actions inside the dialog and refreshes the queue after acceptance', async () => {
+    const initialSnapshot = structuredClone(foundationSnapshotExample);
+    const acceptedSnapshot = structuredClone(foundationSnapshotExample);
+    acceptedSnapshot.assessments = acceptedSnapshot.assessments.map((assessment) =>
+      assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        ? {
+            ...assessment,
+            reviewState: 'accepted',
+            acceptedAt: '2026-02-16T08:00:00.000Z',
+            acceptedByEmployeeId: mannyManager.id,
+            managerNotes: 'Ready for final notes.',
+          }
+        : assessment,
+    );
+
+    vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
+    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(acceptedSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(acceptAssessment).mockResolvedValue({
+      item: acceptedSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('waiting to be accepted') ?? false);
+
+    const submittedRow = Array.from(container.querySelectorAll('.review-queue-item')).find(
+      (button) =>
+        button.textContent?.includes('Elliot Employee') &&
+        button.textContent?.includes('Self assessment') &&
+        button.textContent?.includes('waiting to be accepted'),
+    );
+
+    await act(async () => {
+      submittedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const reviewNotes = container.querySelector('textarea[aria-label="Review notes"]') as HTMLTextAreaElement | null;
+    expect(reviewNotes).toBeTruthy();
+
+    await act(async () => {
+      if (reviewNotes) {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set?.call(
+          reviewNotes,
+          'Ready for final notes.',
+        );
+        reviewNotes.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await flushRender();
+    });
+
+    const acceptButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Accept');
+    expect(acceptButton).toBeTruthy();
+
+    await act(async () => {
+      acceptButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(acceptAssessment).mock.calls.length === 1);
+
+    expect(acceptAssessment).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
+      managerNotes: 'Ready for final notes.',
+    });
+
+    await waitFor(() => container.textContent?.includes('In review') ?? false);
+    expect(container.textContent).toContain('Assessment accepted and moved into the review stage.');
   });
 });

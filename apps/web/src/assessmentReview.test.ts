@@ -1,3 +1,4 @@
+import type { Employee } from '@revu/contracts';
 import { employeesListExample, foundationSnapshotExample } from '@revu/contracts';
 import { describe, expect, it } from 'vitest';
 
@@ -55,18 +56,22 @@ describe('assessment and review helpers', () => {
 
   it('tracks manager review queues across accept, reject-to-draft, and reviewed transitions', () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const initialQueues = buildReviewQueues(manny, snapshot, employeesListExample.items);
+    const initialQueue = buildReviewQueues(manny, snapshot, employeesListExample.items);
 
-    expect(initialQueues[0]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
-    expect(initialQueues[1]?.items.map((item) => item.assessmentId)).toContain(peerAssessmentId);
-    expect(initialQueues[0]?.items[0]).toMatchObject({
+    expect(initialQueue.map((item) => item.assessmentId)).toEqual([selfAssessmentId, peerAssessmentId]);
+    expect(initialQueue[0]).toMatchObject({
       title: '2026 Self Assessment - Elliot Employee',
+      subjectName: 'Elliot Employee',
+      targetLabel: 'Self assessment',
       assessorLabel: 'self',
+      nextStepLabel: 'waiting to be accepted',
       statusLabel: 'Submitted',
     });
-    expect(initialQueues[1]?.items[0]).toMatchObject({
+    expect(initialQueue[1]).toMatchObject({
       title: '2026 Peer Assessment - Elliot Employee',
+      targetLabel: 'Peer assessment',
       assessorLabel: 'Pat Peer',
+      nextStepLabel: 'waiting to be reviewed',
       statusLabel: 'Accepted',
     });
 
@@ -74,19 +79,127 @@ describe('assessment and review helpers', () => {
       actorId: manny.id,
       now: '2026-02-16T08:00:00.000Z',
     });
-    const acceptedQueues = buildReviewQueues(manny, acceptedSnapshot, employeesListExample.items);
-    expect(acceptedQueues[1]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
+    const acceptedQueue = buildReviewQueues(manny, acceptedSnapshot, employeesListExample.items);
+    expect(acceptedQueue.find((item) => item.assessmentId === selfAssessmentId)).toMatchObject({
+      nextStepLabel: 'waiting to be reviewed',
+      statusLabel: 'Accepted',
+    });
 
     const reviewedSnapshot = completeAssessmentReview(acceptedSnapshot, selfAssessmentId, 'Closed out.', {
       actorId: manny.id,
       now: '2026-02-18T15:30:00.000Z',
     });
-    const reviewedQueues = buildReviewQueues(manny, reviewedSnapshot, employeesListExample.items);
-    expect(reviewedQueues[2]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
+    const reviewedQueue = buildReviewQueues(manny, reviewedSnapshot, employeesListExample.items);
+    expect(reviewedQueue.find((item) => item.assessmentId === selfAssessmentId)).toMatchObject({
+      nextStepLabel: 'review complete',
+      statusLabel: 'Reviewed',
+    });
 
     const rejectedSnapshot = rejectAssessmentToDraft(snapshot, selfAssessmentId, 'Please expand the self-review examples.');
-    const rejectedQueues = buildReviewQueues(manny, rejectedSnapshot, employeesListExample.items);
-    expect(rejectedQueues[0]?.items.map((item) => item.assessmentId)).not.toContain(selfAssessmentId);
+    const rejectedQueue = buildReviewQueues(manny, rejectedSnapshot, employeesListExample.items);
+    expect(rejectedQueue.map((item) => item.assessmentId)).not.toContain(selfAssessmentId);
+  });
+
+  it('shows submitted assessments to every manager who can accept them', () => {
+    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const riley: Employee = {
+      id: '55555555-5555-4555-8555-555555555555',
+      username: 'riley.manager',
+      fullName: 'Riley Manager',
+      email: 'riley.manager@example.com',
+      role: 'manager',
+      status: 'active',
+      managerId: ada.id,
+      assessorId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-02-01T12:00:00.000Z',
+    };
+    const employees = [...employeesListExample.items, riley];
+
+    snapshot.assignments[0] = {
+      ...snapshot.assignments[0]!,
+      managerId: riley.id,
+    };
+    snapshot.assessments[1] = {
+      ...snapshot.assessments[1]!,
+      reviewState: 'submitted',
+      acceptedAt: null,
+      acceptedByEmployeeId: null,
+      reviewedAt: null,
+      reviewedByEmployeeId: null,
+    };
+
+    const employeeManagerQueue = buildReviewQueues(manny, snapshot, employees);
+    const assignmentManagerQueue = buildReviewQueues(riley, snapshot, employees);
+
+    expect(employeeManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
+      nextStepLabel: 'waiting to be accepted',
+    });
+    expect(assignmentManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
+      nextStepLabel: 'waiting to be accepted',
+    });
+  });
+
+  it('sorts review rows by next step and employee name', () => {
+    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const bea: Employee = {
+      id: '66666666-6666-4666-8666-666666666666',
+      username: 'bea.employee',
+      fullName: 'Bea Beta',
+      email: 'bea.beta@example.com',
+      role: 'employee',
+      status: 'active',
+      managerId: manny.id,
+      assessorId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-02-01T12:00:00.000Z',
+    };
+    const zara: Employee = {
+      id: '77777777-7777-4777-8777-777777777777',
+      username: 'zara.employee',
+      fullName: 'Zara Zee',
+      email: 'zara.zee@example.com',
+      role: 'employee',
+      status: 'active',
+      managerId: manny.id,
+      assessorId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-02-01T12:00:00.000Z',
+    };
+    const zaraAssessmentId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    const beaAssignmentId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+    const beaAssessmentId = 'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa';
+    const employees = [...employeesListExample.items, bea, zara];
+
+    snapshot.assignments.push({
+      ...snapshot.assignments[0]!,
+      id: beaAssignmentId,
+      employeeId: bea.id,
+      managerId: manny.id,
+    });
+    snapshot.assessments.push(
+      {
+        ...snapshot.assessments[0]!,
+        id: zaraAssessmentId,
+        employeeId: zara.id,
+        assessorId: zara.id,
+      },
+      {
+        ...snapshot.assessments[1]!,
+        id: beaAssessmentId,
+        assignmentId: beaAssignmentId,
+        employeeId: bea.id,
+      },
+    );
+
+    const queue = buildReviewQueues(manny, snapshot, employees);
+
+    expect(queue.map((item) => item.assessmentId)).toEqual([
+      selfAssessmentId,
+      zaraAssessmentId,
+      beaAssessmentId,
+      peerAssessmentId,
+    ]);
   });
 
   it('updates assignment routing without rewriting the authored assessment record', () => {
