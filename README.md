@@ -47,7 +47,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    - API on `http://localhost:4000` by default
    - Web on `http://localhost:3000` by default
 
-   Override those defaults by copying `.env.example` to `.env` and editing the values there. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
+   The dev compose override binds those ports to `127.0.0.1` so they stay local to the machine instead of being exposed on every interface. Override those defaults by copying `.env.example` to `.env` and editing the values there. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
 
 5. Apply SQL migrations to the local Postgres container when you need a real schema instance:
 
@@ -98,11 +98,16 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 4. Pull and start the deployment stack:
 
    ```bash
-   npm run deploy:pull
-   npm run deploy:up
+   ./up.sh
    ```
 
-   This uses `docker-compose.yml` as the deployment definition, runs PostgreSQL locally, exposes the API on `http://localhost:4000`, and serves the web UI on `http://localhost:3000`. The published web image proxies `/api/*` requests to the `api` service inside Compose, so no browser-side API host override is required for standard deployments.
+   To stop the deployment stack later:
+
+   ```bash
+   ./down.sh
+   ```
+
+   This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The published web image proxies `/api/*` requests to the `api` service inside Compose, so no browser-side API host override is required for standard deployments.
 
 ## Container publishing
 
@@ -123,6 +128,8 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run dev:web` | Runs the Vite web workspace on the host. |
 | `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
 | `npm run deploy:up` | Starts the deployment stack from published images. |
+| `./up.sh` | Pulls deployment images and starts the deployment stack. |
+| `./down.sh` | Stops the deployment stack. |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
 | `npm run db:down` | Stops Compose services. |
