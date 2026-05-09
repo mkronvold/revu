@@ -12,7 +12,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up web api db",
+    "dev": "PROXY_NET_EXTERNAL=false PROXY_NET_NAME=revu-dev-proxy-net docker compose -f docker-compose.yml -f docker-compose.dev.yml up web api db",
     "dev:api": "npm run dev --workspace @revu/api",
     "dev:web": "npm run dev --workspace @revu/web",
     "build": "npm run build --workspaces --if-present",
@@ -20,7 +20,7 @@
     "test": "npm run test --workspaces --if-present",
     "validate": "npm test && npm run typecheck && npm run build",
     "compose:config": "docker compose config -q",
-    "compose:config:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q",
+    "compose:config:dev": "PROXY_NET_EXTERNAL=false PROXY_NET_NAME=revu-dev-proxy-net docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q",
     "deploy:pull": "docker compose pull",
     "deploy:up": "docker compose up -d",
     "db:up": "docker compose up -d db",

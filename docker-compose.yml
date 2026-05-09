@@ -18,6 +18,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+    networks:
+      default:
+        aliases:
+          - revu-postgres
 
   api:
     image: ${REVU_API_IMAGE:-ghcr.io/mkronvold/revu-api}:${REVU_IMAGE_TAG:-latest}
@@ -40,6 +44,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - revu-api
+      proxy-net:
+        aliases:
+          - revu-api
 
   web:
     image: ${REVU_WEB_IMAGE:-ghcr.io/mkronvold/revu-web}:${REVU_IMAGE_TAG:-latest}
@@ -60,3 +71,8 @@ services:
 
 volumes:
   postgres-data:
+
+networks:
+  proxy-net:
+    external: ${PROXY_NET_EXTERNAL:-true}
+    name: ${PROXY_NET_NAME:-nginxproxy_proxy-net}

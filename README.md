@@ -88,6 +88,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    - `ghcr.io/mkronvold/revu-api`
    - `ghcr.io/mkronvold/revu-web`
    - tag `latest`
+   - external proxy network `nginxproxy_proxy-net`
 
 3. If the repository or packages are private, authenticate the Docker host to GHCR before pulling:
 
@@ -107,7 +108,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./down.sh
    ```
 
-   This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The published web image proxies `/api/*` requests to the `api` service inside Compose, so no browser-side API host override is required for standard deployments.
+   This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is also reachable inside Compose as `revu-postgres`, and the API is aliased as `revu-api` on both the default network and the external `nginxproxy_proxy-net` network. The published web image proxies `/api/*` requests to the `api` service inside Compose, so no browser-side API host override is required for standard deployments.
 
 ## Container publishing
 
@@ -123,7 +124,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Starts `db`, `api`, and `web` from source with the dev compose override. |
+| `npm run dev` | Starts `db`, `api`, and `web` from source with the dev compose override and a local-only proxy network. |
 | `npm run dev:api` | Runs the API workspace in watch mode on the host. |
 | `npm run dev:web` | Runs the Vite web workspace on the host. |
 | `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
