@@ -3198,7 +3198,7 @@ function App() {
           </button>
         </div>
 
-        <nav aria-label="Primary">
+        <nav className="sidebar-nav" aria-label="Primary">
           {navGroups.map((group) => (
             <section className="nav-group" key={group}>
               <p className="nav-group-label">{group}</p>
@@ -3213,7 +3213,6 @@ function App() {
                       onClick={(event) => navigate(event, section.path)}
                     >
                       <span>{section.title}</span>
-                      <small>{section.audience.join(' • ')}</small>
                     </a>
                   ))}
               </div>
@@ -3223,14 +3222,13 @@ function App() {
 
         <div className="sidebar-utilities">
           <div className="session-card">
-            <p className="section-label">Theme</p>
             <button
               type="button"
               className="secondary-button"
               aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
               onClick={() => setThemePreference((currentTheme) => getNextThemePreference(currentTheme))}
             >
-              Theme: {getThemeLabel(themePreference)}
+              {getThemeLabel(themePreference)}
             </button>
           </div>
 

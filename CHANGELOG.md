@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Polished the sidebar by shrinking the REVU wordmark, tightening the signed-in card, simplifying nav labels, adding space before Administration, and trimming the theme card copy
 - Reworked the Employees roster into a table-style layout with Name, Role, Email, Manager, Assessor, and retained Edit/Password actions
 - Darkened the Summer Nights theme overall to feel like dusk instead of bright late-evening, with deeper sand and rock tones while keeping the warm beach-at-sunset direction
 - Warmed up the Summer Nights theme to feel like hot late-evening sun on the beach with mojito and mai tai card colors and sand/rock tones
