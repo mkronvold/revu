@@ -247,6 +247,7 @@ function App() {
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
   const [reviewManagerDraft, setReviewManagerDraft] = useState('');
   const [reviewAssessorDraft, setReviewAssessorDraft] = useState('');
+  const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [employeeRosterExpanded, setEmployeeRosterExpanded] = useState({
     active: true,
@@ -259,6 +260,7 @@ function App() {
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const reviewPanelRef = useRef<HTMLElement | null>(null);
+  const previousPathnameRef = useRef(pathname);
 
   useEffect(() => {
     const syncLocation = () => {
@@ -542,6 +544,28 @@ function App() {
       setWorkflowNotice('');
     }
   }, [foundation]);
+
+  useEffect(() => {
+    if (!workflowNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setWorkflowNotice('');
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [workflowNotice]);
+
+  useEffect(() => {
+    if (previousPathnameRef.current !== pathname && workflowNotice) {
+      setWorkflowNotice('');
+    }
+
+    previousPathnameRef.current = pathname;
+  }, [pathname, workflowNotice]);
 
   useEffect(() => {
     if (!reviewAdmin) {
@@ -2186,37 +2210,31 @@ function App() {
 
   const renderDashboard = () => (
     <main className="admin-stack">
-      <section className="card">
-        <p className="section-label">Dashboard overview</p>
-        <h3>{dashboardSnapshot?.dueLabel ?? 'Loading review cycle...'}</h3>
-        <p>{dashboardSnapshot?.reviewSummary ?? 'Loading assessment summary...'}</p>
-        {dashboardSnapshot?.adminSummary ? <p>{dashboardSnapshot.adminSummary}</p> : null}
-        <dl className="detail-grid">
-          <div>
-            <dt>Role</dt>
-            <dd>{sessionUser?.role}</dd>
-          </div>
-          <div>
-            <dt>Username</dt>
-            <dd>{sessionUser?.username}</dd>
-          </div>
-          <div>
-            <dt>Email</dt>
-            <dd>{sessionUser?.email}</dd>
-          </div>
-          <div>
-            <dt>Manager</dt>
-            <dd>{getEmployeeName(sessionUser?.managerId ?? null)}</dd>
-          </div>
-          <div>
-            <dt>Assessor</dt>
-            <dd>{getEmployeeName(sessionUser?.assessorId ?? null)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="card">
-        <p className="section-label">Role-based shortcuts</p>
+      <section className="card dashboard-summary-card">
+        <div className="dashboard-summary-header">
+          <h2>{currentSection.title.toUpperCase()}</h2>
+          <p className="dashboard-audience">{currentSection.audience.join(' | ')}</p>
+        </div>
+        {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
+        {appError ? <p className="form-error">{appError}</p> : null}
+        {workflowNotice ? <p className="temporary-password transient-notice">{workflowNotice}</p> : null}
+        <div className="dashboard-identity-row">
+          <span>
+            <strong>Role</strong> {sessionUser?.role}
+          </span>
+          <span>
+            <strong>Username</strong> {sessionUser?.username}
+          </span>
+          <span>
+            <strong>Email</strong> {sessionUser?.email}
+          </span>
+          <span>
+            <strong>Manager</strong> {getEmployeeName(sessionUser?.managerId ?? null)}
+          </span>
+          <span>
+            <strong>Assessor</strong> {getEmployeeName(sessionUser?.assessorId ?? null)}
+          </span>
+        </div>
         <div className="action-row">
           {(sessionUser?.role === 'manager' || sessionUser?.role === 'admin') && (
             <>
@@ -2242,32 +2260,50 @@ function App() {
       </section>
 
       <section className="card">
-        <p className="section-label">Assessment queues</p>
-        <div className="queue-stack">
-          {dashboardSnapshot?.queues.map((queue) => (
-            <article className="queue-card" key={queue.title}>
-              <h3>{queue.title}</h3>
-              {queue.items.length ? (
-                <ul className="queue-list">
-                  {queue.items.map((item) => (
-                    <li key={`${queue.title}-${item.title}`}>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p className="status-caption">{item.statusLabel}</p>
-                        <p>{item.detail}</p>
-                      </div>
-                      <button type="button" onClick={() => setSelectedAssessmentId(item.assessmentId)}>
-                        {item.actionLabel}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted-copy">none</p>
-              )}
-            </article>
-          )) ?? <p className="muted-copy">Loading assessment queues...</p>}
-        </div>
+        <button
+          type="button"
+          className="section-toggle"
+          onClick={() => setAreDashboardQueuesExpanded((currentState) => !currentState)}
+        >
+          <span>Assessment Queue</span>
+          <span className="muted-copy">{areDashboardQueuesExpanded ? 'Collapse' : 'Expand'}</span>
+        </button>
+        {areDashboardQueuesExpanded ? (
+          <div className="queue-stack dashboard-queue-stack">
+            {dashboardSnapshot?.queues.map((queue) => (
+              <article className="dashboard-queue-group" key={queue.title}>
+                <div className="dashboard-queue-group-heading">
+                  <strong>{queue.title}</strong>
+                  <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
+                </div>
+                {queue.items.length ? (
+                  <ul className="queue-list dashboard-queue-list">
+                    {queue.items.map((item) => (
+                      <li key={`${queue.title}-${item.title}`} className="dashboard-queue-row">
+                        <div className="dashboard-queue-line">
+                          <strong>{item.title}</strong>
+                          <span className="dashboard-queue-separator" aria-hidden="true">
+                            |
+                          </span>
+                          <span>{item.detail}</span>
+                          <span className="dashboard-queue-separator" aria-hidden="true">
+                            |
+                          </span>
+                          <span className="status-caption">{item.statusLabel}</span>
+                        </div>
+                        <button type="button" onClick={() => setSelectedAssessmentId(item.assessmentId)}>
+                          {item.actionLabel}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted-copy">none</p>
+                )}
+              </article>
+            )) ?? <p className="muted-copy">Loading assessment queue...</p>}
+          </div>
+        ) : null}
       </section>
 
       <section className="card">
@@ -3181,29 +3217,30 @@ function App() {
       </aside>
 
       <div className="content">
-        <header className="hero card">
-          <div className="hero-copy">
-            {pathname === '/reviews' ? null : <span className="badge">Integrated API auth mode</span>}
-            <h2>{currentSection.title}</h2>
-            <p>{currentSection.summary}</p>
-            {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
-            {appError ? <p className="form-error">{appError}</p> : null}
-            {workflowNotice && (pathname === '/dashboard' || pathname === '/reviews') ? (
-              <p className="temporary-password">{workflowNotice}</p>
-            ) : null}
-          </div>
-
-          <div className="hero-aside">
-            <p className="section-label">Audience</p>
-            <div className="pill-row">
-              {currentSection.audience.map((audience) => (
-                <span className="pill" key={audience}>
-                  {audience}
-                </span>
-              ))}
+        {pathname === '/dashboard' ? null : (
+          <header className="hero card">
+            <div className="hero-copy">
+              <h2>{currentSection.title}</h2>
+              <p>{currentSection.summary}</p>
+              {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
+              {appError ? <p className="form-error">{appError}</p> : null}
+              {workflowNotice && pathname === '/reviews' ? (
+                <p className="temporary-password transient-notice">{workflowNotice}</p>
+              ) : null}
             </div>
-          </div>
-        </header>
+
+            <div className="hero-aside">
+              <p className="section-label">Audience</p>
+              <div className="pill-row">
+                {currentSection.audience.map((audience) => (
+                  <span className="pill" key={audience}>
+                    {audience}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </header>
+        )}
 
         {pathname === '/dashboard'
           ? renderDashboard()

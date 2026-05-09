@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Fixed question-set updates to preserve referenced question ids and reject removing questions that already have recorded assessment responses
+- Reworked the dashboard header and assessment queue into a denser combined layout, removed the Integrated API auth mode badge, and added a collapsible single-row queue list
 - Fixed `autoupdate.sh` so unattended restarts also apply Postgres migrations and seed the example dataset when the database is empty
 - Fixed deployment bootstrap so `./up.sh` applies Postgres migrations before the API comes up and seeds the example dataset automatically on an empty database
 - Fixed the GitHub Actions validate job by starting Postgres in CI and applying SQL migrations before workspace validation

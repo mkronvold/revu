@@ -203,8 +203,9 @@ function parseLocalUsersJson(raw: string, preferredFormat: TransferFormat): Loca
   });
 }
 
-function toQuestionInput(questionSetDraft: QuestionSetDraft) {
+function toQuestionInput(questionSetDraft: QuestionSetDraft, options?: { includeIds?: boolean }) {
   return questionSetDraft.questions.map((question, index) => ({
+    ...(options?.includeIds ? { id: question.id } : {}),
     order: index + 1,
     type: question.type,
     category: question.category.trim() || null,
@@ -262,7 +263,7 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
     title: draft.title.trim(),
     headerMarkdown: draft.headerMarkdown,
     footerMarkdown: draft.footerMarkdown,
-    questions: toQuestionInput(draft),
+    questions: toQuestionInput(draft, { includeIds: Boolean(draft.id) }),
   };
 
   if (draft.id) {

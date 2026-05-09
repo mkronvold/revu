@@ -6,6 +6,7 @@ import {
   authLoginResponseSchema,
   employeeResponseSchema,
   exportStubResponseSchema,
+  foundationSnapshotExample,
   importStubResponseSchema,
   questionSetResponseSchema,
   questionSetsListResponseSchema,
@@ -228,6 +229,64 @@ describe("review periods, question sets, and assignments admin API", () => {
     });
     expect(assignmentExportResponse.statusCode).toBe(200);
     expect(exportStubResponseSchema.parse(assignmentExportResponse.json()).resource).toBe("assignments");
+  });
+
+  it("preserves referenced question ids on update and blocks removing questions with recorded responses", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+    const questionSet = foundationSnapshotExample.questionSets.find(
+      (candidate) => candidate.id === "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+    )!;
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/question-sets/${questionSet.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        title: "2026 Self Questions Revised",
+        headerMarkdown: questionSet.headerMarkdown,
+        footerMarkdown: questionSet.footerMarkdown,
+        status: questionSet.status,
+        questions: questionSet.questions.map((question) => ({
+          id: question.id,
+          order: question.order,
+          type: question.type,
+          category: question.category,
+          prompt: `${question.prompt} Updated.`,
+        })),
+      },
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    const updatedQuestionSet = questionSetResponseSchema.parse(updateResponse.json()).item;
+    expect(updatedQuestionSet.questions.map((question) => question.id)).toEqual(questionSet.questions.map((question) => question.id));
+    expect(updatedQuestionSet.questions[0]?.prompt).toContain("Updated.");
+
+    const removeReferencedQuestionResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/question-sets/${questionSet.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        title: updatedQuestionSet.title,
+        headerMarkdown: updatedQuestionSet.headerMarkdown,
+        footerMarkdown: updatedQuestionSet.footerMarkdown,
+        status: updatedQuestionSet.status,
+        questions: updatedQuestionSet.questions.slice(1).map((question, index) => ({
+          id: question.id,
+          order: index + 1,
+          type: question.type,
+          category: question.category,
+          prompt: question.prompt,
+        })),
+      },
+    });
+
+    expect(removeReferencedQuestionResponse.statusCode).toBe(409);
+    expect(removeReferencedQuestionResponse.body).toContain("cannot be removed from a question set");
   });
 
   it("archives and unarchives review periods while enforcing archive-only mutations", async () => {

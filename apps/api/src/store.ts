@@ -998,12 +998,20 @@ export class ApiStore {
 
   private assertQuestionInputs(questions: CreateQuestionInput[]) {
     const orders = new Set<number>();
+    const questionIds = new Set<string>();
     for (const question of questions) {
       if (orders.has(question.order)) {
         throw new ApiError(400, "Question order must be unique within a question set");
       }
 
       orders.add(question.order);
+
+      if (question.id) {
+        if (questionIds.has(question.id)) {
+          throw new ApiError(400, "Question ids must be unique within a question set");
+        }
+        questionIds.add(question.id);
+      }
     }
   }
 
@@ -1942,7 +1950,7 @@ export class ApiStore {
               INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
               VALUES ($1, $2, $3, $4, $5, $6)
             `,
-            [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+            [question.id ?? randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
           );
         }
 
@@ -1990,15 +1998,63 @@ export class ApiStore {
         );
 
         if (updates.questions !== undefined) {
-          await client.query("DELETE FROM question_set_questions WHERE question_set_id = $1", [questionSetId]);
+          const existingQuestionIds = new Set(questionSet.questions.map((question) => question.id));
+          const retainedQuestionIds = new Set(
+            updates.questions.flatMap((question) => (question.id && existingQuestionIds.has(question.id) ? [question.id] : [])),
+          );
+          const removedQuestionIds = questionSet.questions
+            .map((question) => question.id)
+            .filter((questionId) => !retainedQuestionIds.has(questionId));
+
+          if (removedQuestionIds.length > 0) {
+            const referencedQuestionResult = await client.query<{ question_id: string }>(
+              `
+                SELECT DISTINCT question_id
+                FROM assessment_responses
+                WHERE question_id = ANY($1::uuid[])
+              `,
+              [removedQuestionIds],
+            );
+
+            if (referencedQuestionResult.rows.length > 0) {
+              throw new ApiError(
+                409,
+                "Questions with recorded assessment responses cannot be removed from a question set. Create a new question set instead.",
+              );
+            }
+          }
+
           for (const question of updates.questions) {
+            if (question.id && existingQuestionIds.has(question.id)) {
+              await client.query(
+                `
+                  UPDATE question_set_questions
+                  SET display_order = $3,
+                      type = $4,
+                      category = $5,
+                      prompt = $6
+                  WHERE id = $1
+                    AND question_set_id = $2
+                `,
+                [question.id, questionSetId, question.order, question.type, question.category, question.prompt],
+              );
+              continue;
+            }
+
             await client.query(
               `
                 INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
                 VALUES ($1, $2, $3, $4, $5, $6)
               `,
-              [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+              [question.id ?? randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
             );
+          }
+
+          if (removedQuestionIds.length > 0) {
+            await client.query("DELETE FROM question_set_questions WHERE question_set_id = $1 AND id = ANY($2::uuid[])", [
+              questionSetId,
+              removedQuestionIds,
+            ]);
           }
         }
 

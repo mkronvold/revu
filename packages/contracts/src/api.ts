@@ -234,7 +234,9 @@ export const updateReviewPeriodRequestSchema = z
     message: "At least one field must be provided",
   });
 
-export const createQuestionInputSchema = questionSchema.omit({ id: true });
+export const createQuestionInputSchema = questionSchema.omit({ id: true }).extend({
+  id: idSchema.optional(),
+});
 
 export const createQuestionSetRequestSchema = z.object({
   target: questionSetSchema.shape.target,
