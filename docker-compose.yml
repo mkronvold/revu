@@ -55,6 +55,8 @@ services:
     container_name: revu-web
     image: ${REVU_WEB_IMAGE:-ghcr.io/mkronvold/revu-web}:${REVU_IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      VITE_COMPANY_NAME: ${VITE_COMPANY_NAME:-Your Company}
     ports:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:

@@ -25,5 +25,7 @@ FROM nginx:1.27-alpine
 
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+COPY apps/web/docker-entrypoint.sh /docker-entrypoint.d/40-revu-config.sh
+RUN chmod +x /docker-entrypoint.d/40-revu-config.sh
 
 EXPOSE 3000

@@ -73,8 +73,9 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
+import { getRuntimeCompanyName } from './runtimeConfig';
 
-const configuredCompanyName = import.meta.env.VITE_COMPANY_NAME?.trim();
+const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
 const workspaceTitle = companyName ? `Assessment workspace • ${companyName}` : 'Assessment workspace';
 

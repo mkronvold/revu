@@ -9,6 +9,7 @@
 - Renamed Docker Compose containers to the `revu-*` convention
 - Moved the external proxy network attachment to `revu-web` and kept the API internal
 - Updated the web nginx proxy target to use the internal `revu-api` service alias
+- Made deployed web branding read `VITE_COMPANY_NAME` at container startup
 - Added company-name branding from `VITE_COMPANY_NAME` and made the workspace title link home
 - Updated `up.sh` to fast-forward from git and reconcile `.env` keys against `.env.example`
 - Ignored editor backup and Office document artifacts

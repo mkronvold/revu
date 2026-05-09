@@ -111,7 +111,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./down.sh
    ```
 
-   This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`.
+   This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, so changing it in `.env` takes effect after restarting the web container.
 
 ## Container publishing
 
