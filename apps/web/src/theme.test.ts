@@ -20,14 +20,17 @@ describe('theme helpers', () => {
     expect(getNextThemePreference('light')).toBe('spring');
     expect(getNextThemePreference('spring')).toBe('summer');
     expect(getNextThemePreference('summer')).toBe('autumn');
-    expect(getNextThemePreference('autumn')).toBe('winter-nights');
+    expect(getNextThemePreference('autumn')).toBe('summer-nights');
+    expect(getNextThemePreference('summer-nights')).toBe('winter-nights');
     expect(getNextThemePreference('winter-nights')).toBe('light');
   });
 
   it('exposes readable labels and color scheme metadata', () => {
     expect(getThemeLabel('autumn')).toBe('Autumn');
+    expect(getThemeLabel('summer-nights')).toBe('Summer Nights');
     expect(getThemeLabel('winter-nights')).toBe('Winter Nights');
     expect(getThemeColorScheme('summer')).toBe('light');
+    expect(getThemeColorScheme('summer-nights')).toBe('dark');
     expect(getThemeColorScheme('winter-nights')).toBe('dark');
   });
 });

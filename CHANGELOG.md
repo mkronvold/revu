@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a Summer Nights theme and fixed Winter Nights dashboard overview contrast
 - Simplified the Employees roster into single-line entries and localized password dialog/account timestamps
 - Tightened the sidebar brand row, utility panel placement, signed-in card spacing, and global button height
 - Replaced the sidebar light/dark toggle with a cycling multi-theme switcher and added Spring, Summer, Autumn, and Winter Nights palettes

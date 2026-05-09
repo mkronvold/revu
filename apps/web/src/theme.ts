@@ -1,4 +1,4 @@
-export const themePreferences = ['light', 'spring', 'summer', 'autumn', 'winter-nights'] as const;
+export const themePreferences = ['light', 'spring', 'summer', 'autumn', 'summer-nights', 'winter-nights'] as const;
 
 export type ThemePreference = (typeof themePreferences)[number];
 
@@ -53,6 +53,7 @@ const themeLabels: Record<ThemePreference, string> = {
   spring: 'Spring',
   summer: 'Summer',
   autumn: 'Autumn',
+  'summer-nights': 'Summer Nights',
   'winter-nights': 'Winter Nights',
 };
 
@@ -61,6 +62,7 @@ const themeColorSchemes: Record<ThemePreference, ThemeColorScheme> = {
   spring: 'light',
   summer: 'light',
   autumn: 'light',
+  'summer-nights': 'dark',
   'winter-nights': 'dark',
 };
 
@@ -200,6 +202,51 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     noteBackground: '#fff7ed',
     noteText: '#9a3412',
   },
+  'summer-nights': {
+    appText: '#f8f4ee',
+    loginBackground:
+      'radial-gradient(circle at top, rgba(251, 146, 60, 0.2), transparent 28%), linear-gradient(180deg, #172033 0%, #23344d 42%, #36213e 100%)',
+    appBackground:
+      'radial-gradient(circle at top, rgba(251, 191, 36, 0.16), transparent 30%), linear-gradient(180deg, #172033 0%, #23344d 46%, #36213e 100%)',
+    surfaceText: '#f8f4ee',
+    surfaceBorder: 'rgba(251, 191, 36, 0.2)',
+    surfaceBackground: 'rgba(36, 36, 54, 0.9)',
+    surfaceShadow: '0 20px 50px rgba(23, 17, 35, 0.34)',
+    mutedText: '#f6d7b8',
+    sidebarBackground: 'rgba(23, 32, 51, 0.96)',
+    sidebarText: '#fff7ed',
+    navText: '#fff7ed',
+    navBorder: 'rgba(251, 191, 36, 0.16)',
+    navBackground: 'rgba(251, 146, 60, 0.12)',
+    navHoverBorder: 'rgba(253, 186, 116, 0.42)',
+    navHoverBackground: 'rgba(249, 115, 22, 0.22)',
+    navActiveBorder: 'rgba(253, 186, 116, 0.78)',
+    navActiveBackground: 'rgba(244, 114, 182, 0.2)',
+    sidebarNoteBackground: 'rgba(244, 114, 182, 0.16)',
+    badgeText: '#fff7ed',
+    badgeBackground: 'rgba(251, 146, 60, 0.24)',
+    pillText: '#fff7ed',
+    pillBackground: 'rgba(245, 158, 11, 0.24)',
+    inputText: '#fff7ed',
+    inputBorder: 'rgba(253, 186, 116, 0.24)',
+    inputBackground: 'rgba(29, 30, 46, 0.92)',
+    primaryButtonText: '#fff7ed',
+    primaryButtonBorder: 'rgba(251, 191, 36, 0.24)',
+    primaryButtonStart: '#f97316',
+    primaryButtonEnd: '#ec4899',
+    secondaryButtonText: '#fff7ed',
+    secondaryButtonBorder: 'rgba(253, 186, 116, 0.26)',
+    secondaryButtonBackground: 'rgba(54, 33, 62, 0.9)',
+    successText: '#fef3c7',
+    successBackground: 'rgba(217, 119, 6, 0.3)',
+    errorText: '#fecaca',
+    errorBackground: 'rgba(127, 29, 29, 0.34)',
+    modalBackdrop: 'rgba(23, 17, 35, 0.78)',
+    activeBorder: 'rgba(251, 146, 60, 0.46)',
+    activeBackground: 'rgba(124, 45, 18, 0.34)',
+    noteBackground: 'rgba(251, 146, 60, 0.14)',
+    noteText: '#fed7aa',
+  },
   'winter-nights': {
     appText: '#e2e8f0',
     loginBackground:
@@ -310,6 +357,10 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
 
   [data-revu-theme='${theme}'] ${themedMutedTextSelectors.join(`,\n  [data-revu-theme='${theme}'] `)} {
     color: ${palette.mutedText};
+  }
+
+  [data-revu-theme='${theme}'] .detail-grid dd {
+    color: ${palette.surfaceText};
   }
 
   [data-revu-theme='${theme}'] .sidebar {
