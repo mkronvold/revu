@@ -332,7 +332,9 @@ const themedSurfaceSelectors = [
   '.ia-item',
   '.admin-list-item',
   '.review-response-table',
+  '.question-set-question-list',
   '.question-set-question',
+  '.question-set-dialog-table',
 ];
 
 const themedMutedTextSelectors = [
@@ -361,6 +363,8 @@ const themedInteractiveSurfaceSelectors = [
   '.employee-row-summary',
   '.review-queue-item',
   '.local-user-export-mode-option',
+  '.question-set-card',
+  '.question-set-dialog-row-button',
 ];
 
 const themedActionButtonSelectors = [
@@ -441,6 +445,10 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   [data-revu-theme='${theme}'] .employee-row-summary:focus-visible,
   [data-revu-theme='${theme}'] .review-queue-item:hover,
   [data-revu-theme='${theme}'] .review-queue-item:focus-visible,
+  [data-revu-theme='${theme}'] .question-set-card:hover,
+  [data-revu-theme='${theme}'] .question-set-card:focus-visible,
+  [data-revu-theme='${theme}'] .question-set-dialog-row-button:hover,
+  [data-revu-theme='${theme}'] .question-set-dialog-row-button:focus-visible,
   [data-revu-theme='${theme}'] .workflow-card:hover,
   [data-revu-theme='${theme}'] .workflow-card:focus-visible {
     border-color: ${palette.navHoverBorder};

@@ -236,8 +236,7 @@ describe('questions screen', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders markdown, autocompletes persisted categories, and scrolls to the question-set editor', async () => {
-    const scrollIntoViewSpy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+  it('renders markdown, opens the question-set dialog from the card, and edits questions in a nested dialog', async () => {
     const session: AuthSession = {
       ...adminLoginExample.session,
       permissions: [
@@ -277,20 +276,25 @@ describe('questions screen', () => {
     expect(prompt?.innerHTML).toContain('<strong>lead</strong>');
     expect(prompt?.innerHTML).toContain('<br');
 
+    const questionSetCards = Array.from(container.querySelectorAll('.question-set-card'));
+    expect(questionSetCards).toHaveLength(2);
+    expect(questionSetCards.every((card) => card.getAttribute('role') === 'button')).toBe(true);
     const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit set');
-    expect(editButton).toBeTruthy();
+    expect(editButton).toBeUndefined();
 
     await act(async () => {
-      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      questionSetCards[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
 
-    const editor = container.querySelector('#question-set-editor');
+    const editor = container.querySelector('.question-set-dialog');
     expect(editor).toBeTruthy();
-    expect(scrollIntoViewSpy).toHaveBeenCalled();
+    expect(container.querySelector('#question-set-editor')).toBeNull();
 
-    const categoryInput = editor?.querySelector('.question-category-field input');
-    expect(categoryInput?.getAttribute('list')).toBe(questionCategorySuggestionsId);
+    const fieldOrder = Array.from(editor?.querySelectorAll('.question-set-dialog-fields > label') ?? []).map(
+      (field) => field.childNodes[0]?.textContent?.trim(),
+    );
+    expect(fieldOrder).toEqual(['Title', 'Status', 'Header markdown', 'Footer markdown']);
 
     const suggestionValues = Array.from(
       container.querySelectorAll(`#${questionCategorySuggestionsId} option`),
@@ -298,13 +302,30 @@ describe('questions screen', () => {
     );
     expect(suggestionValues).toEqual(['Growth', 'Impact', 'Teamwork']);
 
-    const firstQuestionEditor = editor?.querySelector('.question-editor-card');
-    const fieldOrder = Array.from(firstQuestionEditor?.querySelectorAll('.question-editor-fields > label') ?? []).map(
-      (field) =>
-        Array.from(field.classList).find((className) => className.startsWith('question-')) ?? field.tagName.toLowerCase(),
-    );
-    expect(fieldOrder).toEqual(['question-category-field', 'question-prompt-field', 'question-response-type-field']);
-    expect(editor?.querySelector('.question-response-type-field')?.textContent).toContain('Response type');
+    const questionRow = editor?.querySelector('.question-set-dialog-row-button');
+    expect(questionRow).toBeTruthy();
+
+    await act(async () => {
+      questionRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    const questionEditor = container.querySelector('.question-edit-dialog');
+    expect(questionEditor).toBeTruthy();
+
+    const categoryInput = questionEditor?.querySelector('.question-category-field input');
+    expect(categoryInput?.getAttribute('list')).toBe(questionCategorySuggestionsId);
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('short written self-rating');
+
+    const responseTypeField = questionEditor?.querySelector('.question-response-type-field select') as HTMLSelectElement | null;
+    expect(responseTypeField).toBeTruthy();
+    await act(async () => {
+      setFieldValue(responseTypeField!, 'narrative');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('longer free-form response');
   });
 });
 

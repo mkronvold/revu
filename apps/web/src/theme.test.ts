@@ -52,8 +52,16 @@ describe('theme helpers', () => {
     expect(themeStyleOverrides).toContain('.revision-card');
     expect(themeStyleOverrides).toContain('.warning-banner');
     expect(themeStyleOverrides).toContain('.review-response-table');
+    expect(themeStyleOverrides).toContain('.question-set-question-list');
     expect(themeStyleOverrides).toContain('.question-set-question');
     expect(themeStyleOverrides).toContain('.dashboard-identity-value');
+  });
+
+  it('keeps question-set cards and dialog rows on themed interactive surfaces', () => {
+    expect(themeStyleOverrides).toContain('.question-set-card');
+    expect(themeStyleOverrides).toContain('.question-set-card:hover');
+    expect(themeStyleOverrides).toContain('.question-set-dialog-row-button');
+    expect(themeStyleOverrides).toContain('.question-set-dialog-row-button:hover');
   });
 
   it('keeps modal windows opaque without changing themed backdrops', () => {
