@@ -250,6 +250,28 @@ button {
   margin: 0;
 }
 
+.theme-card {
+  cursor: pointer;
+}
+
+.theme-card:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.theme-card-value {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #0f172a;
+  background: white;
+}
+
 .sidebar-note {
   padding: 1rem;
   border-radius: 1rem;
@@ -305,6 +327,10 @@ button {
 
 .sidebar-status-card .section-label {
   margin-bottom: 0;
+}
+
+.sidebar-status-card p {
+  margin: 0;
 }
 
 .content {
@@ -804,24 +830,9 @@ button.employee-row:focus-visible {
   background: #dcfce7;
 }
 
-.transient-notice {
-  animation: transient-notice-fade 5s ease forwards;
-}
-
 .form-error {
   color: #991b1b;
   background: #fee2e2;
-}
-
-@keyframes transient-notice-fade {
-  0%,
-  75% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
 }
 
 .admin-layout {

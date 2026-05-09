@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Renamed the sidebar status area to Last Response, kept the latest workflow/admin response in one shared card, and let it clear automatically after 2 minutes
+- Moved the remaining workflow result notices into the sidebar, made the full Theme card clickable, and shifted Summer Nights surfaces to a darker sand-in-shade tone
 - Fixed question-set updates to preserve referenced question ids and reject removing questions that already have recorded assessment responses
 - Reworked the dashboard header and assessment queue into a denser combined layout, removed the Integrated API auth mode badge, and added a collapsible single-row queue list
 - Fixed `autoupdate.sh` so unattended restarts also apply Postgres migrations and seed the example dataset when the database is empty

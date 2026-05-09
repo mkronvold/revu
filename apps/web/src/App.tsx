@@ -97,6 +97,7 @@ const companyName = configuredCompanyName ? configuredCompanyName : null;
 const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
+const lastResponseTimeoutMs = 120000;
 
 type EmployeeDraft = {
   id: string | null;
@@ -243,6 +244,7 @@ function App() {
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
   const [workflowNotice, setWorkflowNotice] = useState('');
+  const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
   const [reviewManagerDraft, setReviewManagerDraft] = useState('');
@@ -260,7 +262,10 @@ function App() {
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const reviewPanelRef = useRef<HTMLElement | null>(null);
-  const previousPathnameRef = useRef(pathname);
+
+  const cycleTheme = () => {
+    setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
+  };
 
   useEffect(() => {
     const syncLocation = () => {
@@ -331,6 +336,13 @@ function App() {
   const hasEmployeeReadAccess = session?.permissions.includes('employees:read') ?? false;
   const canManageEmployees = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
   const isAdmin = sessionUser?.role === 'admin';
+  const visibleAdminNotice = isAdmin ? adminNotice : '';
+  const lastResponseMessage =
+    lastResponseSource === 'workflow'
+      ? workflowNotice || visibleAdminNotice
+      : lastResponseSource === 'admin'
+        ? visibleAdminNotice || workflowNotice
+        : workflowNotice || visibleAdminNotice;
   const selectedEmployee = useMemo(
     () =>
       employees.find((employee) => employee.id === selectedEmployeeId) ??
@@ -552,7 +564,7 @@ function App() {
 
     const timeoutId = window.setTimeout(() => {
       setWorkflowNotice('');
-    }, 5000);
+    }, lastResponseTimeoutMs);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -560,12 +572,30 @@ function App() {
   }, [workflowNotice]);
 
   useEffect(() => {
-    if (previousPathnameRef.current !== pathname && workflowNotice) {
-      setWorkflowNotice('');
+    if (!adminNotice) {
+      return;
     }
 
-    previousPathnameRef.current = pathname;
-  }, [pathname, workflowNotice]);
+    const timeoutId = window.setTimeout(() => {
+      setAdminNotice('');
+    }, lastResponseTimeoutMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [adminNotice]);
+
+  useEffect(() => {
+    if (workflowNotice) {
+      setLastResponseSource('workflow');
+    }
+  }, [workflowNotice]);
+
+  useEffect(() => {
+    if (adminNotice) {
+      setLastResponseSource('admin');
+    }
+  }, [adminNotice]);
 
   useEffect(() => {
     if (!reviewAdmin) {
@@ -2217,7 +2247,6 @@ function App() {
         </div>
         {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
         {appError ? <p className="form-error">{appError}</p> : null}
-        {workflowNotice ? <p className="temporary-password transient-notice">{workflowNotice}</p> : null}
         <div className="dashboard-identity-row">
           <span>
             <strong>Role</strong> {sessionUser?.role}
@@ -3159,10 +3188,10 @@ function App() {
             </button>
         </div>
 
-        {adminNotice && isAdmin ? (
+        {lastResponseMessage ? (
           <div className="session-card sidebar-status-card" role="status" aria-live="polite">
-            <p className="section-label">Status</p>
-            <p>{adminNotice}</p>
+            <p className="section-label">Last Response</p>
+            <p>{lastResponseMessage}</p>
           </div>
         ) : null}
 
@@ -3189,16 +3218,23 @@ function App() {
         </nav>
 
         <div className="sidebar-utilities">
-          <div className="session-card utility-inline-card">
+          <div
+            className="session-card utility-inline-card theme-card"
+            role="button"
+            tabIndex={0}
+            aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
+            onClick={cycleTheme}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                cycleTheme();
+              }
+            }}
+          >
             <p className="section-label">Theme</p>
-            <button
-              type="button"
-              className="secondary-button"
-              aria-label={`Current theme ${getThemeLabel(themePreference)}. Click to switch to ${getThemeLabel(getNextThemePreference(themePreference))}.`}
-              onClick={() => setThemePreference((currentTheme) => getNextThemePreference(currentTheme))}
-            >
+            <span className="theme-card-value">
               {getThemeLabel(themePreference)}
-            </button>
+            </span>
           </div>
 
           {buildRevision ? (
@@ -3224,9 +3260,6 @@ function App() {
               <p>{currentSection.summary}</p>
               {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
               {appError ? <p className="form-error">{appError}</p> : null}
-              {workflowNotice && pathname === '/reviews' ? (
-                <p className="temporary-password transient-notice">{workflowNotice}</p>
-              ) : null}
             </div>
 
             <div className="hero-aside">
