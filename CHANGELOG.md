@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed the GitHub Actions validate job by starting Postgres in CI and applying SQL migrations before workspace validation
 - Tightened the sidebar signed-in card again, moved Employees under Administration, added an inline Theme label, and relocated admin status/results notices into the sidebar
 - Switched the API from in-memory fixtures to Postgres-backed persistence for employees, auth sessions, review periods, question sets, assignments, assessments, and responses
 - Added `reset-to-example.sh` plus example-data seeding so persistent deployments, local development, and tests can return to the same known dataset
