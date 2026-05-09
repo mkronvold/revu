@@ -281,41 +281,6 @@ button {
   background: rgba(15, 118, 110, 0.18);
 }
 
-.workflow-card,
-.workflow-card:visited {
-  color: inherit;
-  text-decoration: none;
-}
-
-.workflow-card {
-  cursor: pointer;
-  transition:
-    transform 120ms ease,
-    border-color 120ms ease,
-    background 120ms ease;
-}
-
-.workflow-card:hover,
-.workflow-card:focus-visible {
-  transform: translateY(-1px);
-  border-color: rgba(94, 234, 212, 0.4);
-  background: rgba(13, 148, 136, 0.3);
-  outline: none;
-}
-
-.workflow-card-markdown {
-  gap: 0.65rem;
-  font-size: 0.85rem;
-}
-
-.workflow-card-markdown h3 {
-  font-size: 0.95rem;
-}
-
-.workflow-card-markdown ul {
-  padding-left: 1rem;
-}
-
 .revision-card {
   padding: 0.5rem 0.75rem;
   border-radius: 0.75rem;
@@ -1325,6 +1290,11 @@ button.employee-row:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+}
+
+.workflow-editor-fields {
+  display: grid;
+  gap: 1rem;
 }
 
 .workflow-editor-grid textarea {

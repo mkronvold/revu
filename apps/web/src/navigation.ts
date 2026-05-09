@@ -1,6 +1,7 @@
 export type Audience = 'Employee' | 'Manager' | 'Admin';
 export type NavGroup = 'Workspace' | 'Administration';
 export type AppRole = 'employee' | 'manager' | 'admin';
+export type WorkflowVisibility = 'all' | 'managers' | 'admin only';
 
 export type AppSection = {
   id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'fileManagement' | 'workflow';
@@ -119,13 +120,12 @@ export const appSections: AppSection[] = [
     audience: ['Employee', 'Manager', 'Admin'],
     highlights: [
       'Show the shared review lifecycle in one place for employees, managers, and admins.',
-      'Keep workflow guidance available from the sidebar without adding another primary navigation item.',
+      'Keep workflow guidance available from the primary sidebar navigation.',
       'Render the approved workflow copy as markdown so future edits can stay content-driven.',
     ],
     placeholderTitle: 'Review workflow reference',
-    placeholderDescription: 'This route renders the complete workflow markdown and keeps it accessible from the sidebar card.',
+    placeholderDescription: 'This route renders the complete workflow markdown and keeps it accessible from the main sidebar navigation.',
     nextSlice: 'Add deeper links from each workflow step once the destination views are fully implemented.',
-    showInNavigation: false,
   },
 ];
 
@@ -172,6 +172,49 @@ export function getSectionsForRole(role: AppRole): AppSection[] {
   return appSections.filter((section) => canAccessSection(role, section));
 }
 
-export function getNavigationSectionsForRole(role: AppRole): AppSection[] {
-  return getSectionsForRole(role).filter((section) => section.showInNavigation !== false);
+function canSeeWorkflowNavigation(role: AppRole, workflowVisibility?: WorkflowVisibility): boolean {
+  if (!workflowVisibility) {
+    return false;
+  }
+
+  if (workflowVisibility === 'all') {
+    return true;
+  }
+
+  if (workflowVisibility === 'managers') {
+    return role !== 'employee';
+  }
+
+  return role === 'admin';
+}
+
+export function getNavigationSectionsForRole(role: AppRole, workflowVisibility?: WorkflowVisibility): AppSection[] {
+  const visibleSections = getSectionsForRole(role).filter((section) => {
+    if (section.showInNavigation === false) {
+      return false;
+    }
+
+    if (section.id === 'workflow') {
+      return canSeeWorkflowNavigation(role, workflowVisibility);
+    }
+
+    return true;
+  });
+
+  const workflowSection = visibleSections.find((section) => section.id === 'workflow');
+  if (!workflowSection) {
+    return visibleSections;
+  }
+
+  const sectionsWithoutWorkflow = visibleSections.filter((section) => section.id !== 'workflow');
+  const reviewsIndex = sectionsWithoutWorkflow.findIndex((section) => section.id === 'reviews');
+  if (reviewsIndex < 0) {
+    return [...sectionsWithoutWorkflow, workflowSection];
+  }
+
+  return [
+    ...sectionsWithoutWorkflow.slice(0, reviewsIndex + 1),
+    workflowSection,
+    ...sectionsWithoutWorkflow.slice(reviewsIndex + 1),
+  ];
 }

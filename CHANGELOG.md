@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Replaced the sidebar workflow markdown card with a main Workflow nav item, added persisted workflow visibility controls in File Management, and renamed the backup status section to Automatic backups
 - Polished Questions, Reviews, and Employees together by moving question-set editing into modal dialogs with nested question editing, tightening the review and employee directories into denser single-table layouts, and shifting review/password actions fully into the corresponding dialogs
 - Made modal window surfaces fully opaque across every theme while leaving the shared modal backdrop behavior unchanged
 - Moved more sidebar, workflow, review-response, question-set, and warning surfaces onto the shared theme palette so non-light themes no longer leak hardcoded light/slate colors

@@ -426,7 +426,7 @@ describe('workflow entry', () => {
     document.body.innerHTML = '';
   });
 
-  it('keeps Workflow out of the main nav, renders the sidebar markdown card, and routes to the workflow page', async () => {
+  it('shows Workflow in the main nav under Reviews and routes to the workflow page', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
@@ -445,22 +445,42 @@ describe('workflow entry', () => {
     expect(navLinkLabels).toContain('File Management');
     expect(navLinkLabels).not.toContain('Archive');
     expect(navLinkLabels).not.toContain('Backups');
-    expect(navLinkLabels).not.toContain('Workflow');
+    expect(navLinkLabels).toContain('Workflow');
+    expect(navLinkLabels.indexOf('Workflow')).toBe(navLinkLabels.indexOf('Reviews') + 1);
 
-    const workflowCard = container.querySelector('a.workflow-card') as HTMLAnchorElement | null;
-    expect(workflowCard).toBeTruthy();
-    expect(workflowCard?.getAttribute('href')).toBe('/workflow');
-    expect(workflowCard?.textContent).toContain('New Review Period begins');
-    expect(workflowCard?.querySelectorAll('li')).toHaveLength(6);
+    const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
+      (link) => link.textContent === 'Workflow',
+    ) as HTMLAnchorElement | undefined;
+    expect(workflowLink?.getAttribute('href')).toBe('/workflow');
 
     await act(async () => {
-      workflowCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      workflowLink?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
     await waitFor(() => window.location.pathname === '/workflow');
 
     expect(container.textContent).toContain('Reference the full review lifecycle');
+    expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
+  });
+
+  it('keeps direct workflow access working while hiding the nav item from employees when visibility is managers', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+
+    window.localStorage.setItem('revu-workflow-visibility', 'managers');
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/workflow');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Reference the full review lifecycle') ?? false);
+
+    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    expect(navLinkLabels).not.toContain('Workflow');
+    expect(window.location.pathname).toBe('/workflow');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
 });
@@ -599,16 +619,18 @@ describe('file management screen', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Runtime backup configuration') ?? false);
+    await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
 
     expect(window.location.pathname).toBe('/file-management');
     expect(container.textContent).not.toContain('Admin workspace');
     expect(container.textContent).not.toContain('Review period lifecycle');
     expect(container.textContent).not.toContain('Backup and restore');
+    expect(container.textContent).not.toContain('Runtime backup configuration');
     expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Local user transfer files');
     expect(container.textContent).toContain('Question set transfer files');
     expect(container.textContent).toContain('Archive review periods');
+    expect(container.textContent).toContain('Automatic backups');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');
@@ -626,9 +648,21 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('Edit workflow markdown') ?? false);
 
     const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
+    const workflowVisibilitySelect = container.querySelector(
+      'select[aria-label="Workflow visibility"]',
+    ) as HTMLSelectElement | null;
     expect(workflowTextarea).toBeTruthy();
+    expect(workflowVisibilitySelect).toBeTruthy();
+    expect(Array.from(workflowVisibilitySelect?.options ?? [], (option) => option.textContent)).toEqual([
+      'all',
+      'managers',
+      'admin only',
+    ]);
 
     await act(async () => {
+      if (workflowVisibilitySelect) {
+        setFieldValue(workflowVisibilitySelect, 'managers');
+      }
       if (workflowTextarea) {
         setFieldValue(workflowTextarea, '## Updated workflow\n- **Bold** item\n- Second item');
       }
@@ -647,8 +681,10 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Updated the workflow markdown.') ?? false);
+    await waitFor(() => container.textContent?.includes('Updated the workflow settings.') ?? false);
     expect(container.querySelector('.workflow-management-card')?.textContent).toContain('Updated workflow');
+    expect(container.querySelector('.workflow-management-card')?.textContent).toContain('Sidebar visibility: managers');
+    expect(window.localStorage.getItem('revu-workflow-visibility')).toBe('managers');
 
     const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
     const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Local user transfer files'));
@@ -784,11 +820,13 @@ describe('file management screen', () => {
       mode: 'replace',
     });
 
-    const workflowCard = container.querySelector('a.workflow-card') as HTMLAnchorElement | null;
-    expect(workflowCard).toBeTruthy();
+    const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
+      (link) => link.textContent === 'Workflow',
+    ) as HTMLAnchorElement | undefined;
+    expect(workflowLink).toBeTruthy();
 
     await act(async () => {
-      workflowCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      workflowLink?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 

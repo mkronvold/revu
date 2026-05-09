@@ -43,6 +43,7 @@ import {
   normalizePath,
   workflowMarkdown,
   type AppRole,
+  type WorkflowVisibility,
 } from './navigation';
 import {
   buildReviewQueues,
@@ -112,6 +113,7 @@ const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
 const workflowStorageKey = 'revu-workflow-markdown';
+const workflowVisibilityStorageKey = 'revu-workflow-visibility';
 const lastResponseTimeoutMs = 120000;
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
@@ -194,6 +196,14 @@ function buildLocalUserExportConfirmation(format: TransferFormat, mode: LocalUse
 function getStoredWorkflowMarkdown() {
   const storedWorkflow = window.localStorage.getItem(workflowStorageKey);
   return storedWorkflow ?? workflowMarkdown;
+}
+
+function normalizeStoredWorkflowVisibility(value: string | null): WorkflowVisibility {
+  return value === 'managers' || value === 'admin only' ? value : 'all';
+}
+
+function getStoredWorkflowVisibility(): WorkflowVisibility {
+  return normalizeStoredWorkflowVisibility(window.localStorage.getItem(workflowVisibilityStorageKey));
 }
 
 type BackupRestoreAction = {
@@ -410,7 +420,9 @@ function App() {
   const [editingQuestionDraftId, setEditingQuestionDraftId] = useState<string | null>(null);
   const [questionCategories, setQuestionCategories] = useState<string[]>([]);
   const [workflowContent, setWorkflowContent] = useState<string>(() => getStoredWorkflowMarkdown());
+  const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(() => getStoredWorkflowVisibility());
   const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
+  const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
@@ -459,6 +471,10 @@ function App() {
   }, [workflowContent]);
 
   useEffect(() => {
+    window.localStorage.setItem(workflowVisibilityStorageKey, workflowVisibility);
+  }, [workflowVisibility]);
+
+  useEffect(() => {
     let cancelled = false;
     const existingToken = window.sessionStorage.getItem(sessionStorageKey);
 
@@ -503,8 +519,8 @@ function App() {
     [sessionUser],
   );
   const navigationSections = useMemo(
-    () => (sessionUser ? getNavigationSectionsForRole(sessionUser.role) : []),
-    [sessionUser],
+    () => (sessionUser ? getNavigationSectionsForRole(sessionUser.role, workflowVisibility) : []),
+    [sessionUser, workflowVisibility],
   );
   const hasEmployeeReadAccess = session?.permissions.includes('employees:read') ?? false;
   const canManageEmployees = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
@@ -1078,21 +1094,25 @@ function App() {
 
   const openWorkflowEditor = () => {
     setWorkflowDraft(workflowContent);
+    setWorkflowVisibilityDraft(workflowVisibility);
     setAppError('');
   };
 
   const closeWorkflowEditor = () => {
     setWorkflowDraft(null);
+    setWorkflowVisibilityDraft(null);
   };
 
   const saveWorkflowContent = () => {
-    if (workflowDraft === null) {
+    if (workflowDraft === null || workflowVisibilityDraft === null) {
       return;
     }
 
     setWorkflowContent(workflowDraft);
+    setWorkflowVisibility(workflowVisibilityDraft);
     setWorkflowDraft(null);
-    setAdminNotice('Updated the workflow markdown.');
+    setWorkflowVisibilityDraft(null);
+    setAdminNotice('Updated the workflow settings.');
   };
 
   const openEmployeeDialog = (employeeId: string) => {
@@ -3380,8 +3400,7 @@ function App() {
       <section className="card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Backup status</p>
-            <h3>Runtime backup configuration</h3>
+            <p className="section-label">Automatic backups</p>
           </div>
           <button
             type="button"
@@ -3573,6 +3592,7 @@ function App() {
           </button>
         ) : null}
       </div>
+      <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p>
       <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
     </section>
   );
@@ -4103,10 +4123,6 @@ function App() {
               </div>
             ) : null}
 
-            <a className="sidebar-note workflow-card" href="/workflow" onClick={(event) => navigate(event, '/workflow')}>
-              <p className="sidebar-note-title">Workflow</p>
-              <MarkdownContent markdown={workflowContent} className="markdown-content workflow-card-markdown" />
-            </a>
           </div>
         </aside>
 
@@ -4228,7 +4244,7 @@ function App() {
           </div>
         ) : null}
 
-        {isAdmin && workflowDraft !== null ? (
+        {isAdmin && workflowDraft !== null && workflowVisibilityDraft !== null ? (
           <div className="modal-backdrop" role="presentation" onClick={closeWorkflowEditor}>
             <section
               aria-modal="true"
@@ -4247,15 +4263,29 @@ function App() {
                 </button>
               </div>
               <div className="workflow-editor-grid">
-                <label className="stack-form">
-                  <span>Workflow markdown</span>
-                  <textarea
-                    aria-label="Workflow markdown"
-                    rows={18}
-                    value={workflowDraft}
-                    onChange={(event) => setWorkflowDraft(event.target.value)}
-                  />
-                </label>
+                <div className="workflow-editor-fields">
+                  <label className="inline-field">
+                    <span>Workflow visibility</span>
+                    <select
+                      aria-label="Workflow visibility"
+                      value={workflowVisibilityDraft}
+                      onChange={(event) => setWorkflowVisibilityDraft(event.target.value as WorkflowVisibility)}
+                    >
+                      <option value="all">all</option>
+                      <option value="managers">managers</option>
+                      <option value="admin only">admin only</option>
+                    </select>
+                  </label>
+                  <label className="stack-form">
+                    <span>Workflow markdown</span>
+                    <textarea
+                      aria-label="Workflow markdown"
+                      rows={18}
+                      value={workflowDraft}
+                      onChange={(event) => setWorkflowDraft(event.target.value)}
+                    />
+                  </label>
+                </div>
                 <section className="subcard workflow-editor-preview">
                   <p className="section-label">Preview</p>
                   <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
