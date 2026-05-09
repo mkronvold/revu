@@ -41,6 +41,11 @@ describe('theme helpers', () => {
     expect(themeStyleOverrides).toContain(".review-queue-item:hover");
   });
 
+  it('themes backup export mode tiles on the same surface model as other interactive cards', () => {
+    expect(themeStyleOverrides).toContain('.local-user-export-mode-option');
+    expect(themeStyleOverrides).toContain('.local-user-export-mode-option-selected');
+  });
+
   it('uses the shared button default color with themed hover gradients', () => {
     expect(themeStyleOverrides).toContain(
       "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)",

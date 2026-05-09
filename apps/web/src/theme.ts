@@ -328,6 +328,7 @@ const themedInteractiveSurfaceSelectors = [
   '.demo-account-card',
   '.employee-row-summary',
   '.review-queue-item',
+  '.local-user-export-mode-option',
 ];
 
 const themedActionButtonSelectors = [
@@ -476,6 +477,11 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   }
 
   [data-revu-theme='${theme}'] .admin-list-item-active {
+    border-color: ${palette.activeBorder};
+    background: ${palette.activeBackground};
+  }
+
+  [data-revu-theme='${theme}'] .local-user-export-mode-option-selected {
     border-color: ${palette.activeBorder};
     background: ${palette.activeBackground};
   }
