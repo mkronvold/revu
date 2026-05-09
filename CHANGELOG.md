@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Made modal window surfaces fully opaque across every theme while leaving the shared modal backdrop behavior unchanged
+- Moved more sidebar, workflow, review-response, question-set, and warning surfaces onto the shared theme palette so non-light themes no longer leak hardcoded light/slate colors
 - Added editable workflow markdown in File Management with a preview/edit modal, removed the old File Management scope card, and made the Workflow page plus sidebar card render from the shared saved content
 - Rebuilt Reviews into a single table-style queue sorted by next step, moved review actions into modal dialogs, and removed the old in-page review panel cards
 - Rebuilt Employees into the same table/dialog interaction model, unified button colors across the app, and removed the dashboard assessment editor card in favor of queue-launched dialogs

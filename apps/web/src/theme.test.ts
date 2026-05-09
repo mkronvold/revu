@@ -46,6 +46,22 @@ describe('theme helpers', () => {
     expect(themeStyleOverrides).toContain('.local-user-export-mode-option-selected');
   });
 
+  it('covers utility cards, warning banners, and review/question surfaces with theme overrides', () => {
+    expect(themeStyleOverrides).toContain('.workflow-card:hover');
+    expect(themeStyleOverrides).toContain('.theme-card-value');
+    expect(themeStyleOverrides).toContain('.revision-card');
+    expect(themeStyleOverrides).toContain('.warning-banner');
+    expect(themeStyleOverrides).toContain('.review-response-table');
+    expect(themeStyleOverrides).toContain('.question-set-question');
+    expect(themeStyleOverrides).toContain('.dashboard-identity-value');
+  });
+
+  it('keeps modal windows opaque without changing themed backdrops', () => {
+    expect(themeStyleOverrides).toContain('.modal-backdrop');
+    expect(themeStyleOverrides).toContain('.modal-card');
+    expect(themeStyleOverrides).toContain('background: #0f172a;');
+  });
+
   it('uses the shared button default color with themed hover gradients', () => {
     expect(themeStyleOverrides).toContain(
       "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)",

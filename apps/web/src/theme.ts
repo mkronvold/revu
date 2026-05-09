@@ -11,6 +11,7 @@ type ThemePalette = {
   surfaceText: string;
   surfaceBorder: string;
   surfaceBackground: string;
+  modalSurfaceBackground: string;
   surfaceShadow: string;
   mutedText: string;
   sidebarBackground: string;
@@ -44,6 +45,9 @@ type ThemePalette = {
   modalBackdrop: string;
   activeBorder: string;
   activeBackground: string;
+  warningText: string;
+  warningBackground: string;
+  warningBorder: string;
   noteBackground: string;
   noteText: string;
 };
@@ -76,6 +80,7 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     surfaceText: '#12343b',
     surfaceBorder: 'rgba(45, 212, 191, 0.32)',
     surfaceBackground: 'rgba(248, 255, 252, 0.93)',
+    modalSurfaceBackground: '#f8fffc',
     surfaceShadow: '0 18px 46px rgba(16, 185, 129, 0.12)',
     mutedText: '#3f6b73',
     sidebarBackground: 'rgba(236, 253, 245, 0.96)',
@@ -109,6 +114,9 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     modalBackdrop: 'rgba(15, 23, 42, 0.32)',
     activeBorder: 'rgba(20, 184, 166, 0.55)',
     activeBackground: 'rgba(204, 251, 241, 0.78)',
+    warningText: '#854d0e',
+    warningBackground: 'rgba(254, 249, 195, 0.92)',
+    warningBorder: 'rgba(250, 204, 21, 0.34)',
     noteBackground: '#ecfeff',
     noteText: '#155e75',
   },
@@ -121,6 +129,7 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     surfaceText: '#17321c',
     surfaceBorder: 'rgba(34, 197, 94, 0.28)',
     surfaceBackground: 'rgba(251, 255, 247, 0.93)',
+    modalSurfaceBackground: '#fbfff7',
     surfaceShadow: '0 18px 46px rgba(34, 84, 61, 0.14)',
     mutedText: '#45614a',
     sidebarBackground: 'rgba(20, 83, 45, 0.96)',
@@ -154,6 +163,9 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     modalBackdrop: 'rgba(15, 23, 42, 0.36)',
     activeBorder: 'rgba(34, 197, 94, 0.52)',
     activeBackground: 'rgba(220, 252, 231, 0.86)',
+    warningText: '#854d0e',
+    warningBackground: 'rgba(254, 249, 195, 0.92)',
+    warningBorder: 'rgba(250, 204, 21, 0.34)',
     noteBackground: '#f0fdf4',
     noteText: '#166534',
   },
@@ -166,6 +178,7 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     surfaceText: '#3f2412',
     surfaceBorder: 'rgba(180, 83, 9, 0.28)',
     surfaceBackground: 'rgba(255, 248, 239, 0.94)',
+    modalSurfaceBackground: '#fff8ef',
     surfaceShadow: '0 18px 46px rgba(146, 64, 14, 0.14)',
     mutedText: '#7c4d2b',
     sidebarBackground: 'rgba(68, 35, 15, 0.96)',
@@ -199,6 +212,9 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     modalBackdrop: 'rgba(41, 24, 12, 0.42)',
     activeBorder: 'rgba(194, 65, 12, 0.46)',
     activeBackground: 'rgba(255, 237, 213, 0.88)',
+    warningText: '#7c2d12',
+    warningBackground: 'rgba(255, 237, 213, 0.94)',
+    warningBorder: 'rgba(249, 115, 22, 0.32)',
     noteBackground: '#fff7ed',
     noteText: '#9a3412',
   },
@@ -211,6 +227,7 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     surfaceText: '#2d1810',
     surfaceBorder: 'rgba(180, 83, 9, 0.28)',
     surfaceBackground: 'rgba(197, 173, 145, 0.9)',
+    modalSurfaceBackground: '#c5ad91',
     surfaceShadow: '0 18px 46px rgba(146, 64, 14, 0.18)',
     mutedText: '#5c3419',
     sidebarBackground: 'rgba(198, 124, 82, 0.92)',
@@ -244,6 +261,9 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     modalBackdrop: 'rgba(45, 24, 16, 0.42)',
     activeBorder: 'rgba(249, 115, 22, 0.46)',
     activeBackground: 'rgba(212, 189, 159, 0.84)',
+    warningText: '#5c3419',
+    warningBackground: 'rgba(232, 210, 160, 0.82)',
+    warningBorder: 'rgba(217, 119, 6, 0.32)',
     noteBackground: 'rgba(142, 212, 221, 0.46)',
     noteText: '#0d4743',
   },
@@ -256,6 +276,7 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     surfaceText: '#e2e8f0',
     surfaceBorder: 'rgba(148, 163, 184, 0.25)',
     surfaceBackground: 'rgba(15, 23, 42, 0.92)',
+    modalSurfaceBackground: '#0f172a',
     surfaceShadow: '0 20px 50px rgba(2, 6, 23, 0.35)',
     mutedText: '#cbd5e1',
     sidebarBackground: 'rgba(2, 6, 23, 0.94)',
@@ -289,6 +310,9 @@ const themePalettes: Record<Exclude<ThemePreference, 'light'>, ThemePalette> = {
     modalBackdrop: 'rgba(2, 6, 23, 0.78)',
     activeBorder: 'rgba(56, 189, 248, 0.48)',
     activeBackground: 'rgba(30, 64, 175, 0.35)',
+    warningText: '#fde68a',
+    warningBackground: 'rgba(120, 53, 15, 0.35)',
+    warningBorder: 'rgba(251, 191, 36, 0.28)',
     noteBackground: 'rgba(30, 64, 175, 0.18)',
     noteText: '#bfdbfe',
   },
@@ -307,6 +331,8 @@ const themedSurfaceSelectors = [
   '.archive-row',
   '.ia-item',
   '.admin-list-item',
+  '.review-response-table',
+  '.question-set-question',
 ];
 
 const themedMutedTextSelectors = [
@@ -321,6 +347,12 @@ const themedMutedTextSelectors = [
   '.ia-item span',
   '.assignment-header',
   '.review-queue-separator',
+  '.dashboard-audience',
+  '.dashboard-identity-label',
+  '.review-dialog-copy',
+  '.review-response-header',
+  '.review-response-meta',
+  '.question-order',
 ];
 
 const themedInteractiveSurfaceSelectors = [
@@ -408,7 +440,9 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   [data-revu-theme='${theme}'] .employee-row-summary:hover,
   [data-revu-theme='${theme}'] .employee-row-summary:focus-visible,
   [data-revu-theme='${theme}'] .review-queue-item:hover,
-  [data-revu-theme='${theme}'] .review-queue-item:focus-visible {
+  [data-revu-theme='${theme}'] .review-queue-item:focus-visible,
+  [data-revu-theme='${theme}'] .workflow-card:hover,
+  [data-revu-theme='${theme}'] .workflow-card:focus-visible {
     border-color: ${palette.navHoverBorder};
     background: ${palette.navHoverBackground};
   }
@@ -418,8 +452,28 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.inputBackground};
   }
 
+  [data-revu-theme='${theme}'] .section-toggle:hover,
+  [data-revu-theme='${theme}'] .section-toggle:focus-visible {
+    color: ${palette.surfaceText};
+    background: ${palette.surfaceBackground};
+  }
+
   [data-revu-theme='${theme}'] .sidebar-note {
     background: ${palette.sidebarNoteBackground};
+  }
+
+  [data-revu-theme='${theme}'] .theme-card:focus-visible {
+    outline-color: ${palette.navHoverBorder};
+  }
+
+  [data-revu-theme='${theme}'] .theme-card-value {
+    color: ${palette.inputText};
+    border-color: ${palette.inputBorder};
+    background: ${palette.inputBackground};
+  }
+
+  [data-revu-theme='${theme}'] .revision-card {
+    background: ${palette.navBackground};
   }
 
   [data-revu-theme='${theme}'] .badge {
@@ -474,6 +528,21 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
 
   [data-revu-theme='${theme}'] .modal-backdrop {
     background: ${palette.modalBackdrop};
+  }
+
+  [data-revu-theme='${theme}'] .modal-card {
+    background: ${palette.modalSurfaceBackground};
+  }
+
+  [data-revu-theme='${theme}'] .dashboard-identity-value,
+  [data-revu-theme='${theme}'] .review-response-answer {
+    color: ${palette.surfaceText};
+  }
+
+  [data-revu-theme='${theme}'] .warning-banner {
+    color: ${palette.warningText};
+    border-color: ${palette.warningBorder};
+    background: ${palette.warningBackground};
   }
 
   [data-revu-theme='${theme}'] .admin-list-item-active {

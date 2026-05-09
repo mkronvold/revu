@@ -1443,6 +1443,7 @@ button.employee-row:focus-visible {
   width: min(640px, 100%);
   display: grid;
   gap: 1rem;
+  background: #ffffff;
 }
 
 .employee-dialog-card {
