@@ -23,6 +23,9 @@ RUN npm run build --workspace @revu/contracts \
 
 FROM nginx:1.27-alpine
 
+ARG APP_REVISION=
+ENV APP_REVISION=$APP_REVISION
+
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/docker-entrypoint.sh /docker-entrypoint.d/40-revu-config.sh

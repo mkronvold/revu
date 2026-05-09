@@ -81,7 +81,7 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
-import { getRuntimeCompanyName } from './runtimeConfig';
+import { getRuntimeCompanyName, getRuntimeRevision } from './runtimeConfig';
 import {
   getNextThemePreference,
   getThemeColorScheme,
@@ -93,6 +93,7 @@ import {
 
 const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
+const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
 
@@ -453,10 +454,7 @@ function App() {
     () => (passwordDialogEmployeeId && selectedEmployeeDetail?.id === passwordDialogEmployeeId ? selectedEmployeeDetail : null),
     [passwordDialogEmployeeId, selectedEmployeeDetail],
   );
-  const localUserImportPlaceholder =
-    localUserTransferFormat === 'json'
-      ? `{\n  "format": "json",\n  "items": []\n}`
-      : 'username,fullName,email,role,status,managerUsername,assessorUsername,password,passwordResetRequired';
+
 
   useEffect(() => {
     if (!sessionUser) {
@@ -2972,63 +2970,27 @@ function App() {
         <section className="card">
           <div className="section-heading">
             <div>
-              <p className="section-label">Local user transfer</p>
-              <h3>Import or export local credentials</h3>
+              <p className="section-label">Import/Export users</p>
             </div>
-            <label className="inline-field">
-              Format
-              <select
-                value={localUserTransferFormat}
-                disabled={isSyncingLocalUsers}
-                onChange={(event) => setLocalUserTransferFormat(event.target.value as TransferFormat)}
-              >
-                <option value="json">JSON</option>
-                <option value="csv">CSV</option>
-              </select>
-            </label>
           </div>
-          <p className="muted-copy">
-            Exporting local users generates new one-time passcodes for every exported account, signs them out immediately,
-            and replaces their previous passwords.
-          </p>
           <div className="action-row">
             <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport()}>
-              {isSyncingLocalUsers ? 'Working…' : `Export ${localUserTransferFormat.toUpperCase()}`}
+              {isSyncingLocalUsers ? 'Working…' : 'Export Users'}
             </button>
             <button
               type="button"
               className="secondary-button"
-              disabled={isSyncingLocalUsers || !localUserImportDraft.trim()}
+              disabled={isSyncingLocalUsers}
               onClick={() => void handleLocalUserImport()}
             >
-              Import {localUserTransferFormat.toUpperCase()}
+              Import Users
             </button>
           </div>
           {localUserTransferPreview ? (
-            <>
-              <p className="temporary-password">
-                Last export prepared {localUserTransferPreview.itemCount} users as {localUserTransferPreview.format.toUpperCase()} at{' '}
-                {localUserTransferPreview.exportedAt}.
-              </p>
-              <label className="stack-form">
-                <span>Latest export payload</span>
-                <textarea readOnly rows={8} value={localUserTransferPreview.content} />
-              </label>
-            </>
+            <p className="temporary-password">
+              Last export prepared {localUserTransferPreview.itemCount} users at {localUserTransferPreview.exportedAt}.
+            </p>
           ) : null}
-          <label className="stack-form">
-            <span>Import payload</span>
-            <textarea
-              rows={8}
-              value={localUserImportDraft}
-              onChange={(event) => setLocalUserImportDraft(event.target.value)}
-              placeholder={localUserImportPlaceholder}
-            />
-          </label>
-          <p className="muted-copy">
-            Paste either the import-ready JSON export object or the matching CSV rows. Imported users keep whatever
-            password-reset requirement is present in the payload.
-          </p>
         </section>
       ) : null}
 
@@ -3231,6 +3193,13 @@ function App() {
               {getThemeLabel(themePreference)}
             </button>
           </div>
+
+          {buildRevision ? (
+            <div className="revision-card">
+              <p className="revision-label">Build</p>
+              <p className="revision-sha" title={buildRevision}>{buildRevision.slice(0, 7)}</p>
+            </div>
+          ) : null}
 
           <div className="sidebar-note">
             <p className="sidebar-note-title">Terminology guardrails</p>

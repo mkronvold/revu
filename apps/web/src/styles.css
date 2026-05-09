@@ -245,6 +245,31 @@ button {
   background: rgba(15, 118, 110, 0.18);
 }
 
+.revision-card {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.12);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.revision-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.revision-sha {
+  margin: 0;
+  font-size: 0.75rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  opacity: 0.75;
+}
+
 .session-card {
   padding: 0.9rem 1rem;
   border-radius: 1rem;
