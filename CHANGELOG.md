@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added `autoupdate.sh` to poll GHCR deployment images and restart Compose when new `api` or `web` images are pulled
 - Added a Summer Nights theme and fixed Winter Nights dashboard overview contrast
 - Simplified the Employees roster into single-line entries and localized password dialog/account timestamps
 - Tightened the sidebar brand row, utility panel placement, signed-in card spacing, and global button height
