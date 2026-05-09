@@ -1,8 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Darkened the Summer Nights theme overall to feel like dusk instead of bright late-evening, with deeper sand and rock tones while keeping the warm beach-at-sunset direction
 - Warmed up the Summer Nights theme to feel like hot late-evening sun on the beach with mojito and mai tai card colors and sand/rock tones
-- Added `autoupdate.sh` to poll GHCR deployment images and restart Compose when new `api` or `web` images are pulled
+- Updated `autoupdate.sh` to check GHCR manifest digests before pulling so Compose only downloads and restarts when `api` or `web` actually changed
 - Added a Summer Nights theme and fixed Winter Nights dashboard overview contrast
 - Simplified the Employees roster into single-line entries and localized password dialog/account timestamps
 - Tightened the sidebar brand row, utility panel placement, signed-in card spacing, and global button height

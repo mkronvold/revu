@@ -135,7 +135,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run deploy:up` | Starts the deployment stack from published images. |
 | `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, then pulls images and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
-| `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images for updates, restarts Compose when either image changes, and sleeps 30 minutes between checks by default. |
+| `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, and sleeps 30 minutes between checks by default. |
 | `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
