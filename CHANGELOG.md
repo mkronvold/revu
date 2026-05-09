@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Rebuilt Reviews into a single table-style queue sorted by next step, moved review actions into modal dialogs, and removed the old in-page review panel cards
+- Rebuilt Employees into the same table/dialog interaction model, unified button colors across the app, and removed the dashboard assessment editor card in favor of queue-launched dialogs
+- Merged Archive and Backups into a new File Management workspace, moved employee and question import/export controls there, and added a markdown-rendered Workflow card plus full Workflow page
 - Added an admin Backups page with live backup status, backup-now/download, upload, and replace-style restore actions for all data, users, questions, or reviews, backed by the new backup API/runtime helpers
 - Added persisted question-category suggestions plus markdown rendering for question-set headers and prompts, and scrolled Edit set directly into the question editor
 - Removed the Assignments navigation, added Backups to Administration, tightened Employees manager/assessor selection rules, and added explicit local-user export modes for rotating passcodes or preserving passwords and sessions
