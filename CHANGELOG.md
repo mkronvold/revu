@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Warmed up the Summer Nights theme to feel like hot late-evening sun on the beach with mojito and mai tai card colors and sand/rock tones
 - Added `autoupdate.sh` to poll GHCR deployment images and restart Compose when new `api` or `web` images are pulled
 - Added a Summer Nights theme and fixed Winter Nights dashboard overview contrast
 - Simplified the Employees roster into single-line entries and localized password dialog/account timestamps

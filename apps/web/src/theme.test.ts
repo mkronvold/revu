@@ -30,7 +30,7 @@ describe('theme helpers', () => {
     expect(getThemeLabel('summer-nights')).toBe('Summer Nights');
     expect(getThemeLabel('winter-nights')).toBe('Winter Nights');
     expect(getThemeColorScheme('summer')).toBe('light');
-    expect(getThemeColorScheme('summer-nights')).toBe('dark');
+    expect(getThemeColorScheme('summer-nights')).toBe('light');
     expect(getThemeColorScheme('winter-nights')).toBe('dark');
   });
 });
