@@ -7,6 +7,7 @@
 - Tightened Docker Compose port exposure and added service health checks
 - Added Docker Compose service aliases and external proxy network wiring
 - Renamed Docker Compose containers to the `revu-*` convention
+- Added company-name branding from `VITE_COMPANY_NAME` and made the workspace title link home
 - Ignored editor backup and Office document artifacts
 - Removed tracked backup and Office source files from the repository
 - Added `up.sh` and `down.sh` helpers for deployment compose lifecycle

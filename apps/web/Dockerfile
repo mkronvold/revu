@@ -4,6 +4,8 @@ WORKDIR /app
 
 ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_COMPANY_NAME=Your Company
+ENV VITE_COMPANY_NAME=$VITE_COMPANY_NAME
 
 COPY package.json package-lock.json ./
 COPY tsconfig.base.json ./

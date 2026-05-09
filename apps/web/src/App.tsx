@@ -25,6 +25,7 @@ import {
 import { buildDashboardSnapshot } from './dashboard';
 import {
   appSections,
+  defaultPath,
   getSection,
   getSectionsForRole,
   navGroups,
@@ -72,6 +73,10 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
+
+const configuredCompanyName = import.meta.env.VITE_COMPANY_NAME?.trim();
+const companyName = configuredCompanyName ? configuredCompanyName : null;
+const workspaceTitle = companyName ? `Assessment workspace • ${companyName}` : 'Assessment workspace';
 
 type EmployeeDraft = {
   id: string | null;
@@ -2669,7 +2674,9 @@ function App() {
       <aside className="sidebar">
         <div className="brand-block">
           <p className="eyebrow">Revu</p>
-          <h1>Assessment workspace</h1>
+          <a className="brand-title-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
+            <h1>{workspaceTitle}</h1>
+          </a>
           <p className="brand-copy">API-backed auth, employee administration, and dashboard flows on top of the shell foundation.</p>
         </div>
 

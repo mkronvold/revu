@@ -24,7 +24,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    npm install
    ```
 
-2. Optional: copy the sample environment file if you want to override local ports or database credentials:
+2. Optional: copy the sample environment file if you want to override local ports, branding, or database credentials:
 
    ```bash
    cp .env.example .env
@@ -47,7 +47,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    - API on `http://localhost:4000` by default
    - Web on `http://localhost:3000` by default
 
-   The dev compose override binds those ports to `127.0.0.1` so they stay local to the machine instead of being exposed on every interface. Override those defaults by copying `.env.example` to `.env` and editing the values there. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
+   The dev compose override binds those ports to `127.0.0.1` so they stay local to the machine instead of being exposed on every interface. Override those defaults by copying `.env.example` to `.env` and editing the values there. `VITE_COMPANY_NAME` controls the company label shown next to the workspace title. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
 
 5. Apply SQL migrations to the local Postgres container when you need a real schema instance:
 
@@ -89,6 +89,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    - `ghcr.io/mkronvold/revu-web`
    - tag `latest`
    - external proxy network `nginxproxy_proxy-net`
+   - baked-in web company label `Your Company`
 
 3. If the repository or packages are private, authenticate the Docker host to GHCR before pulling:
 
