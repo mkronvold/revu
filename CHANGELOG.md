@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added editable workflow markdown in File Management with a preview/edit modal, removed the old File Management scope card, and made the Workflow page plus sidebar card render from the shared saved content
 - Rebuilt Reviews into a single table-style queue sorted by next step, moved review actions into modal dialogs, and removed the old in-page review panel cards
 - Rebuilt Employees into the same table/dialog interaction model, unified button colors across the app, and removed the dashboard assessment editor card in favor of queue-launched dialogs
 - Merged Archive and Backups into a new File Management workspace, moved employee and question import/export controls there, and added a markdown-rendered Workflow card plus full Workflow page

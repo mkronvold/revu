@@ -112,6 +112,7 @@ const companyName = configuredCompanyName ? configuredCompanyName : null;
 const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
+const workflowStorageKey = 'revu-workflow-markdown';
 const lastResponseTimeoutMs = 120000;
 
 type EmployeeDraft = {
@@ -181,6 +182,11 @@ function buildLocalUserExportConfirmation(format: TransferFormat, mode: LocalUse
   return mode === 'rotate-passcodes'
     ? `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${format.toUpperCase()} export?`
     : `Exporting local users in preserve-passwords mode will leave passwords and active sessions untouched. Continue with the ${format.toUpperCase()} export?`;
+}
+
+function getStoredWorkflowMarkdown() {
+  const storedWorkflow = window.localStorage.getItem(workflowStorageKey);
+  return storedWorkflow ?? workflowMarkdown;
 }
 
 type BackupRestoreAction = {
@@ -395,6 +401,8 @@ function App() {
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
   const [questionCategories, setQuestionCategories] = useState<string[]>([]);
+  const [workflowContent, setWorkflowContent] = useState<string>(() => getStoredWorkflowMarkdown());
+  const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
@@ -446,6 +454,10 @@ function App() {
     window.localStorage.setItem(themeStorageKey, themePreference);
     document.documentElement.style.colorScheme = getThemeColorScheme(themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    window.localStorage.setItem(workflowStorageKey, workflowContent);
+  }, [workflowContent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1063,6 +1075,25 @@ function App() {
 
   const closeReviewDialog = () => {
     setSelectedReviewAssessmentId(null);
+  };
+
+  const openWorkflowEditor = () => {
+    setWorkflowDraft(workflowContent);
+    setAppError('');
+  };
+
+  const closeWorkflowEditor = () => {
+    setWorkflowDraft(null);
+  };
+
+  const saveWorkflowContent = () => {
+    if (workflowDraft === null) {
+      return;
+    }
+
+    setWorkflowContent(workflowDraft);
+    setWorkflowDraft(null);
+    setAdminNotice('Updated the workflow markdown.');
   };
 
   const openEmployeeDialog = (employeeId: string) => {
@@ -3451,16 +3482,26 @@ function App() {
 
   const renderBackups = () => <main className="admin-stack">{renderBackupsContent()}</main>;
 
+  const renderWorkflowManagementCard = () => (
+    <section className="card workflow-management-card">
+      <div className="section-heading">
+        <div>
+          <p className="section-label">Workflow</p>
+          <h3>Review workflow markdown</h3>
+        </div>
+        {isAdmin ? (
+          <button type="button" onClick={openWorkflowEditor}>
+            Edit workflow
+          </button>
+        ) : null}
+      </div>
+      <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
+    </section>
+  );
+
   const renderFileManagement = () => (
     <main className="admin-stack">
-      <section className="card">
-        <p className="section-label">Admin workspace</p>
-        <h3>File Management</h3>
-        <p>
-          Run employee transfers, question-set transfers, archive actions, and full backup tasks from one consolidated
-          admin page.
-        </p>
-      </section>
+      {renderWorkflowManagementCard()}
 
       <div className="file-management-card-grid">
         {renderLocalUserTransferCard()}
@@ -3487,7 +3528,7 @@ function App() {
     <main className="content-grid">
       <section className="card card-wide workflow-page-card">
         <p className="section-label">Review lifecycle</p>
-        <MarkdownContent markdown={workflowMarkdown} className="markdown-content workflow-page-markdown" />
+        <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown" />
       </section>
     </main>
   );
@@ -4013,7 +4054,7 @@ function App() {
 
             <a className="sidebar-note workflow-card" href="/workflow" onClick={(event) => navigate(event, '/workflow')}>
               <p className="sidebar-note-title">Workflow</p>
-              <MarkdownContent markdown={workflowMarkdown} className="markdown-content workflow-card-markdown" />
+              <MarkdownContent markdown={workflowContent} className="markdown-content workflow-card-markdown" />
             </a>
           </div>
         </aside>
@@ -4128,6 +4169,51 @@ function App() {
               ) : (
                 <p className="muted-copy">Loading employee credentials…</p>
               )}
+            </section>
+          </div>
+        ) : null}
+
+        {isAdmin && workflowDraft !== null ? (
+          <div className="modal-backdrop" role="presentation" onClick={closeWorkflowEditor}>
+            <section
+              aria-modal="true"
+              className="card modal-card workflow-editor-dialog"
+              role="dialog"
+              aria-labelledby="workflow-editor-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="section-heading">
+                <div>
+                  <p className="section-label">Workflow</p>
+                  <h3 id="workflow-editor-title">Edit workflow markdown</h3>
+                </div>
+                <button type="button" className="secondary-button" onClick={closeWorkflowEditor}>
+                  Close
+                </button>
+              </div>
+              <div className="workflow-editor-grid">
+                <label className="stack-form">
+                  <span>Workflow markdown</span>
+                  <textarea
+                    aria-label="Workflow markdown"
+                    rows={18}
+                    value={workflowDraft}
+                    onChange={(event) => setWorkflowDraft(event.target.value)}
+                  />
+                </label>
+                <section className="subcard workflow-editor-preview">
+                  <p className="section-label">Preview</p>
+                  <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
+                </section>
+              </div>
+              <div className="action-row">
+                <button type="button" onClick={saveWorkflowContent}>
+                  Save workflow
+                </button>
+                <button type="button" className="secondary-button" onClick={closeWorkflowEditor}>
+                  Cancel
+                </button>
+              </div>
             </section>
           </div>
         ) : null}

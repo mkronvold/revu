@@ -507,12 +507,51 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('Runtime backup configuration') ?? false);
 
     expect(window.location.pathname).toBe('/file-management');
+    expect(container.textContent).not.toContain('Admin workspace');
+    expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Local user transfer files');
     expect(container.textContent).toContain('Question set transfer files');
     expect(container.textContent).toContain('Archive review periods');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');
+
+    const editWorkflowButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit workflow',
+    );
+    expect(editWorkflowButton).toBeTruthy();
+
+    await act(async () => {
+      editWorkflowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Edit workflow markdown') ?? false);
+
+    const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
+    expect(workflowTextarea).toBeTruthy();
+
+    await act(async () => {
+      if (workflowTextarea) {
+        setFieldValue(workflowTextarea, '## Updated workflow\n- **Bold** item\n- Second item');
+      }
+      await flushRender();
+    });
+
+    expect(container.querySelector('.workflow-editor-preview')?.innerHTML).toContain('<strong>Bold</strong>');
+
+    const saveWorkflowButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save workflow',
+    );
+    expect(saveWorkflowButton).toBeTruthy();
+
+    await act(async () => {
+      saveWorkflowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Updated the workflow markdown.') ?? false);
+    expect(container.querySelector('.workflow-management-card')?.textContent).toContain('Updated workflow');
 
     const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
     const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Local user transfer files'));
@@ -647,6 +686,18 @@ describe('file management screen', () => {
       target: 'questions',
       mode: 'replace',
     });
+
+    const workflowCard = container.querySelector('a.workflow-card') as HTMLAnchorElement | null;
+    expect(workflowCard).toBeTruthy();
+
+    await act(async () => {
+      workflowCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/workflow');
+    expect(container.textContent).toContain('Updated workflow');
+    expect(container.querySelector('.workflow-page-markdown')?.innerHTML).toContain('<strong>Bold</strong>');
   });
 });
 

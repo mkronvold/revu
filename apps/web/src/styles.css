@@ -1301,6 +1301,37 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
+.workflow-management-card,
+.workflow-editor-preview {
+  gap: 0.85rem;
+}
+
+.workflow-management-preview {
+  font-size: 0.95rem;
+}
+
+.workflow-editor-dialog {
+  width: min(1080px, 100%);
+}
+
+.workflow-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.workflow-editor-grid textarea {
+  min-height: 24rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+@media (max-width: 900px) {
+  .workflow-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .question-set-heading {
   display: flex;
   align-items: baseline;
