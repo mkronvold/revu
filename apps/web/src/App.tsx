@@ -1103,7 +1103,7 @@ function App() {
 
   const openPasswordDialog = (employeeId: string) => {
     resetEditingState();
-    setSelectedEmployeeDetail(null);
+    setSelectedEmployeeDetail((currentDetail) => (currentDetail?.id === employeeId ? currentDetail : null));
     setSelectedEmployeeId(employeeId);
     setPasswordDialogEmployeeId(employeeId);
   };
@@ -3844,8 +3844,6 @@ function App() {
 
   const renderEmployees = () => {
     const renderEmployeeRosterRow = (employee: Employee) => {
-      const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
-
       return (
         <div className="employee-row-card" key={employee.id}>
           <button type="button" className="employee-row-summary" onClick={() => openEmployeeDialog(employee.id)}>
@@ -3861,18 +3859,6 @@ function App() {
               <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
             </span>
           </button>
-          <div className="employee-row-actions">
-            {canManageEmployees && canEditEmployeeRow ? (
-              <button type="button" className="secondary-button" onClick={() => startEditingEmployee(employee)}>
-                Edit
-              </button>
-            ) : null}
-            {isAdmin ? (
-              <button type="button" className="secondary-button" onClick={() => openPasswordDialog(employee.id)}>
-                Password
-              </button>
-            ) : null}
-          </div>
         </div>
       );
     };
@@ -3906,7 +3892,6 @@ function App() {
                   <span>Manager</span>
                   <span>Assessor</span>
                   <span>Status</span>
-                  <span>Actions</span>
                 </div>
                 {directoryEmployees.map(renderEmployeeRosterRow)}
               </div>

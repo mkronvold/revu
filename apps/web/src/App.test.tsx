@@ -983,7 +983,7 @@ describe('employees screen', () => {
     document.body.innerHTML = '';
   });
 
-  it('uses a single employee table and keeps edit and password actions in dialogs', async () => {
+  it('uses a single employee table and keeps edit and password actions in employee dialogs', async () => {
     const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const pat = employeesListExample.items.find((employee) => employee.username === 'pat.peer')!;
     const updatedEmployee = {
@@ -1026,6 +1026,8 @@ describe('employees screen', () => {
 
     const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
     expect(summaryButton).toBeTruthy();
+    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
+    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Password')).toBe(false);
 
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1036,16 +1038,7 @@ describe('employees screen', () => {
 
     expect(container.textContent).toContain('Employee detail');
     expect(container.textContent).toContain('Password configured');
-
-    const detailCloseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
-    expect(detailCloseButton).toBeTruthy();
-
-    await act(async () => {
-      detailCloseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushRender();
-    });
-
-    const editButton = Array.from(elliotRow?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Edit');
+    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit');
     expect(editButton).toBeTruthy();
 
     await act(async () => {
@@ -1117,14 +1110,33 @@ describe('employees screen', () => {
     const passwordButton = Array.from(updatedRow?.querySelectorAll('button') ?? []).find(
       (button) => button.textContent === 'Password',
     );
-    expect(passwordButton).toBeTruthy();
+    expect(passwordButton).toBeFalsy();
+
+    const updatedSummaryButton = updatedRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    expect(updatedSummaryButton).toBeTruthy();
 
     await act(async () => {
-      passwordButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      updatedSummaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
+
+    const managePasswordButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Manage password',
+    );
+    expect(managePasswordButton).toBeTruthy();
+
+    await act(async () => {
+      managePasswordButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
     await waitFor(() => container.textContent?.includes('Password management') ?? false);
+
+    await waitFor(() =>
+      Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Generate one-time passcode'),
+    );
 
     const resetButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Generate one-time passcode',
@@ -1142,9 +1154,13 @@ describe('employees screen', () => {
   });
 
   it('keeps password actions admin-only while managers can still edit non-admin employees', async () => {
+    const ada = employeesListExample.items.find((employee) => employee.username === 'ada.admin')!;
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1154,8 +1170,7 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
 
-    const employeeActionLabels = Array.from(container.querySelectorAll('.employee-row-actions button'), (button) => button.textContent);
-    expect(employeeActionLabels).not.toContain('Password');
+    expect(container.querySelector('.employee-row-actions')).toBeNull();
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Add employee')).toBe(false);
 
     const adaRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) => row.textContent?.includes('Ada Admin'));
@@ -1164,6 +1179,36 @@ describe('employees screen', () => {
     );
 
     expect(Array.from(adaRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
-    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(true);
+    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
+
+    await act(async () => {
+      (adaRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null)?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
+    expect(container.textContent).toContain(ada.fullName);
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Edit')).toBe(false);
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Manage password')).toBe(false);
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Close')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await act(async () => {
+      (elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null)?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes(elliot.fullName) ?? false);
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Edit')).toBe(true);
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Manage password')).toBe(false);
   });
 });
