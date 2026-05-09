@@ -9,6 +9,7 @@
 - Renamed Docker Compose containers to the `revu-*` convention
 - Moved the external proxy network attachment to `revu-web` and kept the API internal
 - Added company-name branding from `VITE_COMPANY_NAME` and made the workspace title link home
+- Updated `up.sh` to fast-forward from git and reconcile `.env` keys against `.env.example`
 - Ignored editor backup and Office document artifacts
 - Removed tracked backup and Office source files from the repository
 - Added `up.sh` and `down.sh` helpers for deployment compose lifecycle

@@ -103,6 +103,8 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./up.sh
    ```
 
+   The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images and starts Compose.
+
    To stop the deployment stack later:
 
    ```bash
@@ -130,7 +132,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run dev:web` | Runs the Vite web workspace on the host. |
 | `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
 | `npm run deploy:up` | Starts the deployment stack from published images. |
-| `./up.sh` | Pulls deployment images and starts the deployment stack. |
+| `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, then pulls images and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
