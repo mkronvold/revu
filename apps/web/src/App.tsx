@@ -3118,10 +3118,17 @@ function App() {
           <p>
             {sessionUser.role} • {sessionUser.username}
           </p>
-          <button type="button" className="secondary-button" onClick={handleLogout}>
-            Sign out
-          </button>
+            <button type="button" className="secondary-button" onClick={handleLogout}>
+              Sign out
+            </button>
         </div>
+
+        {adminNotice && isAdmin ? (
+          <div className="session-card sidebar-status-card" role="status" aria-live="polite">
+            <p className="section-label">Status</p>
+            <p>{adminNotice}</p>
+          </div>
+        ) : null}
 
         <nav className="sidebar-nav" aria-label="Primary">
           {navGroups.map((group) => (
@@ -3146,7 +3153,8 @@ function App() {
         </nav>
 
         <div className="sidebar-utilities">
-          <div className="session-card">
+          <div className="session-card utility-inline-card">
+            <p className="section-label">Theme</p>
             <button
               type="button"
               className="secondary-button"
@@ -3180,7 +3188,6 @@ function App() {
             <p>{currentSection.summary}</p>
             {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
             {appError ? <p className="form-error">{appError}</p> : null}
-            {adminNotice && isAdmin ? <p className="temporary-password">{adminNotice}</p> : null}
             {workflowNotice && (pathname === '/dashboard' || pathname === '/reviews') ? (
               <p className="temporary-password">{workflowNotice}</p>
             ) : null}

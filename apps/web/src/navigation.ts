@@ -56,7 +56,7 @@ export const appSections: AppSection[] = [
   {
     id: 'employees',
     path: '/employees',
-    group: 'Workspace',
+    group: 'Administration',
     title: 'Employees',
     summary: 'Employee management screens for managers and admins, including lifecycle state, reporting lines, and assessor assignments.',
     audience: ['Manager', 'Admin'],

@@ -239,6 +239,17 @@ button {
   gap: 1rem;
 }
 
+.utility-inline-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.utility-inline-card .section-label {
+  margin: 0;
+}
+
 .sidebar-note {
   padding: 1rem;
   border-radius: 1rem;
@@ -278,12 +289,22 @@ button {
 
 .sidebar-session-card {
   display: grid;
-  gap: 0.2rem;
-  padding: 0.65rem 0.85rem;
+  gap: 0.15rem;
+  padding: 0.5rem 0.85rem;
 }
 
 .sidebar-session-card .section-label {
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.1rem;
+}
+
+.sidebar-status-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.sidebar-status-card .section-label {
+  margin-bottom: 0;
 }
 
 .content {
