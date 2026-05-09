@@ -50,9 +50,6 @@ services:
       default:
         aliases:
           - revu-api
-      proxy-net:
-        aliases:
-          - revu-api
 
   web:
     container_name: revu-web
@@ -71,6 +68,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - revu-web
+      proxy-net:
+        aliases:
+          - revu-web
 
 volumes:
   postgres-data:
