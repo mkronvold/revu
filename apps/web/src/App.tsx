@@ -1,25 +1,34 @@
 import type {
   AuthSession,
+  BackupRestoreScope,
+  BackupSnapshot,
+  BackupStatusResponse,
   Employee,
   EmployeeAdmin,
   FoundationSnapshot,
+  LocalUsersExportMode,
   QuestionSet,
   QuestionTarget,
   ReviewPeriod,
 } from '@revu/contracts';
+import { backupSnapshotSchema } from '@revu/contracts';
 import { ChangeEvent, FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiClientError,
   changePassword,
   createEmployee,
+  exportBackup,
   getEmployee,
+  getBackupStatus,
   getFoundation,
+  listQuestionCategories,
   listEmployees,
   login,
   logout,
   me,
   resetEmployeePassword,
+  restoreBackup,
   setEmployeePassword,
   updateEmployee,
 } from './api';
@@ -62,6 +71,11 @@ import {
   type ReviewAdminSnapshot,
   type ReviewPeriodDraft,
 } from './reviewAdmin';
+import {
+  buildQuestionCategorySuggestions,
+  MarkdownContent,
+  questionCategorySuggestionsId,
+} from './questionPresentation';
 import {
   buildExportNotice,
   buildImportNotice,
@@ -144,6 +158,137 @@ const demoAccounts: DemoAccount[] = [
     password: 'PeerPass123!',
   },
 ];
+
+const localUserExportModeOptions: Array<{
+  value: LocalUsersExportMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'rotate-passcodes',
+    label: 'Generate new passcodes and sign everyone out',
+    description: 'Exports one-time passcodes, rotates every exported credential, and signs exported users out immediately.',
+  },
+  {
+    value: 'preserve-passwords',
+    label: 'Leave passwords and session status untouched',
+    description: 'Exports credential-safe data without rotating passwords or ending active sessions.',
+  },
+];
+
+function buildLocalUserExportConfirmation(format: TransferFormat, mode: LocalUsersExportMode) {
+  return mode === 'rotate-passcodes'
+    ? `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${format.toUpperCase()} export?`
+    : `Exporting local users in preserve-passwords mode will leave passwords and active sessions untouched. Continue with the ${format.toUpperCase()} export?`;
+}
+
+type BackupRestoreAction = {
+  target: BackupRestoreScope;
+  title: string;
+  description: string;
+  warning: string;
+};
+
+const backupRestoreActions: BackupRestoreAction[] = [
+  {
+    target: 'all',
+    title: 'Restore all',
+    description: 'Replace all users plus all review data from the uploaded backup.',
+    warning:
+      'Restore all uses replace semantics. It deletes current users, review periods, question sets, assignments, assessments, and every active session before loading the uploaded backup.',
+  },
+  {
+    target: 'users',
+    title: 'Restore users',
+    description: 'Replace employee accounts from the uploaded backup and sign everyone out.',
+    warning:
+      'Restore users uses replace semantics. It deletes current employee sessions and removes any users that are not present in the uploaded backup.',
+  },
+  {
+    target: 'questions',
+    title: 'Restore questions',
+    description: 'Replace review periods and question sets from the uploaded backup.',
+    warning:
+      'Restore questions uses replace semantics. It replaces review periods and question sets only, and it will fail unless assignments and assessments are already cleared.',
+  },
+  {
+    target: 'reviews',
+    title: 'Restore reviews',
+    description: 'Replace review periods, question sets, assignments, and assessments from the uploaded backup.',
+    warning:
+      'Restore reviews uses replace semantics. It overwrites current review periods, question sets, assignments, assessments, and review events with the uploaded backup.',
+  },
+];
+
+function buildBackupFilename(exportedAt: string) {
+  return `revu-backup-${exportedAt.replace(/[:.]/g, '-')}.json`;
+}
+
+function buildBackupExportConfirmation(mode: LocalUsersExportMode) {
+  return mode === 'rotate-passcodes'
+    ? 'Downloading a backup in rotate-passcodes mode will rotate every local password into a generated one-time passcode, sign everyone out, and include those one-time passcodes in the downloaded backup. Continue?'
+    : 'Download a full JSON backup now? This snapshot can later be uploaded for a replace-mode restore.';
+}
+
+function readBackupFileSummary(raw: string): BackupSnapshot {
+  try {
+    return backupSnapshotSchema.parse(JSON.parse(raw));
+  } catch {
+    throw new Error('Backup file must be a valid Revu JSON backup export.');
+  }
+}
+
+function describeBackupSummary(backup: {
+  users: { itemCount: number };
+  reviewData: {
+    reviewPeriods: unknown[];
+    questionSets: unknown[];
+    assignments: unknown[];
+    assessments: unknown[];
+  };
+}) {
+  return `${backup.users.itemCount} users • ${backup.reviewData.reviewPeriods.length} review periods • ${backup.reviewData.questionSets.length} question sets • ${backup.reviewData.assignments.length} assignments • ${backup.reviewData.assessments.length} assessments`;
+}
+
+function buildBackupRestoreConfirmation(action: BackupRestoreAction, fileName: string) {
+  return `${action.warning} Continue with ${action.title.toLowerCase()} using ${fileName}?`;
+}
+
+function buildBackupRestoreNotice(
+  target: BackupRestoreScope,
+  fileName: string,
+  counts: {
+    users: number;
+    reviewPeriods: number;
+    questionSets: number;
+    assignments: number;
+    assessments: number;
+  },
+) {
+  if (target === 'users') {
+    return `Restored users from ${fileName} with replace semantics. Loaded ${counts.users} users.`;
+  }
+
+  if (target === 'questions') {
+    return `Restored questions from ${fileName} with replace semantics. Loaded ${counts.reviewPeriods} review periods and ${counts.questionSets} question sets.`;
+  }
+
+  if (target === 'reviews') {
+    return `Restored reviews from ${fileName} with replace semantics. Loaded ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
+  }
+
+  return `Restored the full backup from ${fileName} with replace semantics. Loaded ${counts.users} users, ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
+}
+
+function buildBackupSessionNotice(target: BackupRestoreScope, mode: LocalUsersExportMode) {
+  if (target === 'questions' || target === 'reviews') {
+    return '';
+  }
+
+  return mode === 'rotate-passcodes'
+    ? 'Restore completed and signed every user out. Sign in again with an account from the uploaded backup using its one-time passcode.'
+    : 'Restore completed and signed every user out. Sign in again with an account from the uploaded backup using its stored password.';
+}
 
 function toEmployeeSummary(employee: EmployeeAdmin): Employee {
   const { auth: _auth, ...summary } = employee;
@@ -229,17 +374,26 @@ function App() {
   const [appError, setAppError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [isLoadingBackupStatus, setIsLoadingBackupStatus] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
   const [isSyncingLocalUsers, setIsSyncingLocalUsers] = useState(false);
+  const [localUserExportMode, setLocalUserExportMode] = useState<LocalUsersExportMode>('rotate-passcodes');
+  const [backupExportMode, setBackupExportMode] = useState<LocalUsersExportMode>('preserve-passwords');
+  const [isSyncingBackups, setIsSyncingBackups] = useState(false);
+  const [isReadingBackupFile, setIsReadingBackupFile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSavingReviewAdmin, setIsSavingReviewAdmin] = useState(false);
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
   const [reviewAdmin, setReviewAdmin] = useState<ReviewAdminSnapshot | null>(null);
+  const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [backupFileSummary, setBackupFileSummary] = useState<BackupSnapshot | null>(null);
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
+  const [questionCategories, setQuestionCategories] = useState<string[]>([]);
   const [adminNotice, setAdminNotice] = useState('');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
@@ -261,8 +415,10 @@ function App() {
   });
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
+  const backupImportInputRef = useRef<HTMLInputElement | null>(null);
   const reviewPanelRef = useRef<HTMLElement | null>(null);
   const employeeDetailRef = useRef<HTMLElement | null>(null);
+  const questionSetEditorRef = useRef<HTMLElement | null>(null);
 
   const cycleTheme = () => {
     setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
@@ -271,6 +427,12 @@ function App() {
   const scrollEmployeeView = () => {
     window.setTimeout(() => {
       employeeDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
+  const scrollQuestionSetEditorView = () => {
+    window.setTimeout(() => {
+      questionSetEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 0);
   };
 
@@ -343,6 +505,14 @@ function App() {
   const hasEmployeeReadAccess = session?.permissions.includes('employees:read') ?? false;
   const canManageEmployees = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
   const isAdmin = sessionUser?.role === 'admin';
+  const availableBackupExportModes = useMemo(() => {
+    const supportedModes = new Set(backupStatus?.supportedUserExportModes ?? localUserExportModeOptions.map((option) => option.value));
+    return localUserExportModeOptions.filter((option) => supportedModes.has(option.value));
+  }, [backupStatus]);
+  const availableBackupRestoreActions = useMemo(() => {
+    const supportedScopes = new Set(backupStatus?.supportedRestoreScopes ?? backupRestoreActions.map((action) => action.target));
+    return backupRestoreActions.filter((action) => supportedScopes.has(action.target));
+  }, [backupStatus]);
   const visibleAdminNotice = isAdmin ? adminNotice : '';
   const lastResponseMessage =
     lastResponseSource === 'workflow'
@@ -456,6 +626,10 @@ function App() {
         : [],
     [employees, reviewAdmin, selectedReviewPeriod],
   );
+  const questionCategorySuggestions = useMemo(
+    () => buildQuestionCategorySuggestions(questionCategories, questionSetDraft),
+    [questionCategories, questionSetDraft],
+  );
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -549,6 +723,7 @@ function App() {
       setSelectedReviewPeriodId(null);
       setReviewPeriodDraft(null);
       setQuestionSetDraft(null);
+      setQuestionCategories([]);
       setAdminNotice('');
       return;
     }
@@ -563,6 +738,75 @@ function App() {
       setWorkflowNotice('');
     }
   }, [foundation]);
+
+  useEffect(() => {
+    if (!sessionToken || !sessionUser || sessionUser.role !== 'admin' || passwordResetRequired) {
+      setQuestionCategories([]);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await listQuestionCategories(sessionToken);
+        if (!cancelled) {
+          setQuestionCategories(response.items);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAppError(getErrorMessage(error));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [passwordResetRequired, sessionToken, sessionUser]);
+
+  useEffect(() => {
+    if (!sessionToken || !isAdmin || passwordResetRequired) {
+      setBackupStatus(null);
+      setBackupFile(null);
+      setBackupFileSummary(null);
+      setIsLoadingBackupStatus(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBackupStatus(true);
+
+    void (async () => {
+      try {
+        const response = await getBackupStatus(sessionToken);
+        if (!cancelled) {
+          setBackupStatus(response);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAppError(getErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingBackupStatus(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, passwordResetRequired, sessionToken]);
+
+  useEffect(() => {
+    if (!backupStatus) {
+      return;
+    }
+
+    if (!backupStatus.supportedUserExportModes.includes(backupExportMode)) {
+      setBackupExportMode(backupStatus.defaultUserExportMode);
+    }
+  }, [backupExportMode, backupStatus]);
 
   useEffect(() => {
     if (!workflowNotice) {
@@ -775,6 +1019,43 @@ function App() {
     setEmployees(response.items);
   };
 
+  const refreshQuestionCategorySuggestions = async () => {
+    if (!sessionToken || !isAdmin) {
+      setQuestionCategories([]);
+      return [];
+    }
+
+    const response = await listQuestionCategories(sessionToken);
+    setQuestionCategories(response.items);
+    return response.items;
+  };
+
+  const refreshBackupStatus = async () => {
+    if (!sessionToken || !isAdmin) {
+      setBackupStatus(null);
+      return null;
+    }
+
+    const response = await getBackupStatus(sessionToken);
+    setBackupStatus(response);
+    return response;
+  };
+
+  const handleBackupStatusRefresh = async () => {
+    setIsLoadingBackupStatus(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      await refreshBackupStatus();
+      setAdminNotice('Refreshed backup status from the API.');
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsLoadingBackupStatus(false);
+    }
+  };
+
   const resetEditingState = () => {
     setEditingEmployeeId(null);
     setDraftEmployee(null);
@@ -818,6 +1099,13 @@ function App() {
     setChangePasswordError('');
     setAppError('');
     setAdminNotice('');
+    setQuestionCategories([]);
+    setBackupStatus(null);
+    setBackupFile(null);
+    setBackupFileSummary(null);
+    setIsLoadingBackupStatus(false);
+    setIsSyncingBackups(false);
+    setIsReadingBackupFile(false);
     setLoginPassword('');
     setPasswordDraft('');
     setPasswordStatus('');
@@ -980,26 +1268,32 @@ function App() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${format.toUpperCase()} export?`,
-    );
+    const confirmed = window.confirm(buildLocalUserExportConfirmation(format, localUserExportMode));
     if (!confirmed) {
       return;
     }
 
     setIsSyncingLocalUsers(true);
+    setAdminNotice('');
     setAppError('');
 
     try {
-      const response = await exportLocalUsersFromApi(sessionToken, format);
+      const response = await exportLocalUsersFromApi(sessionToken, format, localUserExportMode);
       const content = serializeLocalUsersTransfer(response);
       const extension = format === 'csv' ? 'csv' : 'json';
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
       triggerDownload(`local-users-export.${extension}`, content, mimeType);
-      const notice = `${buildLocalUsersExportNotice(response)} Your current session is now signed out. Sign in again with your exported one-time passcode.`;
+      const notice = buildLocalUsersExportNotice(response);
 
-      setLoginUsername(sessionUser.username);
-      clearSession({ authNotice: notice });
+      if (response.mode === 'rotate-passcodes') {
+        setLoginUsername(sessionUser.username);
+        clearSession({
+          authNotice: `${notice} Your current session is now signed out. Sign in again with your exported one-time passcode.`,
+        });
+        return;
+      }
+
+      setAdminNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -1049,6 +1343,131 @@ function App() {
       setAppError(getErrorMessage(error));
     } finally {
       setIsSyncingLocalUsers(false);
+    }
+  };
+
+  const handleBackupDownload = async () => {
+    if (!sessionToken || !sessionUser) {
+      return;
+    }
+
+    const confirmed = window.confirm(buildBackupExportConfirmation(backupExportMode));
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSyncingBackups(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const response = await exportBackup(sessionToken, backupExportMode);
+      triggerDownload(buildBackupFilename(response.exportedAt), JSON.stringify(response, null, 2), 'application/json');
+      setBackupStatus((currentStatus) =>
+        currentStatus
+          ? {
+              ...currentStatus,
+              lastBackupAt: response.exportedAt,
+            }
+          : currentStatus,
+      );
+
+      const notice =
+        response.users.mode === 'rotate-passcodes'
+          ? `Downloaded a backup with rotated one-time passcodes for ${response.users.itemCount} users. Everyone was signed out.`
+          : `Downloaded a JSON backup with ${describeBackupSummary(response)}.`;
+
+      if (response.users.mode === 'rotate-passcodes') {
+        setLoginUsername(sessionUser.username);
+        clearSession({
+          authNotice: `${notice} Sign in again with your exported one-time passcode before continuing.`,
+        });
+        return;
+      }
+
+      setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingBackups(false);
+    }
+  };
+
+  const handleBackupUpload = () => {
+    backupImportInputRef.current?.click();
+  };
+
+  const handleBackupFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    setIsReadingBackupFile(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const summary = readBackupFileSummary(await file.text());
+      setBackupFile(file);
+      setBackupFileSummary(summary);
+      setAdminNotice(`Loaded ${file.name}. Review the restore target carefully before continuing.`);
+    } catch (error) {
+      setBackupFile(null);
+      setBackupFileSummary(null);
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsReadingBackupFile(false);
+    }
+  };
+
+  const handleBackupRestore = async (action: BackupRestoreAction) => {
+    if (!sessionToken || !backupFile || !backupFileSummary) {
+      return;
+    }
+
+    const confirmed = window.confirm(buildBackupRestoreConfirmation(action, backupFile.name));
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSyncingBackups(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const response = await restoreBackup(sessionToken, {
+        file: backupFile,
+        target: action.target,
+        mode: 'replace',
+      });
+
+      setBackupStatus((currentStatus) =>
+        currentStatus
+          ? {
+              ...currentStatus,
+              lastRestoreAt: response.restoredAt,
+            }
+          : currentStatus,
+      );
+
+      const notice = buildBackupRestoreNotice(response.target, backupFile.name, response.counts);
+      if (response.target === 'all' || response.target === 'users') {
+        setLoginUsername(sessionUser?.username ?? '');
+        clearSession({
+          authNotice: `${notice} ${buildBackupSessionNotice(response.target, backupFileSummary.users.mode)}`,
+        });
+        return;
+      }
+
+      await refreshFoundationSnapshot();
+      setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingBackups(false);
     }
   };
 
@@ -1440,6 +1859,7 @@ function App() {
     setQuestionSetDraft(toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined));
     setReviewPeriodDraft(null);
     setAdminNotice('');
+    scrollQuestionSetEditorView();
   };
 
   const saveQuestionDraft = async (event: FormEvent<HTMLFormElement>) => {
@@ -1465,6 +1885,9 @@ function App() {
     try {
       const { notice } = await saveQuestionSetToApi(sessionToken, questionSetDraft);
       await refreshFoundationSnapshot();
+      void refreshQuestionCategorySuggestions().catch((error) => {
+        setAppError(getErrorMessage(error));
+      });
       setQuestionSetDraft(null);
       setAdminNotice(notice);
     } catch (error) {
@@ -1638,12 +2061,10 @@ function App() {
   );
 
   const renderQuestionSetCard = (target: QuestionTarget, questionSet: QuestionSet | null) => (
-    <section className="card admin-section-card">
-      <div className="section-heading">
-        <div>
-          <p className="section-label">{target === 'self' ? 'Self assessment' : 'Peer assessment'}</p>
-          <h3>{questionSet?.title ?? `Create ${target} questions`}</h3>
-        </div>
+    <section className="card admin-section-card question-set-card">
+      <div className="question-set-heading">
+        <p className="section-label">{target === 'self' ? 'Self assessment' : 'Peer assessment'}</p>
+        <h3>{questionSet?.title ?? `Create ${target} questions`}</h3>
       </div>
       <dl className="detail-grid compact-detail-grid">
         <div>
@@ -1655,14 +2076,18 @@ function App() {
           <dd>{questionSet?.questions.length ?? 0}</dd>
         </div>
       </dl>
-      <p>{questionSet?.headerMarkdown || 'No header text yet.'}</p>
-      <ul className="bullet-list">
+      <MarkdownContent markdown={questionSet?.headerMarkdown || 'No header text yet.'} className="markdown-content" />
+      <div className="question-set-question-list">
         {questionSet?.questions.map((question) => (
-          <li key={question.id}>
-            #{question.order} {question.prompt}
-          </li>
-        )) ?? <li>No questions configured yet.</li>}
-      </ul>
+          <article className="question-set-question" key={question.id}>
+            <div className="question-prompt-block">
+              <span className="question-order">#{question.order}</span>
+              <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+            </div>
+            {question.category ? <small className="muted-copy">{question.category}</small> : null}
+          </article>
+        )) ?? <p className="muted-copy">No questions configured yet.</p>}
+      </div>
       <div className="action-row">
         <button
           type="button"
@@ -1689,37 +2114,26 @@ function App() {
 
     return (
       <main className="admin-stack">
-        <section className="card admin-section-card">
+        <section className="card admin-section-card review-period-card">
           <div className="section-heading">
-            <div>
-              <p className="section-label">Review period</p>
-              <h3>{selectedReviewPeriod.label}</h3>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={selectedReviewPeriod.status === 'archived'}
-              onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
-            >
-              Edit period
-            </button>
+            <h3>{selectedReviewPeriod.label}</h3>
+            <label className="inline-field review-period-picker">
+              <span className="sr-only">Review period</span>
+              <select
+                value={selectedReviewPeriod.id}
+                onChange={(event) => {
+                  setSelectedReviewPeriodId(event.target.value);
+                  setQuestionSetDraft(null);
+                }}
+              >
+                {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
+                  <option key={reviewPeriod.id} value={reviewPeriod.id}>
+                    {reviewPeriod.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <label className="inline-field">
-            Review period
-            <select
-              value={selectedReviewPeriod.id}
-              onChange={(event) => {
-                setSelectedReviewPeriodId(event.target.value);
-                setQuestionSetDraft(null);
-              }}
-            >
-              {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
-                <option key={reviewPeriod.id} value={reviewPeriod.id}>
-                  {reviewPeriod.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <dl className="detail-grid">
             <div>
               <dt>Window</dt>
@@ -1746,10 +2160,33 @@ function App() {
             </p>
           ) : null}
           <div className="action-row">
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('json')}>
+            <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+              Add period
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedReviewPeriod.status === 'archived'}
+              onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
+            >
+              Edit period
+            </button>
+          </div>
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSavingReviewAdmin}
+              onClick={() => void handleQuestionSetExport('json')}
+            >
               Export JSON stub
             </button>
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('csv')}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSavingReviewAdmin}
+              onClick={() => void handleQuestionSetExport('csv')}
+            >
               Export CSV stub
             </button>
             <button
@@ -1816,23 +2253,26 @@ function App() {
               </div>
             </form>
           ) : null}
-
-          <div className="action-row">
-            <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
-              Add period
-            </button>
-          </div>
         </section>
 
         {renderQuestionSetCard('self', selectedQuestionSets.self)}
         {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
 
         {questionSetDraft ? (
-          <section className="card">
+          <section
+            className="card admin-section-card question-set-editor-card"
+            id="question-set-editor"
+            ref={questionSetEditorRef}
+          >
             <p className="section-label">
               {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
             </p>
             <form className="stack-form" onSubmit={saveQuestionDraft}>
+              <datalist id={questionCategorySuggestionsId}>
+                {questionCategorySuggestions.map((category) => (
+                  <option key={category} value={category} />
+                ))}
+              </datalist>
               <label>
                 Title
                 <input
@@ -1867,7 +2307,7 @@ function App() {
               </label>
               <div className="admin-stack">
                 {questionSetDraft.questions.map((question, index) => (
-                  <div className="subcard" key={question.id}>
+                  <div className="subcard question-editor-card" key={question.id}>
                     <div className="section-heading">
                       <strong>Question {index + 1}</strong>
                       <button
@@ -1889,9 +2329,44 @@ function App() {
                         Remove
                       </button>
                     </div>
-                    <div className="form-columns">
-                      <label>
-                        Type
+                    <div className="question-editor-fields">
+                      <label className="question-category-field">
+                        Category
+                        <input
+                          list={questionCategorySuggestionsId}
+                          value={question.category}
+                          onChange={(event) =>
+                            setQuestionSetDraft({
+                              ...questionSetDraft,
+                              questions: questionSetDraft.questions.map((candidate) =>
+                                candidate.id === question.id
+                                  ? { ...candidate, category: event.target.value }
+                                  : candidate,
+                              ),
+                            })
+                          }
+                          placeholder="Impact"
+                        />
+                      </label>
+                      <label className="question-prompt-field">
+                        Prompt
+                        <textarea
+                          rows={3}
+                          value={question.prompt}
+                          onChange={(event) =>
+                            setQuestionSetDraft({
+                              ...questionSetDraft,
+                              questions: questionSetDraft.questions.map((candidate) =>
+                                candidate.id === question.id
+                                  ? { ...candidate, prompt: event.target.value }
+                                  : candidate,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="question-response-type-field">
+                        Response type
                         <select
                           value={question.type}
                           onChange={(event) =>
@@ -1910,40 +2385,7 @@ function App() {
                           <option value="narrative">narrative</option>
                         </select>
                       </label>
-                      <label>
-                        Category
-                        <input
-                          value={question.category}
-                          onChange={(event) =>
-                            setQuestionSetDraft({
-                              ...questionSetDraft,
-                              questions: questionSetDraft.questions.map((candidate) =>
-                                candidate.id === question.id
-                                  ? { ...candidate, category: event.target.value }
-                                  : candidate,
-                              ),
-                            })
-                          }
-                        />
-                      </label>
                     </div>
-                    <label>
-                      Prompt
-                      <textarea
-                        rows={3}
-                        value={question.prompt}
-                        onChange={(event) =>
-                          setQuestionSetDraft({
-                            ...questionSetDraft,
-                            questions: questionSetDraft.questions.map((candidate) =>
-                              candidate.id === question.id
-                                ? { ...candidate, prompt: event.target.value }
-                                : candidate,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
                   </div>
                 ))}
               </div>
@@ -2254,44 +2696,27 @@ function App() {
         </div>
         {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
         {appError ? <p className="form-error">{appError}</p> : null}
-        <div className="dashboard-identity-row">
-          <span>
-            <strong>Role</strong> {sessionUser?.role}
-          </span>
-          <span>
-            <strong>Username</strong> {sessionUser?.username}
-          </span>
-          <span>
-            <strong>Email</strong> {sessionUser?.email}
-          </span>
-          <span>
-            <strong>Manager</strong> {getEmployeeName(sessionUser?.managerId ?? null)}
-          </span>
-          <span>
-            <strong>Assessor</strong> {getEmployeeName(sessionUser?.assessorId ?? null)}
-          </span>
-        </div>
-        <div className="action-row">
-          {(sessionUser?.role === 'manager' || sessionUser?.role === 'admin') && (
-            <>
-              <button type="button" onClick={() => goTo('/reviews')}>
-                Reviews
-              </button>
-              <button type="button" onClick={() => goTo('/employees')}>
-                Employees
-              </button>
-            </>
-          )}
-          {sessionUser?.role === 'admin' && (
-            <>
-              <button type="button" onClick={() => goTo('/questions')}>
-                Questions
-              </button>
-              <button type="button" onClick={() => goTo('/assignments')}>
-                Assignments
-              </button>
-            </>
-          )}
+        <div className="dashboard-identity-grid" aria-label="Signed-in user summary">
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Role</span>
+            <span className="dashboard-identity-value">{sessionUser?.role ?? '—'}</span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Username</span>
+            <span className="dashboard-identity-value">{sessionUser?.username ?? '—'}</span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Email</span>
+            <span className="dashboard-identity-value">{sessionUser?.email ?? '—'}</span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Manager</span>
+            <span className="dashboard-identity-value">{getEmployeeName(sessionUser?.managerId ?? null)}</span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Assessor</span>
+            <span className="dashboard-identity-value">{getEmployeeName(sessionUser?.assessorId ?? null)}</span>
+          </div>
         </div>
       </section>
 
@@ -2372,15 +2797,16 @@ function App() {
                   <dd>{selectedAssessmentEditor.managerName}</dd>
                 </div>
               </dl>
-              {selectedAssessmentEditor.headerMarkdown ? <p>{selectedAssessmentEditor.headerMarkdown}</p> : null}
+              {selectedAssessmentEditor.headerMarkdown ? (
+                <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content" />
+              ) : null}
               <div className="question-list">
                 {selectedAssessmentEditor.questions.map((question) => (
                   <label className="subcard" key={question.questionId}>
-                    <span>
-                      <strong>
-                        #{question.order} {question.prompt}
-                      </strong>
-                    </span>
+                    <div className="question-prompt-block">
+                      <span className="question-order">#{question.order}</span>
+                      <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                    </div>
                     <small className="muted-copy">
                       {question.type}
                       {question.category ? ` • ${question.category}` : ''}
@@ -2406,7 +2832,9 @@ function App() {
                   </p>
                 </div>
               ) : null}
-              {selectedAssessmentEditor.footerMarkdown ? <p className="muted-copy">{selectedAssessmentEditor.footerMarkdown}</p> : null}
+              {selectedAssessmentEditor.footerMarkdown ? (
+                <MarkdownContent markdown={selectedAssessmentEditor.footerMarkdown} className="markdown-content muted-copy" />
+              ) : null}
               <div className="action-row">
                 <button
                   type="button"
@@ -2547,9 +2975,10 @@ function App() {
               <div className="question-list review-response-list">
                 {selectedReviewPanel.questions.map((question) => (
                   <article className="subcard review-response-row" key={question.questionId}>
-                    <strong>
-                      #{question.order} {question.prompt}
-                    </strong>
+                    <div className="question-prompt-block">
+                      <span className="question-order">#{question.order}</span>
+                      <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                    </div>
                     <small className="muted-copy">
                       {question.type}
                       {question.category ? ` • ${question.category}` : ''}
@@ -2687,6 +3116,189 @@ function App() {
     </main>
   );
 
+  const renderBackups = () => (
+    <main className="admin-stack">
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Backup status</p>
+            <h3>Runtime backup configuration</h3>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isLoadingBackupStatus || isSyncingBackups}
+            onClick={() => void handleBackupStatusRefresh()}
+          >
+            {isLoadingBackupStatus ? 'Refreshing…' : 'Refresh status'}
+          </button>
+        </div>
+        {isLoadingBackupStatus && !backupStatus ? (
+          <p className="muted-copy">Loading backup status...</p>
+        ) : backupStatus ? (
+          <>
+            <dl className="detail-grid backup-status-grid">
+              <div>
+                <dt>Daily backups</dt>
+                <dd>{backupStatus.dailyBackupsEnabled ? 'Enabled' : 'Disabled'}</dd>
+              </div>
+              <div>
+                <dt>Retention</dt>
+                <dd>{backupStatus.retentionDays ? `${backupStatus.retentionDays} days` : 'Not configured'}</dd>
+              </div>
+              <div>
+                <dt>Last backup</dt>
+                <dd>{formatLocalizedDateTime(backupStatus.lastBackupAt)}</dd>
+              </div>
+              <div>
+                <dt>Last restore</dt>
+                <dd>{formatLocalizedDateTime(backupStatus.lastRestoreAt)}</dd>
+              </div>
+              <div>
+                <dt>Formats</dt>
+                <dd>{backupStatus.supportedFormats.join(', ')}</dd>
+              </div>
+              <div>
+                <dt>Default user export mode</dt>
+                <dd>{backupStatus.defaultUserExportMode}</dd>
+              </div>
+            </dl>
+            <div className="toolbar-note">
+              <p>
+                <strong>Restore rule:</strong> Uploaded restores always use {backupStatus.replaceStrategy} semantics.
+              </p>
+              <p>
+                Supported restore scopes: {backupStatus.supportedRestoreScopes.join(', ')}. Supported restore modes:{' '}
+                {backupStatus.supportedRestoreModes.join(', ')}.
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className="muted-copy">Backup status is unavailable right now.</p>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Backup now</p>
+            <h3>Download a full backup</h3>
+          </div>
+        </div>
+        <p className="muted-copy">
+          The export endpoint returns a full JSON backup that includes users plus review data. Choose how local user
+          credentials should be represented in the download.
+        </p>
+        <div className="local-user-export-mode-grid" role="radiogroup" aria-label="Backup user export mode">
+          {availableBackupExportModes.map((option) => (
+            <label
+              key={option.value}
+              className={`local-user-export-mode-option${backupExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="backup-export-mode"
+                value={option.value}
+                checked={backupExportMode === option.value}
+                onChange={(event) => setBackupExportMode(event.target.value as LocalUsersExportMode)}
+              />
+              <span className="local-user-export-mode-copy">
+                <strong>{option.label}</strong>
+                <span className="muted-copy">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {backupExportMode === 'rotate-passcodes' ? (
+          <div className="warning-banner">
+            <strong>Warning</strong>
+            <p>Rotate-passcodes backup downloads sign every user out, including the current admin session.</p>
+          </div>
+        ) : null}
+        <div className="action-row">
+          <button type="button" disabled={isSyncingBackups || isReadingBackupFile} onClick={() => void handleBackupDownload()}>
+            {isSyncingBackups ? 'Preparing backup…' : 'Backup now / download'}
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Restore backup</p>
+            <h3>Upload a backup file</h3>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSyncingBackups || isReadingBackupFile}
+            onClick={handleBackupUpload}
+          >
+            {backupFile ? 'Replace file' : 'Choose backup file'}
+          </button>
+        </div>
+        <p className="muted-copy">
+          Upload a JSON backup file, then choose exactly which replace-mode restore to run. Nothing restores silently.
+        </p>
+        <input
+          ref={backupImportInputRef}
+          type="file"
+          accept=".json,application/json,text/plain"
+          style={{ display: 'none' }}
+          onChange={(event) => void handleBackupFileChange(event)}
+        />
+        {isReadingBackupFile ? (
+          <p className="muted-copy">Reading backup file...</p>
+        ) : backupFile && backupFileSummary ? (
+          <div className="subcard backup-file-card">
+            <div className="section-heading">
+              <div>
+                <p className="section-label">Selected file</p>
+                <h3>{backupFile.name}</h3>
+              </div>
+              <span className="pill">{Math.max(1, Math.round(backupFile.size / 1024))} KB</span>
+            </div>
+            <dl className="detail-grid compact-detail-grid">
+              <div>
+                <dt>Exported at</dt>
+                <dd>{formatLocalizedDateTime(backupFileSummary.exportedAt)}</dd>
+              </div>
+              <div>
+                <dt>User mode</dt>
+                <dd>{backupFileSummary.users.mode}</dd>
+              </div>
+              <div>
+                <dt>Version</dt>
+                <dd>{backupFileSummary.version}</dd>
+              </div>
+            </dl>
+            <p className="muted-copy">{describeBackupSummary(backupFileSummary)}</p>
+          </div>
+        ) : (
+          <p className="muted-copy">Choose a backup JSON file before you try a restore.</p>
+        )}
+        <div className="warning-banner">
+          <strong>Restore warning</strong>
+          <p>Every restore action is destructive for its target. Review the selected file and the target button before continuing.</p>
+        </div>
+        <div className="backup-action-grid">
+          {availableBackupRestoreActions.map((action) => (
+            <button
+              key={action.target}
+              type="button"
+              className="admin-list-item backup-action-card"
+              disabled={!backupFile || !backupFileSummary || isSyncingBackups || isReadingBackupFile}
+              onClick={() => void handleBackupRestore(action)}
+            >
+              <strong>{action.title}</strong>
+              <span className="muted-copy">{action.description}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+
   const renderEmployeeDetail = () => {
     if (!selectedEmployee && !draftEmployee) {
       return (
@@ -2698,6 +3310,14 @@ function App() {
     }
 
     if (draftEmployee && editingEmployeeId) {
+      const employeeAssessorOptions = activeEmployees.filter((employee) => employee.id !== draftEmployee.id);
+      const selectedManagerId = managerOptions.some((employee) => employee.id === draftEmployee.managerId)
+        ? draftEmployee.managerId
+        : '';
+      const selectedAssessorId = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessorId)
+        ? draftEmployee.assessorId
+        : '';
+
       return (
         <section className="card" ref={employeeDetailRef}>
           <p className="section-label">{draftEmployee.id ? 'Edit employee' : 'Add employee'}</p>
@@ -2727,7 +3347,7 @@ function App() {
             <label>
               Manager
               <select
-                value={draftEmployee.managerId}
+                value={selectedManagerId}
                 onChange={(event) => setDraftEmployee({ ...draftEmployee, managerId: event.target.value })}
               >
                 <option value="">Not assigned</option>
@@ -2741,11 +3361,11 @@ function App() {
             <label>
               Assessor
               <select
-                value={draftEmployee.assessorId}
+                value={selectedAssessorId}
                 onChange={(event) => setDraftEmployee({ ...draftEmployee, assessorId: event.target.value })}
               >
                 <option value="">Not assigned</option>
-                {activeEmployees.map((employee) => (
+                {employeeAssessorOptions.map((employee) => (
                   <option key={employee.id} value={employee.id}>
                     {employee.fullName}
                   </option>
@@ -3024,6 +3644,26 @@ function App() {
               <p className="section-label">Import/Export users</p>
             </div>
           </div>
+          <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
+            {localUserExportModeOptions.map((option) => (
+              <label
+                key={option.value}
+                className={`local-user-export-mode-option${localUserExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="local-user-export-mode"
+                  value={option.value}
+                  checked={localUserExportMode === option.value}
+                  onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
+                />
+                <span className="local-user-export-mode-copy">
+                  <strong>{option.label}</strong>
+                  <span className="muted-copy">{option.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
           <div className="action-row">
             <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
               {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
@@ -3191,12 +3831,12 @@ function App() {
         <div className="session-card sidebar-session-card">
           <p className="section-label">Signed in as</p>
           <h2>{sessionUser.fullName}</h2>
-          <p>
+          <p className="sidebar-session-meta">
             {sessionUser.role} • {sessionUser.username}
           </p>
-            <button type="button" className="secondary-button" onClick={handleLogout}>
-              Sign out
-            </button>
+          <button type="button" className="secondary-button" onClick={handleLogout}>
+            Sign out
+          </button>
         </div>
 
         {lastResponseMessage ? (
@@ -3294,11 +3934,11 @@ function App() {
             ? renderEmployees()
             : pathname === '/questions'
               ? renderQuestions()
-              : pathname === '/assignments'
-                ? renderAssignments()
-                : pathname === '/archive'
-                  ? renderArchive()
-            : renderPlaceholderSection()}
+              : pathname === '/archive'
+                ? renderArchive()
+                : pathname === '/backups'
+                  ? renderBackups()
+                  : renderPlaceholderSection()}
 
         {isAdmin && passwordDialogEmployeeId ? (
           <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>

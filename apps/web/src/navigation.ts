@@ -3,7 +3,7 @@ export type NavGroup = 'Workspace' | 'Administration';
 export type AppRole = 'employee' | 'manager' | 'admin';
 
 export type AppSection = {
-  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assignments' | 'archive';
+  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'archive' | 'backups';
   path: `/${string}`;
   group: NavGroup;
   title: string;
@@ -58,11 +58,11 @@ export const appSections: AppSection[] = [
     path: '/employees',
     group: 'Administration',
     title: 'Employees',
-    summary: 'Employee management screens for managers and admins, including lifecycle state, reporting lines, and assessor assignments.',
+    summary: 'Manage employee records, reporting lines, assessor coverage, and local user transfer actions.',
     audience: ['Manager', 'Admin'],
     highlights: [
       'Separate active and inactive employee views.',
-      'Reserve room for local user management and future import/export controls.',
+      'Keep local user import and export controls close to the employee roster.',
       'Keep employee records distinct from assessment and review workflow screens.',
     ],
     placeholderTitle: 'Employee roster and detail panel',
@@ -86,22 +86,6 @@ export const appSections: AppSection[] = [
     nextSlice: 'Wire in review-period aware question set forms and import/export actions.',
   },
   {
-    id: 'assignments',
-    path: '/assignments',
-    group: 'Administration',
-    title: 'Assignments',
-    summary: 'Admin assignment planning for employee, manager, and peer reviewer relationships across a review period.',
-    audience: ['Admin'],
-    highlights: [
-      'Center the layout on employee, manager, and assigned peer reviewer columns.',
-      'Preserve room for bulk import/export operations.',
-      'Treat assignment setup as a planning surface, not as an assessment editing experience.',
-    ],
-    placeholderTitle: 'Assignment matrix',
-    placeholderDescription: 'A structured placeholder is ready for future assignment tables, batch tools, and review-period filters.',
-    nextSlice: 'Add editable assignment tables after employee and review-period contracts are available.',
-  },
-  {
     id: 'archive',
     path: '/archive',
     group: 'Administration',
@@ -116,6 +100,22 @@ export const appSections: AppSection[] = [
     placeholderTitle: 'Review-period archive controls',
     placeholderDescription: 'This shell reserves space for archive and unarchive actions plus a list of review periods and historical counts.',
     nextSlice: 'Implement archive state management once review-period APIs and policies are available.',
+  },
+  {
+    id: 'backups',
+    path: '/backups',
+    group: 'Administration',
+    title: 'Backups',
+    summary: 'Admin-only backup status, backup downloads, and replace-mode restore controls for users and review data.',
+    audience: ['Admin'],
+    highlights: [
+      'Review runtime backup cadence, retention, and the most recent backup and restore timestamps.',
+      'Download a fresh JSON backup now with explicit user export mode choices.',
+      'Upload one backup file and run explicit replace restores for all data, users, questions, or reviews.',
+    ],
+    placeholderTitle: 'Backup status and restore tools',
+    placeholderDescription: 'The live Backups page shows runtime status, backup downloads, and explicit restore actions for uploaded JSON backups.',
+    nextSlice: 'Add dedicated audit history later if administrators need a longer-lived backup event timeline.',
   },
 ];
 

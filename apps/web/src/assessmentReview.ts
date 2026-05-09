@@ -200,43 +200,69 @@ export function isAssessmentComplete(snapshot: AssessmentWorkflowSnapshot, asses
   return questions.length > 0 && questions.every((question) => question.response.trim().length > 0);
 }
 
+function hasAssessmentResponses(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
+  return getAssessmentQuestionRows(snapshot, assessment).some((question) => question.response.trim().length > 0);
+}
+
+type AssessmentQueueStatus = 'ready' | 'in-progress' | 'ready-to-submit' | 'awaiting-acceptance' | 'complete';
+
+function getAssessmentQueueStatus(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment): AssessmentQueueStatus {
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return 'awaiting-acceptance';
+    case 'accepted':
+    case 'reviewed':
+      return 'complete';
+    case 'new':
+    case 'draft':
+      if (isAssessmentComplete(snapshot, assessment)) {
+        return 'ready-to-submit';
+      }
+
+      return assessment.reviewState === 'draft' || hasAssessmentResponses(snapshot, assessment) ? 'in-progress' : 'ready';
+  }
+}
+
 function buildAssessmentDetail(
   assessment: Assessment,
   snapshot: AssessmentWorkflowSnapshot,
   employeesById: Map<string, Employee>,
 ) {
   const subjectName = getEmployeeName(employeesById, assessment.employeeId);
-  const complete = isAssessmentComplete(snapshot, assessment);
 
-  switch (assessment.reviewState) {
-    case 'new':
+  switch (getAssessmentQueueStatus(snapshot, assessment)) {
+    case 'ready':
       return `Assigned for ${subjectName} and ready to start.`;
-    case 'draft':
-      return complete ? `Completed for ${subjectName} and ready to submit.` : `Draft in progress for ${subjectName}.`;
-    case 'submitted':
+    case 'in-progress':
+      return `Draft in progress for ${subjectName}.`;
+    case 'ready-to-submit':
+      return `Completed for ${subjectName} and ready to submit.`;
+    case 'awaiting-acceptance':
       return `Submitted and waiting for manager or admin acceptance.`;
-    case 'accepted':
-      return `Accepted and ready for manager or admin review notes.`;
-    case 'reviewed':
+    case 'complete':
+      if (assessment.reviewState === 'accepted') {
+        return `Accepted and ready for manager or admin review notes.`;
+      }
+
       return `Reviewed and kept for historical reference.`;
   }
 }
 
 function buildAssessmentStatusLabel(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
-  if (assessment.reviewState === 'draft' && isAssessmentComplete(snapshot, assessment)) {
-    return 'Ready to submit';
-  }
-
-  switch (assessment.reviewState) {
-    case 'new':
+  switch (getAssessmentQueueStatus(snapshot, assessment)) {
+    case 'ready':
       return 'Ready to start';
-    case 'draft':
+    case 'in-progress':
       return 'Draft';
-    case 'submitted':
+    case 'ready-to-submit':
+      return 'Ready to submit';
+    case 'awaiting-acceptance':
       return 'Submitted';
-    case 'accepted':
-      return 'Accepted';
-    case 'reviewed':
+    case 'complete':
+      if (assessment.reviewState === 'accepted') {
+        return 'Accepted';
+      }
+
       return 'Reviewed';
   }
 }
@@ -363,35 +389,35 @@ export function buildAssessmentQueues(
         ? `Complete by ${formatDate(snapshot.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active')!.dueDate)}`
         : 'Ready to start',
       items: authoredAssessments
-        .filter((assessment) => assessment.reviewState === 'new')
+        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'ready')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'in-progress',
       title: 'Started but not completed',
       items: authoredAssessments
-        .filter((assessment) => assessment.reviewState === 'draft' && !isAssessmentComplete(snapshot, assessment))
+        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'in-progress')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'ready-to-submit',
       title: 'Complete but not submitted yet',
       items: authoredAssessments
-        .filter((assessment) => assessment.reviewState === 'draft' && isAssessmentComplete(snapshot, assessment))
+        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'ready-to-submit')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'awaiting-acceptance',
       title: 'Complete but not accepted yet',
       items: authoredAssessments
-        .filter((assessment) => assessment.reviewState === 'submitted')
+        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'awaiting-acceptance')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'complete',
       title: 'Complete',
       items: authoredAssessments
-        .filter((assessment) => assessment.reviewState === 'accepted' || assessment.reviewState === 'reviewed')
+        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'complete')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
   ];

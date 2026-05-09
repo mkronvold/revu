@@ -5,6 +5,9 @@ import {
   assessmentsListQuerySchema,
   assessmentsListResponseSchema,
   assignmentResponseSchema,
+  backupExportResponseSchema,
+  backupRestoreResponseSchema,
+  backupStatusResponseSchema,
   authChangePasswordRequestSchema,
   authChangePasswordResponseSchema,
   authLoginResponseSchema,
@@ -25,6 +28,7 @@ import {
   localUsersExportResponseSchema,
   localUsersImportRequestSchema,
   localUsersImportResponseSchema,
+  questionCategoriesListResponseSchema,
   questionSetResponseSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
@@ -44,12 +48,15 @@ import {
   type AssessmentsListQuery,
   type AuthLoginRequest,
   type AuthChangePasswordRequest,
+  type BackupRestoreMode,
+  type BackupRestoreScope,
   type CreateAssessmentRequest,
   type CreateAssignmentRequest,
   type CreateEmployeeRequest,
   type CreateQuestionSetRequest,
   type CreateReviewPeriodRequest,
   type ImportStubRequest,
+  type LocalUsersExportMode,
   type LocalUsersImportRequest,
   type RejectAssessmentToDraftRequest,
   type ReassignAssessmentRequest,
@@ -89,6 +96,10 @@ export class ApiClientError extends Error {
 
 type ExportFormat = 'json' | 'csv';
 
+function isFormDataBody(body: RequestInit['body']) {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
 async function request<T>(
   path: string,
   schema: z.ZodType<T>,
@@ -97,7 +108,7 @@ async function request<T>(
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
-      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...(init.body && !isFormDataBody(init.body) ? { 'content-type': 'application/json' } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -182,11 +193,46 @@ export function getEmployee(token: string, employeeId: string) {
   return request(`/employees/${employeeId}`, employeeResponseSchema, withAuthorization(token));
 }
 
-export function exportLocalUsers(token: string, format: ExportFormat) {
+export function exportLocalUsers(token: string, format: ExportFormat, mode: LocalUsersExportMode = 'rotate-passcodes') {
   return request(
-    withSearchParams('/employees/export', { format }),
+    withSearchParams('/employees/export', { format, mode }),
     localUsersExportResponseSchema,
     withAuthorization(token),
+  );
+}
+
+export function getBackupStatus(token: string) {
+  return request('/admin/backups/status', backupStatusResponseSchema, withAuthorization(token));
+}
+
+export function exportBackup(token: string, mode: LocalUsersExportMode = 'preserve-passwords') {
+  return request(
+    withSearchParams('/admin/backups/export', { mode }),
+    backupExportResponseSchema,
+    withAuthorization(token),
+  );
+}
+
+export function restoreBackup(
+  token: string,
+  payload: {
+    file: File;
+    target: BackupRestoreScope;
+    mode: BackupRestoreMode;
+  },
+) {
+  const formData = new FormData();
+  formData.set('file', payload.file, payload.file.name);
+  formData.set('target', payload.target);
+  formData.set('mode', payload.mode);
+
+  return request(
+    '/admin/backups/restore',
+    backupRestoreResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: formData,
+    }),
   );
 }
 
@@ -336,6 +382,10 @@ export function importQuestionSets(token: string, reviewPeriodId: string, payloa
       body: JSON.stringify(importStubRequestSchema.parse(payload)),
     }),
   );
+}
+
+export function listQuestionCategories(token: string) {
+  return request('/question-categories', questionCategoriesListResponseSchema, withAuthorization(token));
 }
 
 export function createAssignment(token: string, reviewPeriodId: string, payload: CreateAssignmentRequest) {

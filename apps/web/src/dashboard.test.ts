@@ -33,4 +33,65 @@ describe('integrated dashboard snapshot', () => {
     expect(managerSnapshot.reviewSummary).toMatch(/manager attention/i);
     expect(adminSnapshot.adminSummary).toMatch(/inactive employee records/i);
   });
+
+  it('keeps partially answered authored assessments visible in the in-progress queue', () => {
+    const employee = employeesListExample.items.find((candidate) => candidate.username === 'elliot.employee')!;
+    const snapshot = buildDashboardSnapshot(
+      employee,
+      {
+        ...foundationSnapshotExample,
+        assessments: [
+          {
+            ...foundationSnapshotExample.assessments[0]!,
+            id: '12121212-1212-4212-8212-121212121212',
+            reviewState: 'new',
+            submittedAt: null,
+            acceptedAt: null,
+            acceptedByEmployeeId: null,
+            responses: [
+              {
+                questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+                order: 1,
+                response: 'agree',
+              },
+              {
+                questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+                order: 2,
+                response: '',
+              },
+            ],
+          },
+        ],
+      },
+      employeesListExample.items,
+    );
+
+    expect(snapshot.queues[0]?.items).toHaveLength(0);
+    expect(snapshot.queues[1]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
+    expect(snapshot.queues[1]?.items[0]?.statusLabel).toBe('Draft');
+  });
+
+  it('surfaces complete authored assessments even when legacy data still marks them new', () => {
+    const employee = employeesListExample.items.find((candidate) => candidate.username === 'elliot.employee')!;
+    const snapshot = buildDashboardSnapshot(
+      employee,
+      {
+        ...foundationSnapshotExample,
+        assessments: [
+          {
+            ...foundationSnapshotExample.assessments[0]!,
+            id: '34343434-3434-4434-8434-343434343434',
+            reviewState: 'new',
+            submittedAt: null,
+            acceptedAt: null,
+            acceptedByEmployeeId: null,
+          },
+        ],
+      },
+      employeesListExample.items,
+    );
+
+    expect(snapshot.queues[2]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
+    expect(snapshot.queues[2]?.items[0]?.statusLabel).toBe('Ready to submit');
+  });
 });

@@ -286,10 +286,13 @@ describe("auth and employee admin API", () => {
     expect(exportResponse.statusCode).toBe(200);
     const exportPayload = localUsersExportResponseSchema.parse(exportResponse.json());
     expect(exportPayload.itemCount).toBe(4);
+    expect(exportPayload.mode).toBe("rotate-passcodes");
 
     const exportedAdmin = exportPayload.items.find((item) => item.username === "ada.admin");
     expect(exportedAdmin).toBeDefined();
     expect(exportedAdmin?.passwordResetRequired).toBe(true);
+    expect(exportedAdmin?.credentialKind).toBe("password");
+    expect(exportedAdmin?.id).toBe("11111111-1111-4111-8111-111111111111");
 
     const exportedEmployee = exportPayload.items.find((item) => item.username === "elliot.employee");
     expect(exportedEmployee).toBeDefined();
@@ -366,6 +369,74 @@ describe("auth and employee admin API", () => {
 
     const transferredUserLogin = authLoginResponseSchema.parse((await login(importApp, "new.transfer", "TransferPass123!")).json());
     expect(transferredUserLogin.session.passwordResetRequired).toBe(false);
+  });
+
+  it("supports preserve-password exports without rotating credentials or sessions", async () => {
+    const app = await createApp();
+    const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
+
+    const exportResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/employees/export?format=json&mode=preserve-passwords",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(exportResponse.statusCode).toBe(200);
+
+    const exportPayload = localUsersExportResponseSchema.parse(exportResponse.json());
+    expect(exportPayload.mode).toBe("preserve-passwords");
+
+    const exportedAdmin = exportPayload.items.find((item) => item.username === "ada.admin");
+    expect(exportedAdmin).toMatchObject({
+      credentialKind: "password-hash",
+      passwordResetRequired: false,
+      id: "11111111-1111-4111-8111-111111111111",
+    });
+
+    const meResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(meResponse.statusCode).toBe(200);
+
+    expect((await login(app, "ada.admin", "AdminPass123!")).statusCode).toBe(200);
+  });
+
+  it("rejects imported password-hash credentials that do not use a supported stored-password format", async () => {
+    const app = await createApp();
+    const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
+
+    const importResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/employees/import",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        format: "json",
+        items: [
+          {
+            username: "broken.hash",
+            fullName: "Broken Hash",
+            email: "broken.hash@example.com",
+            role: "employee",
+            status: "active",
+            managerUsername: "manny.manager",
+            assessorUsername: "pat.peer",
+            password: "",
+            credentialKind: "password-hash",
+            passwordResetRequired: false,
+          },
+        ],
+      },
+    });
+
+    expect(importResponse.statusCode).toBe(400);
+    expect(importResponse.body).toContain("Password hash must use a supported stored-password format");
   });
 
   it("captures auth schema invariants in the migration", () => {

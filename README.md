@@ -104,7 +104,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./up.sh
    ```
 
-   The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images, applies database migrations, seeds the built-in example dataset only when the database is still empty, and starts Compose.
+    The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images, applies database migrations, seeds the built-in example dataset only when the database is still empty, and starts Compose. The deployment stack now also starts a `backup` sidecar that keeps a retained archive volume plus a separate handoff volume for backup download/upload and restore workflows.
 
    To stop the deployment stack later:
 
@@ -112,7 +112,30 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./down.sh
    ```
 
-    This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, and the generated runtime config is served without browser caching, so changing it in `.env` takes effect after restarting the web container and refreshing the page. The same runtime config also carries the published image revision, which the sidebar shows in a compact Build card.
+     This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, and the generated runtime config is served without browser caching, so changing it in `.env` takes effect after restarting the web container and refreshing the page. The same runtime config also carries the published image revision, which the sidebar shows in a compact Build card.
+
+## Backup runtime
+
+- The deployment compose file mounts two named backup volumes into both the `api` and `backup` containers:
+  - `backup-archive` stores retained backup files.
+  - `backup-handoff` is reserved for download, upload, and restore handoff files.
+- The `backup` sidecar runs `scripts/backup-entrypoint.sh scheduler` and triggers one full backup every day at `BACKUP_SCHEDULE_UTC` (default `02:00` UTC).
+- Old archived backups are pruned after `BACKUP_RETENTION_DAYS` days (default `14`).
+- The scheduler and helper scripts expect the API backup endpoints to be reachable at:
+  - `BACKUP_DOWNLOAD_URL` (default `http://api:4000/api/v1/admin/backups/export`)
+  - `BACKUP_RESTORE_URL` (default `http://api:4000/api/v1/admin/backups/restore`)
+- If those endpoints need auth or an internal shared-secret header, set either:
+  - `BACKUP_BEARER_TOKEN`
+  - or `BACKUP_HEADER_NAME` plus `BACKUP_HEADER_VALUE`
+- The current ops plumbing assumes the backup payload is a single file response, with JSON as the default extension (`BACKUP_FILE_EXTENSION=json`), and that restores accept multipart form fields named `file`, `target`, and `mode`.
+- Useful manual helpers:
+
+  ```bash
+  ./scripts/backup-now.sh
+  ./scripts/backup-download-handoff.sh latest
+  ./scripts/backup-upload-handoff.sh /path/to/backup.json
+  ./scripts/backup-restore.sh /path/to/backup.json questions
+  ```
 
 ## Container publishing
 
@@ -136,6 +159,10 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, pulls images, applies migrations, seeds the example dataset only when the database is empty, and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
 | `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, applies migrations, seeds the example dataset if the database is empty, and sleeps 30 minutes between checks by default. |
+| `./scripts/backup-now.sh [name]` | Runs the backup sidecar on demand and stores a full backup in the retained archive volume. |
+| `./scripts/backup-download-handoff.sh [backup\|latest] [request-id]` | Copies an archived backup into the shared download handoff area. |
+| `./scripts/backup-upload-handoff.sh <file> [request-id]` | Copies an uploaded backup file into the shared upload handoff area. |
+| `./scripts/backup-restore.sh <file> [target] [request-id]` | Calls the API restore endpoint with replace semantics for the requested target slice. |
 | `./reset-to-example.sh` | Applies migrations and reloads Postgres with the exact example dataset used by development and tests. |
 | `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
 | `npm run db:up` | Starts only the Postgres service. |

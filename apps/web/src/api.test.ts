@@ -6,14 +6,18 @@ import {
   acceptAssessment,
   apiBaseUrl,
   changePassword,
+  exportBackup,
   exportLocalUsers,
   getEmployee,
+  getBackupStatus,
   getFoundation,
   importLocalUsers,
+  listQuestionCategories,
   listAssessments,
   listEmployees,
   login,
   reassignAssessment,
+  restoreBackup,
   reviewAssessment,
   submitAssessment,
 } from './api';
@@ -149,6 +153,24 @@ describe('web api client', () => {
     );
   });
 
+  it('lists persisted question categories from the API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: ['Impact', 'Teamwork'] }), { status: 200 }),
+    );
+
+    const response = await listQuestionCategories('session-token');
+
+    expect(response.items).toEqual(['Impact', 'Teamwork']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${apiBaseUrl}/question-categories`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+  });
+
   it('routes password changes and local user transfers through auth-backed endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
@@ -163,23 +185,25 @@ describe('web api client', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({
-            format: 'json',
-            exportedAt: '2026-06-01T12:00:00.000Z',
-            itemCount: 1,
-            items: [
+            JSON.stringify({
+              format: 'json',
+              mode: 'rotate-passcodes',
+              exportedAt: '2026-06-01T12:00:00.000Z',
+              itemCount: 1,
+              items: [
               {
                 username: 'elliot.employee',
                 fullName: 'Elliot Employee',
                 email: 'elliot.employee@example.com',
                 role: 'employee',
                 status: 'active',
-                managerUsername: 'manny.manager',
-                assessorUsername: 'pat.peer',
-                password: 'tmp-passcode-123',
-                passwordResetRequired: true,
-              },
-            ],
+                  managerUsername: 'manny.manager',
+                  assessorUsername: 'pat.peer',
+                  password: 'tmp-passcode-123',
+                  credentialKind: 'password',
+                  passwordResetRequired: true,
+                },
+              ],
           }),
           { status: 200 },
         ),
@@ -202,7 +226,7 @@ describe('web api client', () => {
       currentPassword: 'OldPass123!',
       newPassword: 'NewPass123!',
     });
-    await exportLocalUsers('session-token', 'json');
+    await exportLocalUsers('session-token', 'json', 'rotate-passcodes');
     await importLocalUsers('session-token', {
       format: 'json',
       items: [
@@ -232,7 +256,7 @@ describe('web api client', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      `${apiBaseUrl}/employees/export?format=json`,
+      `${apiBaseUrl}/employees/export?format=json&mode=rotate-passcodes`,
       expect.objectContaining({
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
@@ -249,6 +273,108 @@ describe('web api client', () => {
         }),
       }),
     );
+  });
+
+  it('uses backup status, export, and multipart restore endpoints', async () => {
+    const { employees: _employees, ...reviewData } = foundationSnapshotExample;
+    const backupStatusResponse = {
+      dailyBackupsEnabled: true,
+      retentionDays: 14,
+      lastBackupAt: '2026-06-01T12:00:00.000Z',
+      lastRestoreAt: null,
+      defaultUserExportMode: 'preserve-passwords' as const,
+      replaceStrategy: 'replace' as const,
+      supportedFormats: ['json'] as const,
+      supportedRestoreModes: ['replace'] as const,
+      supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'] as const,
+      supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'] as const,
+    };
+    const backupExportResponse = {
+      version: 1 as const,
+      exportedAt: '2026-06-02T15:30:00.000Z',
+      users: {
+        mode: 'preserve-passwords' as const,
+        itemCount: 1,
+        items: [
+          {
+            id: adminEmployeeExample.item.id,
+            username: adminEmployeeExample.item.username,
+            fullName: adminEmployeeExample.item.fullName,
+            email: adminEmployeeExample.item.email,
+            role: adminEmployeeExample.item.role,
+            status: adminEmployeeExample.item.status,
+            managerUsername: null,
+            assessorUsername: null,
+            password: '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+            credentialKind: 'password-hash' as const,
+            passwordResetRequired: false,
+          },
+        ],
+      },
+      reviewData,
+    };
+    const backupRestoreResponse = {
+      mode: 'replace' as const,
+      target: 'reviews' as const,
+      restoredAt: '2026-06-03T08:15:00.000Z',
+      counts: {
+        users: backupExportResponse.users.itemCount,
+        reviewPeriods: reviewData.reviewPeriods.length,
+        questionSets: reviewData.questionSets.length,
+        assignments: reviewData.assignments.length,
+        assessments: reviewData.assessments.length,
+      },
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(backupStatusResponse), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(backupExportResponse), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }));
+
+    await getBackupStatus('session-token');
+    await exportBackup('session-token');
+    await restoreBackup('session-token', {
+      file: new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }),
+      target: 'reviews',
+      mode: 'replace',
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${apiBaseUrl}/admin/backups/status`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${apiBaseUrl}/admin/backups/export?mode=preserve-passwords`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+
+    const restoreCall = fetchMock.mock.calls[2];
+    expect(restoreCall?.[0]).toBe(`${apiBaseUrl}/admin/backups/restore`);
+    expect(restoreCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect((restoreCall?.[1]?.headers as Record<string, string>)['content-type']).toBeUndefined();
+
+    const restoreBody = restoreCall?.[1]?.body;
+    expect(restoreBody).toBeInstanceOf(FormData);
+    expect((restoreBody as FormData).get('target')).toBe('reviews');
+    expect((restoreBody as FormData).get('mode')).toBe('replace');
+    expect(((restoreBody as FormData).get('file') as File | null)?.name).toBe('backup.json');
   });
 
   it('surfaces API error messages for login failures', async () => {

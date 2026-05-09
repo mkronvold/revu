@@ -14,6 +14,11 @@ import {
   authLoginResponseSchema,
   authLogoutResponseSchema,
   authMeResponseSchema,
+  backupExportQuerySchema,
+  backupExportResponseSchema,
+  backupRestoreRequestSchema,
+  backupRestoreResponseSchema,
+  backupStatusResponseSchema,
   createAssessmentRequestSchema,
   createAssignmentRequestSchema,
   createEmployeeRequestSchema,
@@ -31,8 +36,10 @@ import {
   importStubRequestSchema,
   importStubResponseSchema,
   localUsersExportResponseSchema,
+  localUsersExportModeSchema,
   localUsersImportRequestSchema,
   localUsersImportResponseSchema,
+  questionCategoriesListResponseSchema,
   questionSetResponseSchema,
   questionSetsListResponseSchema,
   reassignAssessmentRequestSchema,
@@ -53,6 +60,7 @@ import {
   updateReviewPeriodRequestSchema,
   type AuthPermission,
   type AuthSession,
+  type BackupRestoreRequest,
 } from "@revu/contracts";
 import { ZodError, z, type ZodType } from "zod";
 
@@ -66,9 +74,158 @@ const exportFormatQuerySchema = z.object({
   format: exportFormatSchema.default("json"),
 });
 
+const localUsersExportQuerySchema = exportFormatQuerySchema.extend({
+  mode: localUsersExportModeSchema.default("rotate-passcodes"),
+});
+
+const adminBackupRestoreBodyLimit = 50 * 1024 * 1024;
+
 function parseWithSchema<T>(schema: ZodType<T>, value: unknown) {
   try {
     return schema.parse(value);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new ApiError(400, error.issues[0]?.message ?? "Invalid request");
+    }
+
+    throw error;
+  }
+}
+
+function normalizeLocalUserTransferItem(item: {
+  password: string;
+  username: string;
+  fullName: string;
+  email: string;
+  role: "employee" | "manager" | "admin";
+  status: "active" | "inactive";
+  managerUsername: string | null;
+  assessorUsername: string | null;
+  id?: string;
+  credentialKind?: "password" | "password-hash" | "unset";
+  passwordResetRequired?: boolean;
+}) {
+  return {
+    ...item,
+    credentialKind: item.credentialKind ?? "password",
+    passwordResetRequired: item.passwordResetRequired ?? false,
+  };
+}
+
+function buildBackupFilename(exportedAt: string) {
+  return `revu-backup-${exportedAt.replace(/[:.]/g, "-")}.json`;
+}
+
+function parseMultipartFormData(body: Buffer, contentTypeHeader?: string) {
+  const boundaryMatch = contentTypeHeader?.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+  if (!boundary) {
+    throw new ApiError(400, "Multipart boundary is required");
+  }
+
+  const parts = new Map<string, { value: string; filename?: string; contentType?: string }>();
+  const sections = body.toString("utf8").split(`--${boundary}`);
+
+  for (const rawSection of sections) {
+    if (rawSection === "" || rawSection === "--\r\n" || rawSection === "--") {
+      continue;
+    }
+
+    const section = rawSection.startsWith("\r\n") ? rawSection.slice(2) : rawSection;
+    const trimmedSection = section.endsWith("\r\n") ? section.slice(0, -2) : section;
+    if (trimmedSection === "" || trimmedSection === "--") {
+      continue;
+    }
+
+    const headerSeparator = trimmedSection.indexOf("\r\n\r\n");
+    if (headerSeparator === -1) {
+      throw new ApiError(400, "Invalid multipart form data");
+    }
+
+    const headerBlock = trimmedSection.slice(0, headerSeparator);
+    const value = trimmedSection.slice(headerSeparator + 4);
+    let fieldName: string | undefined;
+    let filename: string | undefined;
+    let fieldContentType: string | undefined;
+
+    for (const headerLine of headerBlock.split("\r\n")) {
+      const separatorIndex = headerLine.indexOf(":");
+      if (separatorIndex === -1) {
+        throw new ApiError(400, "Invalid multipart form data header");
+      }
+
+      const headerName = headerLine.slice(0, separatorIndex).trim().toLowerCase();
+      const headerValue = headerLine.slice(separatorIndex + 1).trim();
+      if (headerName === "content-type") {
+        fieldContentType = headerValue;
+        continue;
+      }
+
+      if (headerName !== "content-disposition") {
+        continue;
+      }
+
+      const segments = headerValue.split(";").map((segment) => segment.trim());
+      if (segments[0]?.toLowerCase() !== "form-data") {
+        throw new ApiError(400, "Invalid multipart content disposition");
+      }
+
+      for (const segment of segments.slice(1)) {
+        const [name, rawValue] = segment.split("=");
+        if (!name || rawValue === undefined) {
+          continue;
+        }
+
+        const parsedValue = rawValue.trim().replace(/^"|"$/g, "");
+        if (name === "name") {
+          fieldName = parsedValue;
+        } else if (name === "filename") {
+          filename = parsedValue;
+        }
+      }
+    }
+
+    if (!fieldName) {
+      throw new ApiError(400, "Multipart field name is required");
+    }
+    if (parts.has(fieldName)) {
+      throw new ApiError(400, `Multipart field ${fieldName} must be provided only once`);
+    }
+
+    parts.set(fieldName, {
+      value,
+      filename,
+      contentType: fieldContentType,
+    });
+  }
+
+  return parts;
+}
+
+function parseBackupRestoreRequestFromMultipart(request: FastifyRequest): BackupRestoreRequest {
+  if (!Buffer.isBuffer(request.body)) {
+    throw new ApiError(400, "Backup restore requests must use multipart form data");
+  }
+
+  const parts = parseMultipartFormData(request.body, request.headers["content-type"]);
+  const filePart = parts.get("file");
+  if (!filePart) {
+    throw new ApiError(400, "Backup restore file is required");
+  }
+
+  let backup: unknown;
+  try {
+    backup = JSON.parse(filePart.value);
+  } catch {
+    throw new ApiError(400, "Backup restore file must contain valid JSON");
+  }
+
+  try {
+    return backupRestoreRequestSchema.parse({
+      mode: parts.get("mode")?.value.trim(),
+      target: parts.get("target")?.value.trim(),
+      backup,
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       throw new ApiError(400, error.issues[0]?.message ?? "Invalid request");
@@ -115,6 +272,54 @@ function requirePermissions(session: AuthSession, permissions: AuthPermission[])
 }
 
 export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
+  app.addContentTypeParser(/^multipart\/form-data(?:;.*)?$/u, { parseAs: "buffer" }, (_request, body, done) => {
+    done(null, body);
+  });
+
+  const handleBackupStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:read"]);
+      return backupStatusResponseSchema.parse(await store.getBackupStatus());
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleBackupExport = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:create"]);
+      const query = parseWithSchema(backupExportQuerySchema, request.query);
+      const backup = backupExportResponseSchema.parse(await store.createBackup(query.mode));
+      reply.header("cache-control", "no-store");
+      reply.header("content-disposition", `attachment; filename="${buildBackupFilename(backup.exportedAt)}"`);
+      reply.type("application/json; charset=utf-8");
+      return backup;
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleBackupRestore = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:restore"]);
+      const body = parseBackupRestoreRequestFromMultipart(request);
+      return backupRestoreResponseSchema.parse(
+        await store.restoreBackup(body.target, {
+          ...body.backup,
+          users: {
+            ...body.backup.users,
+            items: body.backup.users.items.map((item) => normalizeLocalUserTransferItem(item)),
+          },
+        }),
+      );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
   app.get("/", async () => apiIndexExample);
   app.get("/domain-rules", async () => domainRulesExample);
   app.get("/review-periods", async () => reviewPeriodsListResponseSchema.parse({ items: await store.listReviewPeriods() }));
@@ -312,8 +517,8 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const session = await requireSession(request, store);
       requirePermissions(session, ["employees:export"]);
-      const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return localUsersExportResponseSchema.parse(await store.exportLocalUsers(query.format ?? "json"));
+      const query = parseWithSchema(localUsersExportQuerySchema, request.query);
+      return localUsersExportResponseSchema.parse(await store.exportLocalUsers(query.format ?? "json", query.mode));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -327,10 +532,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return localUsersImportResponseSchema.parse(
         await store.importLocalUsers(
           body.format,
-          body.items.map((item) => ({
-            ...item,
-            passwordResetRequired: item.passwordResetRequired ?? false,
-          })),
+          body.items.map((item) => normalizeLocalUserTransferItem(item)),
         ),
       );
     } catch (error) {
@@ -429,6 +631,18 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
           headerMarkdown: body.headerMarkdown ?? "",
           footerMarkdown: body.footerMarkdown ?? "",
         }),
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/question-categories", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["questionSets:update"]);
+      return questionCategoriesListResponseSchema.parse({
+        items: await store.listQuestionCategories(),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -549,6 +763,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
+
+  app.get("/backups/status", handleBackupStatus);
+  app.get("/admin/backups/status", handleBackupStatus);
+  app.get("/admin/backups/export", handleBackupExport);
+  app.post("/admin/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, handleBackupRestore);
 
   app.post("/review-periods/:id/assessments", async (request, reply) => {
     try {

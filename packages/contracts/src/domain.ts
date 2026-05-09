@@ -23,6 +23,11 @@ export const assessmentReviewStateSchema = z.enum([
   "reviewed",
 ]);
 export const assessmentArchiveStateSchema = z.enum(["active", "archived"]);
+export const localUsersExportModeSchema = z.enum(["rotate-passcodes", "preserve-passwords"]);
+export const localUserCredentialKindSchema = z.enum(["password", "password-hash", "unset"]);
+export const questionCategoryNameSchema = z.string().trim().min(1);
+const bcryptHashSchema = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+const scryptHashSchema = /^[0-9a-f]{32}:[0-9a-f]{128}$/i;
 
 export const employeeSchema = z.object({
   id: idSchema,
@@ -48,6 +53,7 @@ export const employeeAdminSchema = employeeSchema.extend({
 });
 
 export const localUserTransferItemSchema = z.object({
+  id: idSchema.optional(),
   username: usernameSchema,
   fullName: z.string().min(1),
   email: z.string().email(),
@@ -55,8 +61,42 @@ export const localUserTransferItemSchema = z.object({
   status: employeeStatusSchema,
   managerUsername: usernameSchema.nullable(),
   assessorUsername: usernameSchema.nullable(),
-  password: z.string().min(8),
+  password: z.string(),
+  credentialKind: localUserCredentialKindSchema.optional(),
   passwordResetRequired: z.boolean().default(false),
+}).superRefine((value, context) => {
+  const credentialKind = value.credentialKind ?? "password";
+
+  if (credentialKind === "unset") {
+    if (value.password.length !== 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Unset credentials must use an empty password value",
+      });
+    }
+    return;
+  }
+
+  if (credentialKind === "password" && value.password.length < 8) {
+    context.addIssue({
+      code: z.ZodIssueCode.too_small,
+      minimum: 8,
+      inclusive: true,
+      type: "string",
+      path: ["password"],
+      message: "Password must be at least 8 characters",
+    });
+    return;
+  }
+
+  if (credentialKind === "password-hash" && !bcryptHashSchema.test(value.password) && !scryptHashSchema.test(value.password)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["password"],
+      message: "Password hash must use a supported stored-password format",
+    });
+  }
 });
 
 export const reviewPeriodSchema = z.object({
@@ -143,7 +183,10 @@ export type AssessmentArchiveState = z.infer<typeof assessmentArchiveStateSchema
 export type Employee = z.infer<typeof employeeSchema>;
 export type EmployeeAuthMetadata = z.infer<typeof employeeAuthMetadataSchema>;
 export type EmployeeAdmin = z.infer<typeof employeeAdminSchema>;
+export type LocalUsersExportMode = z.infer<typeof localUsersExportModeSchema>;
+export type LocalUserCredentialKind = z.infer<typeof localUserCredentialKindSchema>;
 export type LocalUserTransferItem = z.infer<typeof localUserTransferItemSchema>;
+export type QuestionCategoryName = z.infer<typeof questionCategoryNameSchema>;
 export type ReviewPeriod = z.infer<typeof reviewPeriodSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type QuestionSet = z.infer<typeof questionSetSchema>;

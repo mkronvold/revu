@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Added an admin Backups page with live backup status, backup-now/download, upload, and replace-style restore actions for all data, users, questions, or reviews, backed by the new backup API/runtime helpers
+- Added persisted question-category suggestions plus markdown rendering for question-set headers and prompts, and scrolled Edit set directly into the question editor
+- Removed the Assignments navigation, added Backups to Administration, tightened Employees manager/assessor selection rules, and added explicit local-user export modes for rotating passcodes or preserving passwords and sessions
 - Matched Summer Nights employee roster rows to the pulldown tone, removed the persistent selected-row highlight, auto-scrolled roster selections into the employee view, and moved Import/Export users below that detail panel
 - Tinted the dashboard Assessment Queue category cards with the shared themed surface so Summer Nights uses the same sand-in-shadow tone there too
 - Renamed the sidebar status area to Last Response, kept the latest workflow/admin response in one shared card, and let it clear automatically after 2 minutes

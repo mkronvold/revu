@@ -327,6 +327,7 @@ const themedInteractiveSurfaceSelectors = [
   '.section-toggle',
   '.demo-account-card',
   '.employee-row-summary',
+  '.review-queue-item',
 ];
 
 function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: ThemePalette) {
@@ -394,12 +395,15 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   [data-revu-theme='${theme}'] .demo-account-card:hover,
   [data-revu-theme='${theme}'] .demo-account-card:focus-visible,
   [data-revu-theme='${theme}'] .employee-row-summary:hover,
-  [data-revu-theme='${theme}'] .employee-row-summary:focus-visible {
+  [data-revu-theme='${theme}'] .employee-row-summary:focus-visible,
+  [data-revu-theme='${theme}'] .review-queue-item:hover,
+  [data-revu-theme='${theme}'] .review-queue-item:focus-visible {
     border-color: ${palette.navHoverBorder};
     background: ${palette.navHoverBackground};
   }
 
-  [data-revu-theme='${theme}'] .employee-row-summary {
+  [data-revu-theme='${theme}'] .employee-row-summary,
+  [data-revu-theme='${theme}'] .review-queue-item {
     background: ${palette.inputBackground};
   }
 

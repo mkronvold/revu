@@ -5,6 +5,7 @@ import {
   getThemeColorScheme,
   getThemeLabel,
   normalizeThemePreference,
+  themeStyleOverrides,
 } from './theme';
 
 describe('theme helpers', () => {
@@ -32,5 +33,11 @@ describe('theme helpers', () => {
     expect(getThemeColorScheme('summer')).toBe('light');
     expect(getThemeColorScheme('summer-nights')).toBe('light');
     expect(getThemeColorScheme('winter-nights')).toBe('dark');
+  });
+
+  it('keeps review queue items on the same themed surface model as employee roster rows', () => {
+    expect(themeStyleOverrides).toContain(".review-queue-item");
+    expect(themeStyleOverrides).toContain(".employee-row-summary:hover");
+    expect(themeStyleOverrides).toContain(".review-queue-item:hover");
   });
 });

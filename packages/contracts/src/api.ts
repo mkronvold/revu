@@ -12,7 +12,9 @@ import {
   appRoleSchema,
   idSchema,
   isoTimestampSchema,
+  localUsersExportModeSchema,
   localUserTransferItemSchema,
+  questionCategoryNameSchema,
   questionSchema,
   questionSetSchema,
   reviewPeriodSchema,
@@ -125,6 +127,9 @@ export const authPermissionSchema = z.enum([
   "assessments:accept",
   "assessments:review",
   "assessments:reassign",
+  "backups:read",
+  "backups:create",
+  "backups:restore",
 ]);
 
 export const authSessionUserSchema = employeeSchema;
@@ -336,6 +341,7 @@ export const exportFormatSchema = z.enum(["json", "csv"]);
 
 export const localUsersExportResponseSchema = z.object({
   format: exportFormatSchema,
+  mode: localUsersExportModeSchema,
   exportedAt: isoTimestampSchema,
   itemCount: z.number().int().nonnegative(),
   items: z.array(localUserTransferItemSchema),
@@ -374,6 +380,68 @@ export const importStubResponseSchema = z.object({
   accepted: z.literal(false),
   status: z.literal("not_implemented"),
   supportedFormats: z.array(exportFormatSchema).min(1),
+});
+
+export const questionCategoriesListResponseSchema = z.object({
+  items: z.array(questionCategoryNameSchema),
+});
+
+export const backupReviewDataSchema = foundationSnapshotSchema.omit({
+  employees: true,
+});
+
+export const backupSnapshotSchema = z.object({
+  version: z.literal(1),
+  exportedAt: isoTimestampSchema,
+  users: z.object({
+    mode: localUsersExportModeSchema,
+    itemCount: z.number().int().nonnegative(),
+    items: z.array(localUserTransferItemSchema),
+  }),
+  reviewData: backupReviewDataSchema,
+});
+
+export const backupRestoreScopeSchema = z.enum(["all", "users", "questions", "reviews"]);
+export const backupRestoreModeSchema = z.literal("replace");
+export const backupRestoreTargetSchema = z
+  .union([backupRestoreScopeSchema, z.literal("full")])
+  .transform((value) => (value === "full" ? "all" : value));
+export const backupExportQuerySchema = z.object({
+  mode: localUsersExportModeSchema.default("preserve-passwords"),
+});
+
+export const backupStatusResponseSchema = z.object({
+  dailyBackupsEnabled: z.boolean(),
+  retentionDays: z.number().int().positive().nullable(),
+  lastBackupAt: isoTimestampSchema.nullable(),
+  lastRestoreAt: isoTimestampSchema.nullable(),
+  defaultUserExportMode: z.literal("preserve-passwords"),
+  replaceStrategy: z.literal("replace"),
+  supportedFormats: z.array(z.literal("json")).length(1),
+  supportedRestoreModes: z.array(backupRestoreModeSchema).length(1),
+  supportedRestoreScopes: z.array(backupRestoreScopeSchema).min(1),
+  supportedUserExportModes: z.array(localUsersExportModeSchema).length(2),
+});
+
+export const backupExportResponseSchema = backupSnapshotSchema;
+
+export const backupRestoreRequestSchema = z.object({
+  mode: backupRestoreModeSchema.default("replace"),
+  target: backupRestoreTargetSchema.default("all"),
+  backup: backupSnapshotSchema,
+});
+
+export const backupRestoreResponseSchema = z.object({
+  mode: backupRestoreModeSchema,
+  target: backupRestoreScopeSchema,
+  restoredAt: isoTimestampSchema,
+  counts: z.object({
+    users: z.number().int().nonnegative(),
+    reviewPeriods: z.number().int().nonnegative(),
+    questionSets: z.number().int().nonnegative(),
+    assignments: z.number().int().nonnegative(),
+    assessments: z.number().int().nonnegative(),
+  }),
 });
 
 export type ApiIndexResponse = z.infer<typeof apiIndexResponseSchema>;
@@ -428,3 +496,14 @@ export type LocalUsersImportResponse = z.infer<typeof localUsersImportResponseSc
 export type ExportStubResponse = z.infer<typeof exportStubResponseSchema>;
 export type ImportStubRequest = z.infer<typeof importStubRequestSchema>;
 export type ImportStubResponse = z.infer<typeof importStubResponseSchema>;
+export type QuestionCategoriesListResponse = z.infer<typeof questionCategoriesListResponseSchema>;
+export type BackupReviewData = z.infer<typeof backupReviewDataSchema>;
+export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
+export type BackupExportQuery = z.infer<typeof backupExportQuerySchema>;
+export type BackupExportResponse = z.infer<typeof backupExportResponseSchema>;
+export type BackupRestoreMode = z.infer<typeof backupRestoreModeSchema>;
+export type BackupRestoreScope = z.infer<typeof backupRestoreScopeSchema>;
+export type BackupRestoreTarget = z.infer<typeof backupRestoreTargetSchema>;
+export type BackupStatusResponse = z.infer<typeof backupStatusResponseSchema>;
+export type BackupRestoreRequest = z.infer<typeof backupRestoreRequestSchema>;
+export type BackupRestoreResponse = z.infer<typeof backupRestoreResponseSchema>;

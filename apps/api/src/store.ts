@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 
 import type {
   Assessment,
@@ -10,6 +11,11 @@ import type {
   AuthChangePasswordResponse,
   AuthPermission,
   AuthSession,
+  BackupRestoreResponse,
+  BackupRestoreScope,
+  BackupSnapshot,
+  BackupStatusResponse,
+  BackupReviewData,
   CreateAssessmentRequest,
   CreateAssignmentRequest,
   CreateEmployeeRequest,
@@ -21,7 +27,9 @@ import type {
   EmployeeAuthMetadata,
   ExportStubResponse,
   ImportStubResponse,
+  LocalUserCredentialKind,
   LocalUserTransferItem,
+  LocalUsersExportMode,
   LocalUsersExportResponse,
   LocalUsersImportResponse,
   QuestionSet,
@@ -226,6 +234,9 @@ const permissionsByRole: Record<Employee["role"], AuthPermission[]> = {
     "assessments:accept",
     "assessments:review",
     "assessments:reassign",
+    "backups:read",
+    "backups:create",
+    "backups:restore",
   ],
 };
 
@@ -1204,13 +1215,27 @@ export class ApiStore {
     return employeeId ? employeesById.get(employeeId)?.username ?? null : null;
   }
 
+  private passwordForTransfer(auth: StoredAuthMetadata, credentialKind: LocalUserCredentialKind, password: string) {
+    if (credentialKind === "unset") {
+      return "";
+    }
+
+    if (credentialKind === "password-hash") {
+      return auth.passwordHash ?? "";
+    }
+
+    return password;
+  }
+
   private toLocalUserTransferItem(
     employee: Employee,
     auth: StoredAuthMetadata,
     password: string,
     employeesById: Map<string, Employee>,
+    credentialKind: LocalUserCredentialKind = "password",
   ): LocalUserTransferItem {
     return {
+      id: employee.id,
       username: employee.username,
       fullName: employee.fullName,
       email: employee.email,
@@ -1218,9 +1243,78 @@ export class ApiStore {
       status: employee.status,
       managerUsername: this.usernameForEmployee(employee.managerId, employeesById),
       assessorUsername: this.usernameForEmployee(employee.assessorId, employeesById),
-      password,
+      password: this.passwordForTransfer(auth, credentialKind, password),
+      credentialKind,
       passwordResetRequired: auth.passwordResetRequired,
     };
+  }
+
+  private passwordHashForTransferItem(item: LocalUserTransferItem) {
+    if (item.credentialKind === "unset") {
+      return null;
+    }
+
+    return item.credentialKind === "password-hash" ? item.password : hashPassword(item.password);
+  }
+
+  private parseBooleanEnv(value: string | undefined) {
+    if (!value) {
+      return false;
+    }
+
+    return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+  }
+
+  private parseNumberEnv(value: string | undefined) {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private parseTimestampEnv(value: string | undefined) {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.valueOf()) ? null : parsed.toISOString();
+  }
+
+  private readBackupStatusOverrides() {
+    const path = process.env.BACKUP_STATUS_PATH;
+    if (!path || !existsSync(path)) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      return {
+        dailyBackupsEnabled: typeof parsed.dailyBackupsEnabled === "boolean" ? parsed.dailyBackupsEnabled : undefined,
+        retentionDays:
+          typeof parsed.retentionDays === "number" && Number.isInteger(parsed.retentionDays) && parsed.retentionDays > 0
+            ? parsed.retentionDays
+            : parsed.retentionDays === null
+              ? null
+              : undefined,
+        lastBackupAt:
+          typeof parsed.lastBackupAt === "string" && !Number.isNaN(new Date(parsed.lastBackupAt).valueOf())
+            ? new Date(parsed.lastBackupAt).toISOString()
+            : parsed.lastBackupAt === null
+              ? null
+              : undefined,
+        lastRestoreAt:
+          typeof parsed.lastRestoreAt === "string" && !Number.isNaN(new Date(parsed.lastRestoreAt).valueOf())
+            ? new Date(parsed.lastRestoreAt).toISOString()
+            : parsed.lastRestoreAt === null
+              ? null
+              : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private canManagerEdit(target: Employee, updates: UpdateEmployeeRequest) {
@@ -2144,7 +2238,10 @@ export class ApiStore {
     };
   }
 
-  async exportLocalUsers(format: "json" | "csv"): Promise<LocalUsersExportResponse> {
+  async exportLocalUsers(
+    format: "json" | "csv",
+    mode: LocalUsersExportMode = "rotate-passcodes",
+  ): Promise<LocalUsersExportResponse> {
     try {
       return await withTransaction(async (client) => {
         const employeeRows = await this.loadEmployeeRows(client);
@@ -2154,39 +2251,51 @@ export class ApiStore {
         const items: LocalUserTransferItem[] = [];
 
         for (const employeeRow of employeeRows) {
-          const temporaryPassword = generateTemporaryPassword();
-          await client.query(
-            `
-              UPDATE employees
-              SET password_hash = $2,
-                  password_reset_required = TRUE,
-                  password_changed_at = $3::timestamptz,
-                  password_changed_by_employee_id = NULL
-              WHERE id = $1
-            `,
-            [employeeRow.id, hashPassword(temporaryPassword), exportedAt],
-          );
+          const auth = this.toStoredAuthMetadata(employeeRow);
+          const credentialKind: LocalUserCredentialKind =
+            mode === "preserve-passwords" ? (auth.passwordHash ? "password-hash" : "unset") : "password";
+          const password = mode === "preserve-passwords" ? auth.passwordHash ?? "" : generateTemporaryPassword();
+
+          if (mode === "rotate-passcodes") {
+            await client.query(
+              `
+                UPDATE employees
+                SET password_hash = $2,
+                    password_reset_required = TRUE,
+                    password_changed_at = $3::timestamptz,
+                    password_changed_by_employee_id = NULL
+                WHERE id = $1
+              `,
+              [employeeRow.id, hashPassword(password), exportedAt],
+            );
+          }
+
           items.push(
             this.toLocalUserTransferItem(
               this.toEmployee(employeeRow),
-              {
-                passwordHash: "hidden",
-                passwordConfigured: true,
-                passwordResetRequired: true,
-                lastPasswordChangeAt: exportedAt,
-              },
-              temporaryPassword,
+              mode === "rotate-passcodes"
+                ? {
+                    ...auth,
+                    passwordHash: password,
+                    passwordConfigured: true,
+                    passwordResetRequired: true,
+                    lastPasswordChangeAt: exportedAt,
+                  }
+                : auth,
+              password,
               employeesById,
+              credentialKind,
             ),
           );
         }
 
-        if (employeeRows.length > 0) {
+        if (mode === "rotate-passcodes" && employeeRows.length > 0) {
           await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [employeeRows.map((employee) => employee.id)]);
         }
 
         return {
           format,
+          mode,
           exportedAt,
           itemCount: items.length,
           items,
@@ -2277,7 +2386,7 @@ export class ApiStore {
                 $7::timestamptz
               )
             `,
-            [randomUUID(), item.username, item.fullName, item.email, item.role, item.status, importedAt],
+            [item.id ?? randomUUID(), item.username, item.fullName, item.email, item.role, item.status, importedAt],
           );
         }
 
@@ -2323,7 +2432,7 @@ export class ApiStore {
                   password_changed_by_employee_id = NULL
               WHERE id = $1
             `,
-            [employee.id, managerId, assessorId, hashPassword(item.password), item.passwordResetRequired, importedAt],
+            [employee.id, managerId, assessorId, this.passwordHashForTransferItem(item), item.passwordResetRequired, importedAt],
           );
         }
 
@@ -2532,6 +2641,609 @@ export class ApiStore {
       status: "not_implemented",
       supportedFormats: ["json", "csv"],
     };
+  }
+
+  async listQuestionCategories() {
+    const result = await this.pool.query<{ category: string }>(
+      `
+        SELECT category
+        FROM (
+          SELECT DISTINCT trim(category) AS category
+          FROM question_set_questions
+          WHERE category IS NOT NULL
+            AND length(trim(category)) > 0
+        ) categories
+        ORDER BY lower(category), category
+      `,
+    );
+
+    return result.rows.map((row) => row.category);
+  }
+
+  async getBackupStatus(): Promise<BackupStatusResponse> {
+    const overrides = this.readBackupStatusOverrides();
+
+    return {
+      dailyBackupsEnabled: overrides?.dailyBackupsEnabled ?? this.parseBooleanEnv(process.env.BACKUP_DAILY_ENABLED),
+      retentionDays: overrides?.retentionDays ?? this.parseNumberEnv(process.env.BACKUP_RETENTION_DAYS),
+      lastBackupAt: overrides?.lastBackupAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_BACKUP_AT),
+      lastRestoreAt: overrides?.lastRestoreAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_RESTORE_AT),
+      defaultUserExportMode: "preserve-passwords",
+      replaceStrategy: "replace",
+      supportedFormats: ["json"],
+      supportedRestoreModes: ["replace"],
+      supportedRestoreScopes: ["all", "users", "questions", "reviews"],
+      supportedUserExportModes: ["rotate-passcodes", "preserve-passwords"],
+    };
+  }
+
+  async createBackup(mode: LocalUsersExportMode = "preserve-passwords"): Promise<BackupSnapshot> {
+    const [users, reviewPeriods, questionSets, assignments, assessments] = await Promise.all([
+      this.exportLocalUsers("json", mode),
+      this.listReviewPeriods(),
+      this.listQuestionSets(),
+      this.listAssignments(),
+      this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
+    ]);
+
+    return {
+      version: 1,
+      exportedAt: users.exportedAt,
+      users: {
+        mode: users.mode,
+        itemCount: users.itemCount,
+        items: users.items,
+      },
+      reviewData: {
+        reviewPeriods,
+        questionSets,
+        assignments,
+        assessments,
+      },
+    };
+  }
+
+  private async assertReviewDataEmployeesExist(client: DbClient, reviewData: BackupReviewData) {
+    const employeeIds = Array.from(
+      new Set(
+        [
+          ...reviewData.reviewPeriods.map((item) => item.archivedByEmployeeId),
+          ...reviewData.assignments.flatMap((item) => [item.employeeId, item.managerId, item.assessorId]),
+          ...reviewData.assessments.flatMap((item) => [
+            item.employeeId,
+            item.assessorId,
+            item.acceptedByEmployeeId,
+            item.reviewedByEmployeeId,
+          ]),
+        ].filter((value): value is string => value !== null),
+      ),
+    );
+
+    if (employeeIds.length === 0) {
+      return;
+    }
+
+    const existingRows = await this.loadEmployeeRows(client, { employeeIds });
+    const existingIds = new Set(existingRows.map((row) => row.id));
+    const missingIds = employeeIds.filter((employeeId) => !existingIds.has(employeeId));
+    if (missingIds.length > 0) {
+      throw new ApiError(409, `Backup references missing employees: ${missingIds.join(", ")}`);
+    }
+  }
+
+  private async insertReviewPeriodsSnapshot(client: DbClient, reviewPeriods: ReviewPeriod[]) {
+    for (const period of reviewPeriods) {
+      await client.query(
+        `
+          INSERT INTO review_periods (
+            id,
+            key,
+            label,
+            start_date,
+            due_date,
+            status,
+            archived_at,
+            archived_by_employee_id,
+            created_at,
+            updated_at
+          ) VALUES ($1,$2,$3,$4::date,$5::date,$6,$7::timestamptz,$8,$9::timestamptz,$10::timestamptz)
+        `,
+        [
+          period.id,
+          period.key,
+          period.label,
+          period.startDate,
+          period.dueDate,
+          period.status,
+          period.archivedAt,
+          period.archivedByEmployeeId,
+          period.createdAt,
+          period.updatedAt,
+        ],
+      );
+    }
+  }
+
+  private async insertQuestionSetsSnapshot(client: DbClient, questionSets: QuestionSet[]) {
+    for (const questionSet of questionSets) {
+      await client.query(
+        `
+          INSERT INTO question_sets (
+            id,
+            review_period_id,
+            target,
+            status,
+            title,
+            header_markdown,
+            footer_markdown,
+            created_at,
+            updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9::timestamptz)
+        `,
+        [
+          questionSet.id,
+          questionSet.reviewPeriodId,
+          questionSet.target,
+          questionSet.status,
+          questionSet.title,
+          questionSet.headerMarkdown,
+          questionSet.footerMarkdown,
+          questionSet.createdAt,
+          questionSet.updatedAt,
+        ],
+      );
+
+      for (const question of questionSet.questions) {
+        await client.query(
+          `
+            INSERT INTO question_set_questions (
+              id,
+              question_set_id,
+              display_order,
+              type,
+              category,
+              prompt,
+              created_at,
+              updated_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz)
+          `,
+          [
+            question.id,
+            questionSet.id,
+            question.order,
+            question.type,
+            question.category,
+            question.prompt,
+            questionSet.createdAt,
+            questionSet.updatedAt,
+          ],
+        );
+      }
+    }
+  }
+
+  private async insertAssignmentsSnapshot(client: DbClient, assignments: Assignment[]) {
+    for (const assignment of assignments) {
+      await client.query(
+        `
+          INSERT INTO review_period_assignments (
+            id,
+            review_period_id,
+            employee_id,
+            manager_employee_id,
+            assessor_employee_id,
+            created_at,
+            updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6::timestamptz,$7::timestamptz)
+        `,
+        [
+          assignment.id,
+          assignment.reviewPeriodId,
+          assignment.employeeId,
+          assignment.managerId,
+          assignment.assessorId,
+          assignment.createdAt,
+          assignment.updatedAt,
+        ],
+      );
+    }
+  }
+
+  private async insertAssessmentsSnapshot(client: DbClient, assessments: Assessment[]) {
+    for (const assessment of assessments) {
+      await client.query(
+        `
+          INSERT INTO assessments (
+            id,
+            review_period_id,
+            question_set_id,
+            assignment_id,
+            target,
+            employee_id,
+            assessor_employee_id,
+            review_state,
+            submitted_at,
+            accepted_at,
+            accepted_by_employee_id,
+            reviewed_at,
+            reviewed_by_employee_id,
+            manager_notes,
+            archive_state,
+            created_at,
+            updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17::timestamptz)
+        `,
+        [
+          assessment.id,
+          assessment.reviewPeriodId,
+          assessment.questionSetId,
+          assessment.assignmentId,
+          assessment.target,
+          assessment.employeeId,
+          assessment.assessorId,
+          assessment.reviewState,
+          assessment.submittedAt,
+          assessment.acceptedAt,
+          assessment.acceptedByEmployeeId,
+          assessment.reviewedAt,
+          assessment.reviewedByEmployeeId,
+          assessment.managerNotes,
+          assessment.archiveState,
+          assessment.createdAt,
+          assessment.updatedAt,
+        ],
+      );
+
+      for (const response of assessment.responses) {
+        await client.query(
+          `
+            INSERT INTO assessment_responses (
+              assessment_id,
+              question_id,
+              response_text,
+              created_at,
+              updated_at
+            ) VALUES ($1,$2,$3,$4::timestamptz,$5::timestamptz)
+          `,
+          [assessment.id, response.questionId, response.response, assessment.createdAt, assessment.updatedAt],
+        );
+      }
+    }
+  }
+
+  private validateRestoreUsers(items: LocalUserTransferItem[], requireIds: boolean) {
+    const seenIds = new Set<string>();
+    const seenUsernames = new Set<string>();
+    const seenEmails = new Set<string>();
+
+    for (const item of items) {
+      if (requireIds && !item.id) {
+        throw new ApiError(400, `Backup user ${item.username} is missing an id`);
+      }
+
+      if (item.id) {
+        if (seenIds.has(item.id)) {
+          throw new ApiError(400, "Backup user ids must be unique");
+        }
+        seenIds.add(item.id);
+      }
+
+      if (seenUsernames.has(item.username)) {
+        throw new ApiError(400, "Backup usernames must be unique");
+      }
+      if (seenEmails.has(item.email)) {
+        throw new ApiError(400, "Backup emails must be unique");
+      }
+
+      seenUsernames.add(item.username);
+      seenEmails.add(item.email);
+    }
+  }
+
+  private async upsertUsersSnapshot(client: DbClient, items: LocalUserTransferItem[], timestamp: string) {
+    this.validateRestoreUsers(items, true);
+
+    const itemsById = new Map(items.map((item) => [item.id!, item]));
+    const existingRows = await this.loadEmployeeRows(client);
+    const existingById = new Map(existingRows.map((row) => [row.id, row]));
+    const existingByUsername = new Map(existingRows.map((row) => [row.username, row]));
+
+    for (const item of items) {
+      const currentById = existingById.get(item.id!);
+      const currentByUsername = existingByUsername.get(item.username);
+      if (currentByUsername && currentByUsername.id !== item.id) {
+        throw new ApiError(409, `Backup user id does not match the existing username: ${item.username}`);
+      }
+
+      if (currentById) {
+        await this.assertUniqueEmployeeFields(client, {
+          id: currentById.id,
+          username: item.username,
+          email: item.email,
+        });
+        await client.query(
+          `
+            UPDATE employees
+            SET username = $2,
+                full_name = $3,
+                email = $4,
+                role = $5,
+                status = $6,
+                password_hash = $7,
+                password_reset_required = $8,
+                password_changed_at = $9::timestamptz,
+                password_changed_by_employee_id = NULL
+            WHERE id = $1
+          `,
+          [
+            item.id,
+            item.username,
+            item.fullName,
+            item.email,
+            item.role,
+            item.status,
+            this.passwordHashForTransferItem(item),
+            item.passwordResetRequired,
+            timestamp,
+          ],
+        );
+        continue;
+      }
+
+      await this.assertUniqueEmployeeFields(client, {
+        username: item.username,
+        email: item.email,
+      });
+      await client.query(
+        `
+          INSERT INTO employees (
+            id,
+            username,
+            full_name,
+            email,
+            role,
+            status,
+            manager_employee_id,
+            assessor_employee_id,
+            password_hash,
+            password_reset_required,
+            password_changed_at,
+            created_at,
+            updated_at
+          ) VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            NULL,
+            NULL,
+            $7,
+            $8,
+            $9::timestamptz,
+            $9::timestamptz,
+            $9::timestamptz
+          )
+        `,
+        [
+          item.id,
+          item.username,
+          item.fullName,
+          item.email,
+          item.role,
+          item.status,
+          this.passwordHashForTransferItem(item),
+          item.passwordResetRequired,
+          timestamp,
+        ],
+      );
+    }
+
+    const finalRows = await this.loadEmployeeRows(client, {
+      employeeIds: Array.from(itemsById.keys()),
+    });
+    const finalByUsername = new Map(finalRows.map((row) => [row.username, row]));
+    for (const item of items) {
+      const employee = finalByUsername.get(item.username);
+      if (!employee) {
+        throw new ApiError(500, "Restored employee missing after upsert");
+      }
+
+      const managerId = item.managerUsername === null
+        ? null
+        : finalByUsername.get(item.managerUsername)?.id ?? (() => {
+            throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+          })();
+      const assessorId = item.assessorUsername === null
+        ? null
+        : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
+            throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+          })();
+
+      await this.assertRelationships(client, {
+        id: employee.id,
+        managerId,
+        assessorId,
+      });
+
+      await client.query(
+        `
+          UPDATE employees
+          SET manager_employee_id = $2,
+              assessor_employee_id = $3
+          WHERE id = $1
+        `,
+        [employee.id, managerId, assessorId],
+      );
+    }
+  }
+
+  private async assertUsersRestoreSafe(client: DbClient, items: LocalUserTransferItem[]) {
+    this.validateRestoreUsers(items, true);
+
+    const existingRows = await this.loadEmployeeRows(client);
+    const expectedIds = new Set(items.map((item) => item.id!));
+    const removableIds = existingRows.filter((row) => !expectedIds.has(row.id)).map((row) => row.id);
+    if (removableIds.length === 0) {
+      return;
+    }
+
+    const referenceResult = await client.query<{ employee_id: string }>(
+      `
+        SELECT DISTINCT employee_id
+        FROM (
+          SELECT archived_by_employee_id AS employee_id
+          FROM review_periods
+          WHERE archived_by_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT employee_id
+          FROM review_period_assignments
+          WHERE employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT manager_employee_id
+          FROM review_period_assignments
+          WHERE manager_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT assessor_employee_id
+          FROM review_period_assignments
+          WHERE assessor_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT employee_id
+          FROM assessments
+          WHERE employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT assessor_employee_id
+          FROM assessments
+          WHERE assessor_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT accepted_by_employee_id
+          FROM assessments
+          WHERE accepted_by_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT reviewed_by_employee_id
+          FROM assessments
+          WHERE reviewed_by_employee_id = ANY($1::uuid[])
+        ) refs
+        WHERE employee_id IS NOT NULL
+      `,
+      [removableIds],
+    );
+
+    if (referenceResult.rows.length > 0) {
+      const existingById = new Map(existingRows.map((row) => [row.id, row.username]));
+      const blockedUsernames = Array.from(
+        new Set(referenceResult.rows.map((row) => existingById.get(row.employee_id) ?? row.employee_id)),
+      ).sort();
+      throw new ApiError(
+        409,
+        `User restore would remove employees still referenced by review data: ${blockedUsernames.join(", ")}`,
+      );
+    }
+  }
+
+  private async replaceUsersOnly(client: DbClient, items: LocalUserTransferItem[], restoredAt: string) {
+    await this.assertUsersRestoreSafe(client, items);
+
+    const existingRows = await this.loadEmployeeRows(client);
+    const expectedIds = new Set(items.map((item) => item.id!));
+    const removableIds = existingRows.filter((row) => !expectedIds.has(row.id)).map((row) => row.id);
+
+    if (existingRows.length > 0) {
+      await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [existingRows.map((row) => row.id)]);
+    }
+
+    if (removableIds.length > 0) {
+      await client.query("DELETE FROM employees WHERE id = ANY($1::uuid[])", [removableIds]);
+    }
+
+    await this.upsertUsersSnapshot(client, items, restoredAt);
+  }
+
+  private async replaceQuestionsOnly(client: DbClient, reviewData: BackupReviewData) {
+    const inUseResult = await client.query<{ assignments_count: string; assessments_count: string }>(
+      `
+        SELECT
+          (SELECT COUNT(*)::text FROM review_period_assignments) AS assignments_count,
+          (SELECT COUNT(*)::text FROM assessments) AS assessments_count
+      `,
+    );
+
+    if (Number(inUseResult.rows[0]?.assignments_count ?? "0") > 0 || Number(inUseResult.rows[0]?.assessments_count ?? "0") > 0) {
+      throw new ApiError(409, "Question-only restores require assignments and assessments to be cleared first");
+    }
+
+    await client.query("DELETE FROM question_set_questions");
+    await client.query("DELETE FROM question_sets");
+    await client.query("DELETE FROM review_periods");
+
+    await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
+    await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
+  }
+
+  private async replaceReviewData(client: DbClient, reviewData: BackupReviewData) {
+    await this.assertReviewDataEmployeesExist(client, reviewData);
+
+    await client.query("DELETE FROM assessment_review_events");
+    await client.query("DELETE FROM assessment_responses");
+    await client.query("DELETE FROM assessments");
+    await client.query("DELETE FROM review_period_assignments");
+    await client.query("DELETE FROM question_set_questions");
+    await client.query("DELETE FROM question_sets");
+    await client.query("DELETE FROM review_periods");
+
+    await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
+    await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
+    await this.insertAssignmentsSnapshot(client, reviewData.assignments);
+    await this.insertAssessmentsSnapshot(client, reviewData.assessments);
+  }
+
+  async restoreBackup(scope: BackupRestoreScope, backup: BackupSnapshot): Promise<BackupRestoreResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const restoredAt = nowIso();
+        await client.query("SET LOCAL session_replication_role = replica");
+
+        if (scope === "all") {
+          await client.query("DELETE FROM assessment_review_events");
+          await client.query("DELETE FROM assessment_responses");
+          await client.query("DELETE FROM assessments");
+          await client.query("DELETE FROM review_period_assignments");
+          await client.query("DELETE FROM question_set_questions");
+          await client.query("DELETE FROM question_sets");
+          await client.query("DELETE FROM review_periods");
+          await client.query("DELETE FROM auth_sessions");
+          await client.query("DELETE FROM employees");
+
+          await this.upsertUsersSnapshot(client, backup.users.items, restoredAt);
+          await this.replaceReviewData(client, backup.reviewData);
+        } else if (scope === "users") {
+          await this.replaceUsersOnly(client, backup.users.items, restoredAt);
+        } else if (scope === "questions") {
+          await this.replaceQuestionsOnly(client, backup.reviewData);
+        } else {
+          await this.replaceReviewData(client, backup.reviewData);
+        }
+
+        return {
+          mode: "replace",
+          target: scope,
+          restoredAt,
+          counts: {
+            users: backup.users.itemCount,
+            reviewPeriods: backup.reviewData.reviewPeriods.length,
+            questionSets: backup.reviewData.questionSets.length,
+            assignments: backup.reviewData.assignments.length,
+            assessments: backup.reviewData.assessments.length,
+          },
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
   async listAssessments(session: AuthSession, query: AssessmentsListQuery = {}) {

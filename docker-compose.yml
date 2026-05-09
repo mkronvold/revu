@@ -32,8 +32,14 @@ services:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER:-revu}:${POSTGRES_PASSWORD:-revu}@db:5432/${POSTGRES_DB:-revu}
+      BACKUP_ARCHIVE_DIR: ${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
+      BACKUP_HANDOFF_DIR: ${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
     expose:
       - "4000"
+    volumes:
+      - backup-archive:${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
+      - backup-handoff:${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      - ./scripts:/opt/revu/scripts:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -50,6 +56,42 @@ services:
       default:
         aliases:
           - revu-api
+
+  backup:
+    container_name: revu-backup
+    image: node:22-bookworm-slim
+    restart: unless-stopped
+    working_dir: /opt/revu
+    entrypoint:
+      - /bin/sh
+      - /opt/revu/scripts/backup-entrypoint.sh
+    command:
+      - scheduler
+    environment:
+      BACKUP_ARCHIVE_DIR: ${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
+      BACKUP_HANDOFF_DIR: ${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      BACKUP_DOWNLOAD_URL: ${BACKUP_DOWNLOAD_URL:-http://api:4000/api/v1/admin/backups/export}
+      BACKUP_RESTORE_URL: ${BACKUP_RESTORE_URL:-http://api:4000/api/v1/admin/backups/restore}
+      BACKUP_FILE_PREFIX: ${BACKUP_FILE_PREFIX:-revu-backup}
+      BACKUP_FILE_EXTENSION: ${BACKUP_FILE_EXTENSION:-json}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_SCHEDULE_UTC: ${BACKUP_SCHEDULE_UTC:-02:00}
+      BACKUP_RESTORE_MODE: ${BACKUP_RESTORE_MODE:-replace}
+      BACKUP_RESTORE_TARGET: ${BACKUP_RESTORE_TARGET:-full}
+      BACKUP_BEARER_TOKEN: ${BACKUP_BEARER_TOKEN:-}
+      BACKUP_HEADER_NAME: ${BACKUP_HEADER_NAME:-}
+      BACKUP_HEADER_VALUE: ${BACKUP_HEADER_VALUE:-}
+    volumes:
+      - ./scripts:/opt/revu/scripts:ro
+      - backup-archive:${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
+      - backup-handoff:${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - revu-backup
 
   web:
     container_name: revu-web
@@ -80,6 +122,8 @@ services:
 
 volumes:
   postgres-data:
+  backup-archive:
+  backup-handoff:
 
 networks:
   proxy-net:

@@ -195,6 +195,7 @@ describe('review admin API orchestration', () => {
   it('serializes and parses local user transfer payloads for import-ready reuse', () => {
     const exportResponse = {
       format: 'json' as const,
+      mode: 'rotate-passcodes' as const,
       exportedAt: '2026-06-01T12:00:00.000Z',
       itemCount: 1,
       items: [
@@ -207,6 +208,7 @@ describe('review admin API orchestration', () => {
           managerUsername: 'manny.manager',
           assessorUsername: 'pat.peer',
           password: 'tmp-passcode-123',
+          credentialKind: 'password' as const,
           passwordResetRequired: true,
         },
       ],
@@ -220,6 +222,7 @@ describe('review admin API orchestration', () => {
 
     const csvPayload = serializeLocalUsersTransfer({
       format: 'csv',
+      mode: 'rotate-passcodes',
       items: exportResponse.items,
     });
     expect(buildLocalUsersImportPayload('csv', csvPayload)).toEqual({
@@ -238,26 +241,35 @@ describe('review admin API orchestration', () => {
       managerUsername: 'manny.manager',
       assessorUsername: 'pat.peer',
       password: 'tmp-passcode-123',
+      credentialKind: 'password' as const,
       passwordResetRequired: true,
     };
 
-    const jsonContent = serializeLocalUsersTransfer({ format: 'json', items: [item] });
+    const jsonContent = serializeLocalUsersTransfer({ format: 'json', mode: 'rotate-passcodes', items: [item] });
     expect(buildLocalUsersImportPayloadFromFile(jsonContent)).toEqual({ format: 'json', items: [item] });
 
     const jsonArrayContent = JSON.stringify([item]);
     expect(buildLocalUsersImportPayloadFromFile(jsonArrayContent)).toEqual({ format: 'json', items: [item] });
 
-    const csvContent = serializeLocalUsersTransfer({ format: 'csv', items: [item] });
+    const csvContent = serializeLocalUsersTransfer({ format: 'csv', mode: 'rotate-passcodes', items: [item] });
     expect(buildLocalUsersImportPayloadFromFile(csvContent)).toEqual({ format: 'csv', items: [item] });
   });
 
-  it('describes local user export/import one-time passcode behavior', () => {
+  it('describes local user export/import credential behavior', () => {
     expect(
       buildLocalUsersExportNotice({
         format: 'json',
         itemCount: 2,
+        mode: 'rotate-passcodes',
       }),
     ).toContain('one-time passcode');
+    expect(
+      buildLocalUsersExportNotice({
+        format: 'json',
+        itemCount: 2,
+        mode: 'preserve-passwords',
+      }),
+    ).toContain('left untouched');
     expect(
       buildLocalUsersImportNotice({
         format: 'json',

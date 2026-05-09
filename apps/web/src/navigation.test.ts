@@ -9,16 +9,16 @@ describe('web shell foundation', () => {
       'reviews',
       'employees',
       'questions',
-      'assignments',
       'archive',
+      'backups',
     ]);
     expect(appSections.map((section) => section.path)).toEqual([
       '/dashboard',
       '/reviews',
       '/employees',
       '/questions',
-      '/assignments',
       '/archive',
+      '/backups',
     ]);
   });
 
@@ -39,8 +39,15 @@ describe('web shell foundation', () => {
       'reviews',
       'employees',
       'questions',
-      'assignments',
       'archive',
+      'backups',
     ]);
+  });
+
+  it('keeps employees copy current and exposes backups navigation', () => {
+    expect(appSections.find((section) => section.id === 'employees')?.summary).toBe(
+      'Manage employee records, reporting lines, assessor coverage, and local user transfer actions.',
+    );
+    expect(appSections.find((section) => section.id === 'backups')?.path).toBe('/backups');
   });
 });

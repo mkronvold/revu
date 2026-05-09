@@ -1,6 +1,7 @@
 import type {
   Assignment,
   Employee,
+  LocalUsersExportMode,
   LocalUsersExportResponse,
   LocalUsersImportRequest,
   LocalUsersImportResponse,
@@ -39,7 +40,7 @@ type LocalUserTransferDraft = Omit<LocalUserTransferItem, 'passwordResetRequired
   passwordResetRequired?: boolean;
 };
 
-const localUserTransferHeaders = [
+const localUserTransferRequiredHeaders = [
   'username',
   'fullName',
   'email',
@@ -48,8 +49,8 @@ const localUserTransferHeaders = [
   'managerUsername',
   'assessorUsername',
   'password',
-  'passwordResetRequired',
 ] as const;
+const localUserTransferHeaders = [...localUserTransferRequiredHeaders, 'credentialKind', 'passwordResetRequired'] as const;
 
 function escapeCsvCell(value: string) {
   return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
@@ -58,6 +59,7 @@ function escapeCsvCell(value: string) {
 function normalizeLocalUserTransferItems(items: LocalUserTransferDraft[]): LocalUserTransferItem[] {
   return items.map((item) => ({
     ...item,
+    credentialKind: item.credentialKind ?? 'password',
     passwordResetRequired: item.passwordResetRequired ?? false,
   }));
 }
@@ -75,6 +77,7 @@ function serializeLocalUsersAsCsv(items: LocalUserTransferDraft[]) {
         item.managerUsername ?? '',
         item.assessorUsername ?? '',
         item.password,
+        item.credentialKind ?? 'password',
         String(item.passwordResetRequired),
       ]
         .map(escapeCsvCell)
@@ -155,7 +158,7 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
 
   const [headerRow, ...dataRows] = rows;
   const headers = new Map(headerRow?.map((header, index) => [header.trim(), index]));
-  for (const header of localUserTransferHeaders) {
+  for (const header of localUserTransferRequiredHeaders) {
     if (!headers.has(header)) {
       throw new Error(`CSV imports must include the ${header} column.`);
     }
@@ -171,6 +174,7 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
       managerUsername: row[headers.get('managerUsername') ?? -1]?.trim() || null,
       assessorUsername: row[headers.get('assessorUsername') ?? -1]?.trim() || null,
       password: row[headers.get('password') ?? -1] ?? '',
+      credentialKind: row[headers.get('credentialKind') ?? -1]?.trim() || undefined,
       passwordResetRequired: parseBooleanCell(row[headers.get('passwordResetRequired') ?? -1] ?? ''),
     }),
   );
@@ -385,8 +389,8 @@ export async function importAssignmentsFromApi(token: string, reviewPeriodId: st
   return importAssignments(token, reviewPeriodId, { format });
 }
 
-export async function exportLocalUsersFromApi(token: string, format: TransferFormat) {
-  return exportLocalUsers(token, format);
+export async function exportLocalUsersFromApi(token: string, format: TransferFormat, mode: LocalUsersExportMode) {
+  return exportLocalUsers(token, format, mode);
 }
 
 export async function importLocalUsersFromApi(token: string, payload: LocalUsersImportRequest) {
@@ -394,7 +398,7 @@ export async function importLocalUsersFromApi(token: string, payload: LocalUsers
 }
 
 export function serializeLocalUsersTransfer(
-  response: Pick<LocalUsersExportResponse, 'format'> & { items: LocalUserTransferDraft[] },
+  response: Pick<LocalUsersExportResponse, 'format' | 'mode'> & { items: LocalUserTransferDraft[] },
 ) {
   if (response.format === 'csv') {
     return serializeLocalUsersAsCsv(response.items);
@@ -403,6 +407,7 @@ export function serializeLocalUsersTransfer(
   return JSON.stringify(
     {
       format: response.format,
+      mode: response.mode,
       items: normalizeLocalUserTransferItems(response.items),
     },
     null,
@@ -428,8 +433,10 @@ export function buildImportNotice(response: ImportStubResponse) {
   return `${response.resource} import is still a stub. Supported formats: ${response.supportedFormats.join(', ')}.`;
 }
 
-export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount'>) {
-  return `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Every exported account now uses a generated one-time passcode and must change it after sign-in.`;
+export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount' | 'mode'>) {
+  return response.mode === 'rotate-passcodes'
+    ? `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Every exported account now uses a generated one-time passcode and must change it after sign-in.`
+    : `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Passwords and active sessions were left untouched.`;
 }
 
 export function triggerDownload(filename: string, content: string, mimeType: string) {
@@ -448,6 +455,6 @@ export function buildLocalUsersImportNotice(response: LocalUsersImportResponse) 
   const resetCount = response.items.filter((item) => item.auth.passwordResetRequired).length;
   const resetSummary = resetCount
     ? `${resetCount} imported ${resetCount === 1 ? 'account' : 'accounts'} still require a one-time passcode change.`
-    : 'Imported passwords are ready for immediate sign-in.';
+    : 'Imported credentials are ready for immediate sign-in.';
   return `Imported ${response.itemCount} local users (${response.createdCount} created, ${response.updatedCount} updated). ${resetSummary}`;
 }
