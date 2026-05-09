@@ -8,6 +8,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
 - The API currently serves seeded in-memory demo data for local workflow development. Restarting the API resets that data.
 - PostgreSQL migrations in `prisma/migrations/` define the intended schema and can be applied locally for schema validation and future persistence work.
 - Question-set and assignment export routes return metadata stubs today; matching import routes acknowledge supported formats but are still `not_implemented`.
+- Local user import/export is available from the employee admin UI. Exporting local users rotates every exported account to a generated one-time passcode and immediately signs those users out.
 - GitHub Actions publishes deployment images to `ghcr.io/mkronvold/revu-api` and `ghcr.io/mkronvold/revu-web`.
 
 ## Requirements
@@ -157,6 +158,8 @@ The current API boots with seeded demo users for end-to-end workflow testing:
 
 These credentials are for local development only and live in the in-memory demo store.
 
+If a user signs in with a generated reset password or exported one-time passcode, the API allows `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, and `POST /api/v1/auth/password/change` only until that user chooses a new password.
+
 ## Database notes
 
 - `DATABASE_URL` is used by the containerized API configuration and future persistence work.
@@ -176,9 +179,13 @@ These credentials are for local development only and live in the in-memory demo 
 - Assignments:
   - `GET /api/v1/review-periods/:id/assignments/export?format=json|csv`
   - `POST /api/v1/review-periods/:id/assignments/import`
+- Local users:
+  - `GET /api/v1/employees/export?format=json|csv`
+  - `POST /api/v1/employees/import`
 
 Current behavior:
 
 - export endpoints return typed stub metadata describing what would be exported
 - import endpoints return `status: "not_implemented"`
-- employee import/export flows are not exposed yet
+- local user exports return import-ready payloads plus generated one-time passcodes
+- local user imports upsert users, preserve the supplied `passwordResetRequired` flag, and invalidate sessions for imported accounts

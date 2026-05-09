@@ -5,6 +5,8 @@ import {
   assessmentsListQuerySchema,
   assessmentsListResponseSchema,
   assignmentResponseSchema,
+  authChangePasswordRequestSchema,
+  authChangePasswordResponseSchema,
   authLoginResponseSchema,
   authLogoutResponseSchema,
   authMeResponseSchema,
@@ -20,6 +22,9 @@ import {
   foundationSnapshotSchema,
   importStubRequestSchema,
   importStubResponseSchema,
+  localUsersExportResponseSchema,
+  localUsersImportRequestSchema,
+  localUsersImportResponseSchema,
   questionSetResponseSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
@@ -38,12 +43,14 @@ import {
   type AcceptAssessmentRequest,
   type AssessmentsListQuery,
   type AuthLoginRequest,
+  type AuthChangePasswordRequest,
   type CreateAssessmentRequest,
   type CreateAssignmentRequest,
   type CreateEmployeeRequest,
   type CreateQuestionSetRequest,
   type CreateReviewPeriodRequest,
   type ImportStubRequest,
+  type LocalUsersImportRequest,
   type RejectAssessmentToDraftRequest,
   type ReassignAssessmentRequest,
   type ResetEmployeePasswordRequest,
@@ -152,6 +159,17 @@ export function logout(token: string) {
   );
 }
 
+export function changePassword(token: string, payload: AuthChangePasswordRequest) {
+  return request(
+    '/auth/password/change',
+    authChangePasswordResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: JSON.stringify(authChangePasswordRequestSchema.parse(payload)),
+    }),
+  );
+}
+
 export function getFoundation(token: string) {
   return request('/foundation', foundationSnapshotSchema, withAuthorization(token));
 }
@@ -162,6 +180,25 @@ export function listEmployees(token: string) {
 
 export function getEmployee(token: string, employeeId: string) {
   return request(`/employees/${employeeId}`, employeeResponseSchema, withAuthorization(token));
+}
+
+export function exportLocalUsers(token: string, format: ExportFormat) {
+  return request(
+    withSearchParams('/employees/export', { format }),
+    localUsersExportResponseSchema,
+    withAuthorization(token),
+  );
+}
+
+export function importLocalUsers(token: string, payload: LocalUsersImportRequest) {
+  return request(
+    '/employees/import',
+    localUsersImportResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: JSON.stringify(localUsersImportRequestSchema.parse(payload)),
+    }),
+  );
 }
 
 export function createEmployee(token: string, payload: CreateEmployeeRequest) {

@@ -12,6 +12,7 @@ import {
   appRoleSchema,
   idSchema,
   isoTimestampSchema,
+  localUserTransferItemSchema,
   questionSchema,
   questionSetSchema,
   reviewPeriodSchema,
@@ -103,6 +104,8 @@ export const authPermissionSchema = z.enum([
   "employees:create",
   "employees:update",
   "employees:delete",
+  "employees:import",
+  "employees:export",
   "employees:password:set",
   "employees:password:reset",
   "reviewPeriods:create",
@@ -130,6 +133,7 @@ export const authSessionSchema = z.object({
   token: z.string().min(1),
   issuedAt: isoTimestampSchema,
   expiresAt: isoTimestampSchema,
+  passwordResetRequired: z.boolean(),
   permissions: z.array(authPermissionSchema),
   user: authSessionUserSchema,
 });
@@ -147,6 +151,16 @@ export const authMeResponseSchema = authLoginResponseSchema;
 
 export const authLogoutResponseSchema = z.object({
   success: z.literal(true),
+});
+
+export const authChangePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(8),
+  newPassword: z.string().min(8),
+});
+
+export const authChangePasswordResponseSchema = z.object({
+  session: authSessionSchema,
+  lastPasswordChangeAt: isoTimestampSchema,
 });
 
 export const createEmployeeRequestSchema = z.object({
@@ -318,6 +332,27 @@ export const assessmentReassignmentResponseSchema = z.object({
 
 export const exportFormatSchema = z.enum(["json", "csv"]);
 
+export const localUsersExportResponseSchema = z.object({
+  format: exportFormatSchema,
+  exportedAt: isoTimestampSchema,
+  itemCount: z.number().int().nonnegative(),
+  items: z.array(localUserTransferItemSchema),
+});
+
+export const localUsersImportRequestSchema = z.object({
+  format: exportFormatSchema,
+  items: z.array(localUserTransferItemSchema).min(1),
+});
+
+export const localUsersImportResponseSchema = z.object({
+  format: exportFormatSchema,
+  importedAt: isoTimestampSchema,
+  itemCount: z.number().int().positive(),
+  createdCount: z.number().int().nonnegative(),
+  updatedCount: z.number().int().nonnegative(),
+  items: z.array(employeeAdminSchema),
+});
+
 export const exportStubResponseSchema = z.object({
   reviewPeriodId: idSchema,
   resource: z.enum(["questionSets", "assignments"]),
@@ -359,6 +394,8 @@ export type AuthLoginRequest = z.infer<typeof authLoginRequestSchema>;
 export type AuthLoginResponse = z.infer<typeof authLoginResponseSchema>;
 export type AuthMeResponse = z.infer<typeof authMeResponseSchema>;
 export type AuthLogoutResponse = z.infer<typeof authLogoutResponseSchema>;
+export type AuthChangePasswordRequest = z.infer<typeof authChangePasswordRequestSchema>;
+export type AuthChangePasswordResponse = z.infer<typeof authChangePasswordResponseSchema>;
 export type CreateEmployeeRequest = z.infer<typeof createEmployeeRequestSchema>;
 export type UpdateEmployeeRequest = z.infer<typeof updateEmployeeRequestSchema>;
 export type DeleteEmployeeResponse = z.infer<typeof deleteEmployeeResponseSchema>;
@@ -383,6 +420,9 @@ export type RejectAssessmentToDraftRequest = z.infer<typeof rejectAssessmentToDr
 export type ReviewAssessmentRequest = z.infer<typeof reviewAssessmentRequestSchema>;
 export type ReassignAssessmentRequest = z.infer<typeof reassignAssessmentRequestSchema>;
 export type AssessmentReassignmentResponse = z.infer<typeof assessmentReassignmentResponseSchema>;
+export type LocalUsersExportResponse = z.infer<typeof localUsersExportResponseSchema>;
+export type LocalUsersImportRequest = z.infer<typeof localUsersImportRequestSchema>;
+export type LocalUsersImportResponse = z.infer<typeof localUsersImportResponseSchema>;
 export type ExportStubResponse = z.infer<typeof exportStubResponseSchema>;
 export type ImportStubRequest = z.infer<typeof importStubRequestSchema>;
 export type ImportStubResponse = z.infer<typeof importStubResponseSchema>;

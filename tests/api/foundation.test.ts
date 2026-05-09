@@ -44,6 +44,7 @@ describe("API/domain foundation", () => {
       },
     });
     const authSession = authLoginResponseSchema.parse(loginResponse.json()).session;
+    expect(authSession.passwordResetRequired).toBe(false);
 
     const [indexResponse, rulesResponse, employeesResponse, periodsResponse, questionSetsResponse, assignmentsResponse, assessmentsResponse, foundationResponse] =
       await Promise.all([
@@ -121,6 +122,7 @@ describe("API/domain foundation", () => {
       },
     });
     const authSession = authLoginResponseSchema.parse(loginResponse.json()).session;
+    expect(authSession.passwordResetRequired).toBe(false);
 
     const foundationResponse = await app.inject({
       method: "GET",

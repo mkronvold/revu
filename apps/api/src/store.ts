@@ -12,6 +12,7 @@ import type {
   Assessment,
   AssessmentResponse,
   AssessmentReviewState,
+  AuthChangePasswordResponse,
   AssessmentsListQuery,
   Assignment,
   AuthPermission,
@@ -27,6 +28,9 @@ import type {
   EmployeeAuthMetadata,
   ExportStubResponse,
   ImportStubResponse,
+  LocalUserTransferItem,
+  LocalUsersExportResponse,
+  LocalUsersImportResponse,
   QuestionSet,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
@@ -45,7 +49,11 @@ type StoredAuthMetadata = EmployeeAuthMetadata & {
   passwordHash: string | null;
 };
 
-type SessionRecord = Omit<AuthSession, "user"> & {
+type SessionRecord = {
+  token: string;
+  issuedAt: string;
+  expiresAt: string;
+  permissions: AuthPermission[];
   employeeId: string;
 };
 
@@ -76,6 +84,8 @@ const permissionsByRole: Record<Employee["role"], AuthPermission[]> = {
     "employees:create",
     "employees:update",
     "employees:delete",
+    "employees:import",
+    "employees:export",
     "employees:password:set",
     "employees:password:reset",
     "reviewPeriods:create",
@@ -254,8 +264,10 @@ export class ApiStore {
   }
 
   private toSession(record: SessionRecord): AuthSession {
+    const auth = this.authOrThrow(record.employeeId);
     return {
       ...record,
+      passwordResetRequired: auth.passwordResetRequired,
       user: clone(this.employeeOrThrow(record.employeeId)),
     };
   }
@@ -264,15 +276,15 @@ export class ApiStore {
     id?: string;
     username: string;
     email: string;
-  }) {
-    const duplicateUsername = this.employees.find(
+  }, employees = this.employees) {
+    const duplicateUsername = employees.find(
       (employee) => employee.username === candidate.username && employee.id !== candidate.id,
     );
     if (duplicateUsername) {
       throw new ApiError(409, "Username already exists");
     }
 
-    const duplicateEmail = this.employees.find(
+    const duplicateEmail = employees.find(
       (employee) => employee.email === candidate.email && employee.id !== candidate.id,
     );
     if (duplicateEmail) {
@@ -284,9 +296,13 @@ export class ApiStore {
     id: string;
     managerId: string | null;
     assessorId: string | null;
-  }) {
+  }, employees = this.employees) {
+    const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
     if (candidate.managerId) {
-      const manager = this.employeeOrThrow(candidate.managerId);
+      const manager = employeeById.get(candidate.managerId);
+      if (!manager) {
+        throw new ApiError(400, "Manager not found");
+      }
       if (manager.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own manager");
       }
@@ -297,7 +313,10 @@ export class ApiStore {
     }
 
     if (candidate.assessorId) {
-      const assessor = this.employeeOrThrow(candidate.assessorId);
+      const assessor = employeeById.get(candidate.assessorId);
+      if (!assessor) {
+        throw new ApiError(400, "Assessor not found");
+      }
       if (assessor.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own assessor");
       }
@@ -537,6 +556,33 @@ export class ApiStore {
     return clone(this.employees);
   }
 
+  private invalidateEmployeeSessions(employeeId: string, keepToken?: string) {
+    this.sessions.forEach((session, token) => {
+      if (session.employeeId === employeeId && token !== keepToken) {
+        this.sessions.delete(token);
+      }
+    });
+  }
+
+  private usernameForEmployee(employeeId: string | null) {
+    return employeeId ? this.employeeOrThrow(employeeId).username : null;
+  }
+
+  private toLocalUserTransferItem(employee: Employee, password: string): LocalUserTransferItem {
+    const auth = this.authOrThrow(employee.id);
+    return {
+      username: employee.username,
+      fullName: employee.fullName,
+      email: employee.email,
+      role: employee.role,
+      status: employee.status,
+      managerUsername: this.usernameForEmployee(employee.managerId),
+      assessorUsername: this.usernameForEmployee(employee.assessorId),
+      password,
+      passwordResetRequired: auth.passwordResetRequired,
+    };
+  }
+
   getEmployee(employeeId: string) {
     return this.toEmployeeAdmin(this.employeeOrThrow(employeeId));
   }
@@ -583,6 +629,34 @@ export class ApiStore {
 
   logout(token: string) {
     return this.sessions.delete(token);
+  }
+
+  changeOwnPassword(token: string, currentPassword: string, newPassword: string): AuthChangePasswordResponse {
+    const session = this.sessions.get(token);
+    if (!session || Date.parse(session.expiresAt) <= Date.now()) {
+      this.sessions.delete(token);
+      throw new ApiError(401, "Authentication required");
+    }
+
+    const employee = this.employeeOrThrow(session.employeeId);
+    const auth = this.authOrThrow(employee.id);
+    if (!verifyPassword(currentPassword, auth.passwordHash)) {
+      throw new ApiError(401, "Invalid username or password");
+    }
+
+    const timestamp = nowIso();
+    this.auth.set(employee.id, {
+      passwordHash: hashPassword(newPassword),
+      passwordConfigured: true,
+      passwordResetRequired: false,
+      lastPasswordChangeAt: timestamp,
+    });
+    this.invalidateEmployeeSessions(employee.id, token);
+
+    return {
+      session: this.toSession(session),
+      lastPasswordChangeAt: timestamp,
+    };
   }
 
   createEmployee(input: CreateEmployeeRequest) {
@@ -714,6 +788,7 @@ export class ApiStore {
       passwordResetRequired: false,
       lastPasswordChangeAt: timestamp,
     });
+    this.invalidateEmployeeSessions(employee.id);
 
     return {
       employeeId: employee.id,
@@ -732,6 +807,7 @@ export class ApiStore {
       passwordResetRequired: true,
       lastPasswordChangeAt: timestamp,
     });
+    this.invalidateEmployeeSessions(employee.id);
 
     return {
       employeeId: employee.id,
@@ -908,6 +984,145 @@ export class ApiStore {
       accepted: false,
       status: "not_implemented",
       supportedFormats: ["json", "csv"],
+    };
+  }
+
+  exportLocalUsers(format: "json" | "csv"): LocalUsersExportResponse {
+    const exportedAt = nowIso();
+    const items = this.employees.map((employee) => {
+      const temporaryPassword = generateTemporaryPassword();
+      this.auth.set(employee.id, {
+        passwordHash: hashPassword(temporaryPassword),
+        passwordConfigured: true,
+        passwordResetRequired: true,
+        lastPasswordChangeAt: exportedAt,
+      });
+      this.invalidateEmployeeSessions(employee.id);
+      return this.toLocalUserTransferItem(employee, temporaryPassword);
+    });
+
+    return {
+      format,
+      exportedAt,
+      itemCount: items.length,
+      items,
+    };
+  }
+
+  importLocalUsers(format: "json" | "csv", items: LocalUserTransferItem[]): LocalUsersImportResponse {
+    const importedAt = nowIso();
+    const seenUsernames = new Set<string>();
+    const seenEmails = new Set<string>();
+    const existingByUsername = new Map(this.employees.map((employee) => [employee.username, employee]));
+
+    for (const item of items) {
+      if (seenUsernames.has(item.username)) {
+        throw new ApiError(400, "Imported usernames must be unique");
+      }
+      if (seenEmails.has(item.email)) {
+        throw new ApiError(400, "Imported emails must be unique");
+      }
+      seenUsernames.add(item.username);
+      seenEmails.add(item.email);
+    }
+
+    const importedByUsername = new Map(items.map((item) => [item.username, item]));
+    const finalEmployees = this.employees.map((employee) => {
+      const item = importedByUsername.get(employee.username);
+      if (!item) {
+        return employee;
+      }
+
+      return {
+        ...employee,
+        fullName: item.fullName,
+        email: item.email,
+        role: item.role,
+        status: item.status,
+        updatedAt: importedAt,
+      };
+    });
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    for (const item of items) {
+      if (existingByUsername.has(item.username)) {
+        updatedCount += 1;
+        continue;
+      }
+
+      createdCount += 1;
+      finalEmployees.push({
+        id: randomUUID(),
+        username: item.username,
+        fullName: item.fullName,
+        email: item.email,
+        role: item.role,
+        status: item.status,
+        managerId: null,
+        assessorId: null,
+        createdAt: importedAt,
+        updatedAt: importedAt,
+      });
+    }
+
+    for (const employee of finalEmployees) {
+      this.assertUniqueEmployeeFields(employee, finalEmployees);
+    }
+
+    const finalByUsername = new Map(finalEmployees.map((employee) => [employee.username, employee]));
+    for (const item of items) {
+      const employee = finalByUsername.get(item.username);
+      if (!employee) {
+        throw new ApiError(500, "Imported employee missing after merge");
+      }
+
+      const managerId =
+        item.managerUsername === null
+          ? null
+          : finalByUsername.get(item.managerUsername)?.id ?? (() => {
+              throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+            })();
+      const assessorId =
+        item.assessorUsername === null
+          ? null
+          : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
+              throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+            })();
+
+      employee.managerId = managerId;
+      employee.assessorId = assessorId;
+    }
+
+    for (const employee of finalEmployees) {
+      this.assertRelationships(employee, finalEmployees);
+    }
+
+    this.employees.splice(0, this.employees.length, ...finalEmployees);
+
+    const importedEmployees = items.map((item) => {
+      const employee = finalByUsername.get(item.username);
+      if (!employee) {
+        throw new ApiError(500, "Imported employee missing after commit");
+      }
+
+      this.auth.set(employee.id, {
+        passwordHash: hashPassword(item.password),
+        passwordConfigured: true,
+        passwordResetRequired: item.passwordResetRequired,
+        lastPasswordChangeAt: importedAt,
+      });
+      this.invalidateEmployeeSessions(employee.id);
+      return this.toEmployeeAdmin(employee);
+    });
+
+    return {
+      format,
+      importedAt,
+      itemCount: items.length,
+      createdCount,
+      updatedCount,
+      items: importedEmployees,
     };
   }
 

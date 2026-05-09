@@ -8,8 +8,10 @@ vi.mock('./api', () => ({
   createQuestionSet: vi.fn(),
   createReviewPeriod: vi.fn(),
   deleteAssignment: vi.fn(),
+  exportLocalUsers: vi.fn(),
   exportAssignments: vi.fn(),
   exportQuestionSets: vi.fn(),
+  importLocalUsers: vi.fn(),
   importAssignments: vi.fn(),
   importQuestionSets: vi.fn(),
   unarchiveReviewPeriod: vi.fn(),
@@ -27,10 +29,14 @@ import {
   updateEmployee,
 } from './api';
 import {
+  buildLocalUsersExportNotice,
+  buildLocalUsersImportNotice,
+  buildLocalUsersImportPayload,
   buildExportNotice,
   buildImportNotice,
   saveAssignmentToApi,
   saveQuestionSetToApi,
+  serializeLocalUsersTransfer,
   toggleReviewPeriodArchiveInApi,
 } from './reviewAdminApi';
 import { createReviewAdminSnapshot, toQuestionSetDraft } from './reviewAdmin';
@@ -183,5 +189,77 @@ describe('review admin API orchestration', () => {
         supportedFormats: ['json', 'csv'],
       }),
     ).toContain('json, csv');
+  });
+
+  it('serializes and parses local user transfer payloads for import-ready reuse', () => {
+    const exportResponse = {
+      format: 'json' as const,
+      exportedAt: '2026-06-01T12:00:00.000Z',
+      itemCount: 1,
+      items: [
+        {
+          username: 'elliot.employee',
+          fullName: 'Elliot Employee',
+          email: 'elliot.employee@example.com',
+          role: 'employee' as const,
+          status: 'active' as const,
+          managerUsername: 'manny.manager',
+          assessorUsername: 'pat.peer',
+          password: 'tmp-passcode-123',
+          passwordResetRequired: true,
+        },
+      ],
+    };
+
+    const jsonPayload = serializeLocalUsersTransfer(exportResponse);
+    expect(buildLocalUsersImportPayload('json', jsonPayload)).toEqual({
+      format: 'json',
+      items: exportResponse.items,
+    });
+
+    const csvPayload = serializeLocalUsersTransfer({
+      format: 'csv',
+      items: exportResponse.items,
+    });
+    expect(buildLocalUsersImportPayload('csv', csvPayload)).toEqual({
+      format: 'csv',
+      items: exportResponse.items,
+    });
+  });
+
+  it('describes local user export/import one-time passcode behavior', () => {
+    expect(
+      buildLocalUsersExportNotice({
+        format: 'json',
+        itemCount: 2,
+      }),
+    ).toContain('one-time passcode');
+    expect(
+      buildLocalUsersImportNotice({
+        format: 'json',
+        importedAt: '2026-06-01T12:00:00.000Z',
+        itemCount: 2,
+        createdCount: 1,
+        updatedCount: 1,
+        items: [
+          {
+            ...employeesListExample.items[2]!,
+            auth: {
+              passwordConfigured: true,
+              passwordResetRequired: true,
+              lastPasswordChangeAt: '2026-06-01T12:00:00.000Z',
+            },
+          },
+          {
+            ...employeesListExample.items[3]!,
+            auth: {
+              passwordConfigured: true,
+              passwordResetRequired: false,
+              lastPasswordChangeAt: '2026-06-01T12:00:00.000Z',
+            },
+          },
+        ],
+      }),
+    ).toContain('1 imported account');
   });
 });

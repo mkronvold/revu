@@ -5,8 +5,11 @@ import {
   ApiClientError,
   acceptAssessment,
   apiBaseUrl,
+  changePassword,
+  exportLocalUsers,
   getEmployee,
   getFoundation,
+  importLocalUsers,
   listAssessments,
   listEmployees,
   login,
@@ -142,6 +145,108 @@ describe('web api client', () => {
       `${apiBaseUrl}/assessments/${foundationSnapshotExample.assessments[1]!.id}/reassign`,
       expect.objectContaining({
         method: 'POST',
+      }),
+    );
+  });
+
+  it('routes password changes and local user transfers through auth-backed endpoints', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            session: adminLoginExample.session,
+            lastPasswordChangeAt: '2026-06-01T12:00:00.000Z',
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            format: 'json',
+            exportedAt: '2026-06-01T12:00:00.000Z',
+            itemCount: 1,
+            items: [
+              {
+                username: 'elliot.employee',
+                fullName: 'Elliot Employee',
+                email: 'elliot.employee@example.com',
+                role: 'employee',
+                status: 'active',
+                managerUsername: 'manny.manager',
+                assessorUsername: 'pat.peer',
+                password: 'tmp-passcode-123',
+                passwordResetRequired: true,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            format: 'json',
+            importedAt: '2026-06-01T12:00:00.000Z',
+            itemCount: 1,
+            createdCount: 0,
+            updatedCount: 1,
+            items: [adminEmployeeExample.item],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    await changePassword('session-token', {
+      currentPassword: 'OldPass123!',
+      newPassword: 'NewPass123!',
+    });
+    await exportLocalUsers('session-token', 'json');
+    await importLocalUsers('session-token', {
+      format: 'json',
+      items: [
+        {
+          username: 'elliot.employee',
+          fullName: 'Elliot Employee',
+          email: 'elliot.employee@example.com',
+          role: 'employee',
+          status: 'active',
+          managerUsername: 'manny.manager',
+          assessorUsername: 'pat.peer',
+          password: 'tmp-passcode-123',
+          passwordResetRequired: true,
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${apiBaseUrl}/auth/password/change`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${apiBaseUrl}/employees/export?format=json`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `${apiBaseUrl}/employees/import`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
       }),
     );
   });

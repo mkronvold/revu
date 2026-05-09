@@ -371,6 +371,12 @@ button.employee-row:focus-visible {
   gap: 1rem;
 }
 
+.queue-stack,
+.archive-list {
+  display: grid;
+  gap: 1rem;
+}
+
 .queue-card {
   display: flex;
   flex-direction: column;
@@ -456,6 +462,36 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
+.employee-row-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.employee-row-summary {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0;
+  border: none;
+  color: #0f172a;
+  text-align: left;
+  background: transparent;
+}
+
+.employee-row-summary span,
+.employee-row-summary small {
+  color: #475569;
+}
+
+.employee-row-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .employee-row-active {
   border-color: rgba(37, 99, 235, 0.58);
   background: #dbeafe;
@@ -480,6 +516,19 @@ button.employee-row:focus-visible {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+}
+
+.section-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0;
+  border: none;
+  color: #0f172a;
+  text-align: left;
+  background: transparent;
 }
 
 .stack-form {
@@ -631,9 +680,29 @@ button.employee-row:focus-visible {
   background: #f8fafc;
 }
 
-.archive-grid {
+.archive-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.modal-card {
+  width: min(640px, 100%);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
 }
 
@@ -678,5 +747,11 @@ button.employee-row:focus-visible {
   .assignment-row,
   .form-columns {
     grid-template-columns: 1fr;
+  }
+
+  .archive-row,
+  .section-toggle {
+    align-items: start;
+    flex-direction: column;
   }
 }

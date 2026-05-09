@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Reworked the dashboard, reviews, employees, questions, assignments, and archive admin screens into the new single-column, collapsible layouts
+- Wired the web login flow into backend-enforced password reset and password change handling
+- Added local user import/export UI for the new backend contracts, including export warnings and one-time passcode messaging
+- Added a persisted dark mode toggle to the sidebar
 - Added multi-stage Docker images for the API and web app
 - Added GitHub Actions image publishing to GHCR
 - Split Docker Compose into deployment defaults plus a source-development override

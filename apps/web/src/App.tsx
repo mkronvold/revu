@@ -11,6 +11,7 @@ import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
 
 import {
   ApiClientError,
+  changePassword,
   createEmployee,
   getEmployee,
   getFoundation,
@@ -63,12 +64,18 @@ import {
 import {
   buildExportNotice,
   buildImportNotice,
+  buildLocalUsersExportNotice,
+  buildLocalUsersImportNotice,
+  buildLocalUsersImportPayload,
   exportAssignmentsFromApi,
+  exportLocalUsersFromApi,
   exportQuestionSetsFromApi,
   importAssignmentsFromApi,
+  importLocalUsersFromApi,
   importQuestionSetsFromApi,
   saveAssignmentToApi,
   saveQuestionSetToApi,
+  serializeLocalUsersTransfer,
   saveReviewPeriodToApi,
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
@@ -78,6 +85,97 @@ import { getRuntimeCompanyName } from './runtimeConfig';
 const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
 const workspaceTitle = companyName ? `Assessment workspace • ${companyName}` : 'Assessment workspace';
+const sessionStorageKey = 'revu-session-token';
+const themeStorageKey = 'revu-theme-preference';
+const darkThemeStyleOverrides = `
+  [data-revu-theme='dark'] {
+    color: #e2e8f0;
+  }
+
+  [data-revu-theme='dark'].login-shell,
+  [data-revu-theme='dark'].app-shell {
+    background:
+      radial-gradient(circle at top, rgba(14, 165, 233, 0.18), transparent 30%),
+      linear-gradient(180deg, #020617 0%, #0f172a 55%, #111827 100%);
+  }
+
+  [data-revu-theme='dark'] .login-card,
+  [data-revu-theme='dark'] .card,
+  [data-revu-theme='dark'] .subcard,
+  [data-revu-theme='dark'] .modal-card,
+  [data-revu-theme='dark'] .employee-row-card,
+  [data-revu-theme='dark'] .queue-card,
+  [data-revu-theme='dark'] .session-card {
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow: 0 20px 50px rgba(2, 6, 23, 0.35);
+  }
+
+  [data-revu-theme='dark'] .login-copy,
+  [data-revu-theme='dark'] .muted-copy,
+  [data-revu-theme='dark'] .status-caption,
+  [data-revu-theme='dark'] .brand-copy,
+  [data-revu-theme='dark'] .toolbar-note,
+  [data-revu-theme='dark'] .employee-row-summary small {
+    color: #cbd5e1;
+  }
+
+  [data-revu-theme='dark'] .sidebar {
+    background: rgba(2, 6, 23, 0.94);
+  }
+
+  [data-revu-theme='dark'] .nav-link,
+  [data-revu-theme='dark'] .section-toggle,
+  [data-revu-theme='dark'] .demo-account-card,
+  [data-revu-theme='dark'] .employee-row-summary {
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(30, 41, 59, 0.75);
+  }
+
+  [data-revu-theme='dark'] .nav-link-active {
+    border-color: rgba(56, 189, 248, 0.9);
+    background: rgba(14, 165, 233, 0.24);
+  }
+
+  [data-revu-theme='dark'] .sidebar-note {
+    background: rgba(13, 148, 136, 0.2);
+  }
+
+  [data-revu-theme='dark'] .badge,
+  [data-revu-theme='dark'] .pill {
+    color: #e0f2fe;
+    background: rgba(14, 165, 233, 0.22);
+  }
+
+  [data-revu-theme='dark'] button,
+  [data-revu-theme='dark'] input,
+  [data-revu-theme='dark'] select,
+  [data-revu-theme='dark'] textarea {
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.92);
+  }
+
+  [data-revu-theme='dark'] button.secondary-button {
+    background: rgba(51, 65, 85, 0.92);
+  }
+
+  [data-revu-theme='dark'] .temporary-password {
+    color: #dcfce7;
+    background: rgba(22, 101, 52, 0.32);
+  }
+
+  [data-revu-theme='dark'] .form-error {
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.34);
+  }
+
+  [data-revu-theme='dark'] .modal-backdrop {
+    background: rgba(2, 6, 23, 0.78);
+  }
+`;
 
 type EmployeeDraft = {
   id: string | null;
@@ -98,7 +196,14 @@ type DemoAccount = {
   password: string;
 };
 
-const sessionStorageKey = 'revu-session-token';
+type ThemePreference = 'light' | 'dark';
+
+type LocalUserTransferPreview = {
+  format: TransferFormat;
+  itemCount: number;
+  content: string;
+  exportedAt: string;
+};
 const demoAccounts: DemoAccount[] = [
   {
     fullName: 'Ada Admin',
@@ -168,6 +273,10 @@ function getErrorMessage(error: unknown) {
 
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+    const storedPreference = window.localStorage.getItem(themeStorageKey);
+    return storedPreference === 'dark' ? 'dark' : 'light';
+  });
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [foundation, setFoundation] = useState<FoundationSnapshot | null>(null);
@@ -182,12 +291,19 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('ada.admin');
   const [loginPassword, setLoginPassword] = useState('AdminPass123!');
   const [loginError, setLoginError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [currentPasswordDraft, setCurrentPasswordDraft] = useState('');
+  const [nextPasswordDraft, setNextPasswordDraft] = useState('');
+  const [confirmPasswordDraft, setConfirmPasswordDraft] = useState('');
+  const [changePasswordError, setChangePasswordError] = useState('');
   const [formError, setFormError] = useState('');
   const [appError, setAppError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
+  const [isSyncingLocalUsers, setIsSyncingLocalUsers] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSavingReviewAdmin, setIsSavingReviewAdmin] = useState(false);
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
@@ -203,6 +319,19 @@ function App() {
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
   const [reviewManagerDraft, setReviewManagerDraft] = useState('');
   const [reviewAssessorDraft, setReviewAssessorDraft] = useState('');
+  const [expandedReviewQueues, setExpandedReviewQueues] = useState<Record<string, boolean>>({});
+  const [employeeRosterExpanded, setEmployeeRosterExpanded] = useState({
+    active: true,
+    inactive: false,
+  });
+  const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
+    active: true,
+    archived: true,
+  });
+  const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
+  const [localUserTransferFormat, setLocalUserTransferFormat] = useState<TransferFormat>('json');
+  const [localUserImportDraft, setLocalUserImportDraft] = useState('');
+  const [localUserTransferPreview, setLocalUserTransferPreview] = useState<LocalUserTransferPreview | null>(null);
 
   useEffect(() => {
     const syncLocation = () => {
@@ -222,6 +351,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    window.localStorage.setItem(themeStorageKey, themePreference);
+    document.documentElement.style.colorScheme = themePreference;
+  }, [themePreference]);
+
+  useEffect(() => {
     let cancelled = false;
     const existingToken = window.sessionStorage.getItem(sessionStorageKey);
 
@@ -239,6 +373,11 @@ function App() {
 
         setSessionToken(existingToken);
         setSession(response.session);
+        setAuthNotice(
+          response.session.passwordResetRequired
+            ? 'Session restored with a one-time passcode. Change it now before opening the workspace.'
+            : '',
+        );
       } catch {
         window.sessionStorage.removeItem(sessionStorageKey);
       } finally {
@@ -254,6 +393,7 @@ function App() {
   }, []);
 
   const sessionUser = session?.user ?? null;
+  const passwordResetRequired = session?.passwordResetRequired ?? false;
   const currentSection = useMemo(() => getSection(pathname), [pathname]);
   const availableSections = useMemo(
     () => (sessionUser ? getSectionsForRole(sessionUser.role) : []),
@@ -368,6 +508,22 @@ function App() {
         : [],
     [employees, reviewAdmin, selectedReviewPeriod],
   );
+  const passwordDialogEmployee = useMemo(() => {
+    if (!passwordDialogEmployeeId) {
+      return null;
+    }
+
+    return employees.find((employee) => employee.id === passwordDialogEmployeeId) ??
+      (passwordDialogEmployeeId === sessionUser?.id ? sessionUser : null);
+  }, [employees, passwordDialogEmployeeId, sessionUser]);
+  const passwordDialogDetail = useMemo(
+    () => (passwordDialogEmployeeId && selectedEmployeeDetail?.id === passwordDialogEmployeeId ? selectedEmployeeDetail : null),
+    [passwordDialogEmployeeId, selectedEmployeeDetail],
+  );
+  const localUserImportPlaceholder =
+    localUserTransferFormat === 'json'
+      ? `{\n  "format": "json",\n  "items": []\n}`
+      : 'username,fullName,email,role,status,managerUsername,assessorUsername,password,passwordResetRequired';
 
   useEffect(() => {
     if (!sessionUser) {
@@ -385,6 +541,14 @@ function App() {
       setFoundation(null);
       setEmployees([]);
       setSelectedEmployeeDetail(null);
+      return;
+    }
+
+    if (passwordResetRequired) {
+      setFoundation(null);
+      setEmployees([sessionUser]);
+      setSelectedEmployeeDetail(null);
+      setIsLoadingEmployees(false);
       return;
     }
 
@@ -432,7 +596,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [hasEmployeeReadAccess, sessionToken, sessionUser]);
+  }, [hasEmployeeReadAccess, passwordResetRequired, sessionToken, sessionUser]);
 
   useEffect(() => {
     if (!sessionUser || sessionUser.role !== 'admin' || !foundation) {
@@ -530,6 +694,12 @@ function App() {
   }, [reviewAssessmentIds, selectedReviewAssessmentId]);
 
   useEffect(() => {
+    setExpandedReviewQueues((currentState) =>
+      Object.fromEntries(reviewQueues.map((queue) => [queue.title, currentState[queue.title] ?? true])),
+    );
+  }, [reviewQueues]);
+
+  useEffect(() => {
     if (!selectedReviewPanel) {
       setReviewNotesDraft('');
       setReviewManagerDraft('');
@@ -620,7 +790,29 @@ function App() {
     setFormError('');
   };
 
-  const clearSession = () => {
+  const closePasswordDialog = () => {
+    setPasswordDialogEmployeeId(null);
+    setPasswordDraft('');
+    setPasswordStatus('');
+    setTemporaryPassword(null);
+  };
+
+  const openPasswordDialog = (employeeId: string) => {
+    resetEditingState();
+    setSelectedEmployeeId(employeeId);
+    setPasswordDialogEmployeeId(employeeId);
+  };
+
+  const handleSelectReviewAssessment = (assessmentId: string) => {
+    setSelectedReviewAssessmentId(assessmentId);
+    setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, false])));
+  };
+
+  const clearSession = (options?: {
+    authNotice?: string;
+    preserveLocalUserTransferDraft?: boolean;
+    preserveLocalUserTransferPreview?: boolean;
+  }) => {
     window.sessionStorage.removeItem(sessionStorageKey);
     setSessionToken(null);
     setSession(null);
@@ -631,6 +823,14 @@ function App() {
     setEditingEmployeeId(null);
     setDraftEmployee(null);
     setLoginError('');
+    setAuthNotice(options?.authNotice ?? '');
+    setCurrentPasswordDraft('');
+    setNextPasswordDraft('');
+    setConfirmPasswordDraft('');
+    setChangePasswordError('');
+    setAppError('');
+    setAdminNotice('');
+    setLoginPassword('');
     setPasswordDraft('');
     setPasswordStatus('');
     setTemporaryPassword(null);
@@ -642,6 +842,22 @@ function App() {
     setReviewManagerDraft('');
     setReviewAssessorDraft('');
     setWorkflowNotice('');
+    setExpandedReviewQueues({});
+    setEmployeeRosterExpanded({
+      active: true,
+      inactive: false,
+    });
+    setArchivePanelsExpanded({
+      active: true,
+      archived: true,
+    });
+    setPasswordDialogEmployeeId(null);
+    if (!options?.preserveLocalUserTransferDraft) {
+      setLocalUserImportDraft('');
+    }
+    if (!options?.preserveLocalUserTransferPreview) {
+      setLocalUserTransferPreview(null);
+    }
   };
 
   const syncEmployeeRelationships = (employeeId: string, managerId: string | null, assessorId: string | null) => {
@@ -694,6 +910,15 @@ function App() {
       window.sessionStorage.setItem(sessionStorageKey, response.session.token);
       setSessionToken(response.session.token);
       setSession(response.session);
+      setAuthNotice(
+        response.session.passwordResetRequired
+          ? 'Signed in with a one-time passcode. Change it now before opening the workspace.'
+          : '',
+      );
+      setCurrentPasswordDraft(response.session.passwordResetRequired ? loginPassword : '');
+      setNextPasswordDraft('');
+      setConfirmPasswordDraft('');
+      setChangePasswordError('');
       setSelectedEmployeeId(response.session.user.role === 'employee' ? response.session.user.id : null);
       setLoginError('');
       window.history.replaceState(null, '', '/dashboard');
@@ -714,6 +939,141 @@ function App() {
       // Ignore API errors during local cleanup.
     } finally {
       clearSession();
+    }
+  };
+
+  const handleChangeOwnPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!sessionToken) {
+      return;
+    }
+
+    if (!currentPasswordDraft.trim()) {
+      setChangePasswordError('Enter the current password or one-time passcode you just used.');
+      return;
+    }
+
+    if (!nextPasswordDraft.trim()) {
+      setChangePasswordError('Enter a new password.');
+      return;
+    }
+
+    if (nextPasswordDraft.trim().length < 8) {
+      setChangePasswordError('New passwords must be at least 8 characters.');
+      return;
+    }
+
+    if (nextPasswordDraft !== confirmPasswordDraft) {
+      setChangePasswordError('New password and confirmation must match.');
+      return;
+    }
+
+    setIsChangingOwnPassword(true);
+    setChangePasswordError('');
+
+    try {
+      const response = await changePassword(sessionToken, {
+        currentPassword: currentPasswordDraft,
+        newPassword: nextPasswordDraft,
+      });
+
+      window.sessionStorage.setItem(sessionStorageKey, response.session.token);
+      setSessionToken(response.session.token);
+      setSession(response.session);
+      setAuthNotice('Password updated. You can now access the full workspace.');
+      setCurrentPasswordDraft('');
+      setNextPasswordDraft('');
+      setConfirmPasswordDraft('');
+      setLoginPassword('');
+    } catch (error) {
+      setChangePasswordError(getErrorMessage(error));
+    } finally {
+      setIsChangingOwnPassword(false);
+    }
+  };
+
+  const handleLocalUserExport = async () => {
+    if (!sessionToken || !sessionUser) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Exporting local users will rotate every exported password into a generated one-time passcode, sign every exported user out, and include the passcodes in the export. Continue with the ${localUserTransferFormat.toUpperCase()} export?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSyncingLocalUsers(true);
+    setAppError('');
+
+    try {
+      const response = await exportLocalUsersFromApi(sessionToken, localUserTransferFormat);
+      const preview = serializeLocalUsersTransfer(response);
+      const notice = `${buildLocalUsersExportNotice(response)} Your current session is now signed out. Copy the export, then sign in again with your exported one-time passcode.`;
+
+      setLocalUserTransferPreview({
+        format: response.format,
+        itemCount: response.itemCount,
+        content: preview,
+        exportedAt: response.exportedAt,
+      });
+      setLocalUserImportDraft(preview);
+      setLoginUsername(sessionUser.username);
+      clearSession({
+        authNotice: notice,
+        preserveLocalUserTransferDraft: true,
+        preserveLocalUserTransferPreview: true,
+      });
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingLocalUsers(false);
+    }
+  };
+
+  const handleLocalUserImport = async () => {
+    if (!sessionToken || !sessionUser) {
+      return;
+    }
+
+    if (!localUserImportDraft.trim()) {
+      setAdminNotice('Paste a JSON or CSV payload before importing local users.');
+      return;
+    }
+
+    setIsSyncingLocalUsers(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const payload = buildLocalUsersImportPayload(localUserTransferFormat, localUserImportDraft);
+      const response = await importLocalUsersFromApi(sessionToken, payload);
+      const notice = buildLocalUsersImportNotice(response);
+      const currentUserWasImported = response.items.some((item) => item.id === sessionUser.id);
+
+      if (currentUserWasImported) {
+        setLoginUsername(sessionUser.username);
+        clearSession({
+          authNotice: `${notice} Your account was part of the import, so sign in again with the imported password or one-time passcode.`,
+          preserveLocalUserTransferDraft: true,
+          preserveLocalUserTransferPreview: true,
+        });
+        return;
+      }
+
+      const selectedImportedEmployee = response.items.find((item) => item.id === selectedEmployeeId) ?? null;
+      if (selectedImportedEmployee) {
+        setSelectedEmployeeDetail(selectedImportedEmployee);
+      }
+
+      await Promise.all([refreshFoundationSnapshot(), refreshEmployeeDirectory()]);
+      setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingLocalUsers(false);
     }
   };
 
@@ -876,7 +1236,7 @@ function App() {
       });
       setPasswordDraft('');
       setTemporaryPassword(response.temporaryPassword);
-      setPasswordStatus('Admin generated a temporary password for the next sign-in.');
+      setPasswordStatus('Admin generated a one-time passcode for the next sign-in.');
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -1309,14 +1669,6 @@ function App() {
           <p className="section-label">{target === 'self' ? 'Self assessment' : 'Peer assessment'}</p>
           <h3>{questionSet?.title ?? `Create ${target} questions`}</h3>
         </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={!selectedReviewPeriod || selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                onClick={() => openQuestionSetEditor(target)}
-              >
-                {questionSet ? 'Edit set' : 'Create set'}
-        </button>
       </div>
       <dl className="detail-grid compact-detail-grid">
         <div>
@@ -1327,10 +1679,6 @@ function App() {
           <dt>Questions</dt>
           <dd>{questionSet?.questions.length ?? 0}</dd>
         </div>
-        <div>
-          <dt>Read-only</dt>
-          <dd>{questionSet?.isReadOnly ? 'Yes' : 'No'}</dd>
-        </div>
       </dl>
       <p>{questionSet?.headerMarkdown || 'No header text yet.'}</p>
       <ul className="bullet-list">
@@ -1340,6 +1688,16 @@ function App() {
           </li>
         )) ?? <li>No questions configured yet.</li>}
       </ul>
+      <div className="action-row">
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!selectedReviewPeriod || selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+          onClick={() => openQuestionSetEditor(target)}
+        >
+          {questionSet ? 'Edit set' : 'Create set'}
+        </button>
+      </div>
     </section>
   );
 
@@ -1355,35 +1713,86 @@ function App() {
     }
 
     return (
-      <main className="admin-layout">
-        <section className="card admin-sidebar-card">
+      <main className="admin-stack">
+        <section className="card admin-section-card">
           <div className="section-heading">
             <div>
-              <p className="section-label">Review periods</p>
-              <h3>Cycle setup</h3>
+              <p className="section-label">Review period</p>
+              <h3>{selectedReviewPeriod.label}</h3>
             </div>
-              <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
-                Add period
-              </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedReviewPeriod.status === 'archived'}
+              onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
+            >
+              Edit period
+            </button>
           </div>
-
-          <div className="admin-list">
-            {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
-              <button
-                type="button"
-                key={reviewPeriod.id}
-                className={`admin-list-item${reviewPeriod.id === selectedReviewPeriodId ? ' admin-list-item-active' : ''}`}
-                onClick={() => {
-                  setSelectedReviewPeriodId(reviewPeriod.id);
-                  setQuestionSetDraft(null);
-                }}
-              >
-                <strong>{reviewPeriod.label}</strong>
-                <small>
-                  {reviewPeriod.key} • {reviewPeriod.status}
-                </small>
-              </button>
-            ))}
+          <label className="inline-field">
+            Review period
+            <select
+              value={selectedReviewPeriod.id}
+              onChange={(event) => {
+                setSelectedReviewPeriodId(event.target.value);
+                setQuestionSetDraft(null);
+              }}
+            >
+              {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
+                <option key={reviewPeriod.id} value={reviewPeriod.id}>
+                  {reviewPeriod.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <dl className="detail-grid">
+            <div>
+              <dt>Window</dt>
+              <dd>
+                {selectedReviewPeriod.startDate} → {selectedReviewPeriod.dueDate}
+              </dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{selectedReviewPeriod.status}</dd>
+            </div>
+            <div>
+              <dt>Question sets</dt>
+              <dd>{selectedReviewPeriodSummary.questionSetCount}</dd>
+            </div>
+            <div>
+              <dt>Assignments</dt>
+              <dd>{selectedReviewPeriodSummary.assignmentCount}</dd>
+            </div>
+          </dl>
+          {selectedReviewPeriod.status === 'archived' ? (
+            <p className="toolbar-note">
+              Archived review periods stay visible here but question sets become read-only until an admin unarchives the cycle.
+            </p>
+          ) : null}
+          <div className="action-row">
+            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('json')}>
+              Export JSON stub
+            </button>
+            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('csv')}>
+              Export CSV stub
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+              onClick={() => void handleQuestionSetImport('json')}
+            >
+              Import JSON stub
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+              onClick={() => void handleQuestionSetImport('csv')}
+            >
+              Import CSV stub
+            </button>
           </div>
 
           {reviewPeriodDraft ? (
@@ -1404,26 +1813,28 @@ function App() {
                   placeholder="2026 Annual Review"
                 />
               </label>
-              <label>
-                Start date
-                <input
-                  type="date"
-                  value={reviewPeriodDraft.startDate}
-                  onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })}
-                />
-              </label>
-              <label>
-                Due date
-                <input
-                  type="date"
-                  value={reviewPeriodDraft.dueDate}
-                  onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
-                />
-              </label>
+              <div className="form-columns">
+                <label>
+                  Start date
+                  <input
+                    type="date"
+                    value={reviewPeriodDraft.startDate}
+                    onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Due date
+                  <input
+                    type="date"
+                    value={reviewPeriodDraft.dueDate}
+                    onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
+                  />
+                </label>
+              </div>
               <div className="action-row">
-                  <button type="submit" disabled={isSavingReviewAdmin}>
-                    Save period
-                  </button>
+                <button type="submit" disabled={isSavingReviewAdmin}>
+                  Save period
+                </button>
                 <button type="button" className="secondary-button" onClick={() => setReviewPeriodDraft(null)}>
                   Cancel
                 </button>
@@ -1431,194 +1842,109 @@ function App() {
             </form>
           ) : null}
 
-          <div className="toolbar-note">
-            <p>Changes on this screen save through the review-period admin API.</p>
+          <div className="action-row">
+            <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+              Add period
+            </button>
           </div>
         </section>
 
-        <section className="detail-panel">
-          <div className="card">
-            <div className="section-heading">
-              <div>
-                <p className="section-label">Selected review period</p>
-                <h3>{selectedReviewPeriod.label}</h3>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={selectedReviewPeriod.status === 'archived'}
-                  onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
+        {renderQuestionSetCard('self', selectedQuestionSets.self)}
+        {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
+
+        {questionSetDraft ? (
+          <section className="card">
+            <p className="section-label">
+              {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
+            </p>
+            <form className="stack-form" onSubmit={saveQuestionDraft}>
+              <label>
+                Title
+                <input
+                  value={questionSetDraft.title}
+                  onChange={(event) => setQuestionSetDraft({ ...questionSetDraft, title: event.target.value })}
+                />
+              </label>
+              <label>
+                Status
+                <select
+                  value={questionSetDraft.status}
+                  onChange={(event) =>
+                    setQuestionSetDraft({
+                      ...questionSetDraft,
+                      status: event.target.value as QuestionSetDraft['status'],
+                    })
+                  }
                 >
-                  Edit period
-                </button>
-            </div>
-            <dl className="detail-grid">
-              <div>
-                <dt>Window</dt>
-                <dd>
-                  {selectedReviewPeriod.startDate} → {selectedReviewPeriod.dueDate}
-                </dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>{selectedReviewPeriod.status}</dd>
-              </div>
-              <div>
-                <dt>Question sets</dt>
-                <dd>{selectedReviewPeriodSummary.questionSetCount}</dd>
-              </div>
-              <div>
-                <dt>Assignments</dt>
-                <dd>{selectedReviewPeriodSummary.assignmentCount}</dd>
-              </div>
-            </dl>
-            {selectedReviewPeriod.status === 'archived' ? (
-              <p className="toolbar-note">
-                Archived review periods stay visible here but question sets become read-only until an admin unarchives the cycle.
-              </p>
-            ) : null}
-            <div className="action-row">
-              <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('json')}>
-                Export JSON stub
-              </button>
-              <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleQuestionSetExport('csv')}>
-                Export CSV stub
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                onClick={() => void handleQuestionSetImport('json')}
-              >
-                Import JSON stub
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                onClick={() => void handleQuestionSetImport('csv')}
-              >
-                Import CSV stub
-              </button>
-            </div>
-          </div>
-
-          <div className="content-grid admin-question-grid">
-            {renderQuestionSetCard('self', selectedQuestionSets.self)}
-            {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
-          </div>
-
-          {questionSetDraft ? (
-            <section className="card">
-              <p className="section-label">
-                {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
-              </p>
-              <form className="stack-form" onSubmit={saveQuestionDraft}>
-                <label>
-                  Title
-                  <input
-                    value={questionSetDraft.title}
-                    onChange={(event) => setQuestionSetDraft({ ...questionSetDraft, title: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Status
-                  <select
-                    value={questionSetDraft.status}
-                    onChange={(event) =>
-                      setQuestionSetDraft({
-                        ...questionSetDraft,
-                        status: event.target.value as QuestionSetDraft['status'],
-                      })
-                    }
-                  >
-                    <option value="draft">draft</option>
-                    <option value="active">active</option>
-                  </select>
-                </label>
-                <label>
-                  Header markdown
-                  <textarea
-                    rows={3}
-                    value={questionSetDraft.headerMarkdown}
-                    onChange={(event) =>
-                      setQuestionSetDraft({ ...questionSetDraft, headerMarkdown: event.target.value })
-                    }
-                  />
-                </label>
-                <div className="admin-stack">
-                  {questionSetDraft.questions.map((question, index) => (
-                    <div className="subcard" key={question.id}>
-                      <div className="section-heading">
-                        <strong>Question {index + 1}</strong>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          disabled={questionSetDraft.questions.length === 1}
-                          onClick={() =>
-                            setQuestionSetDraft({
-                              ...questionSetDraft,
-                              questions: questionSetDraft.questions
-                                .filter((candidate) => candidate.id !== question.id)
-                                .map((candidate, candidateIndex) => ({
-                                  ...candidate,
-                                  order: candidateIndex + 1,
-                                })),
-                            })
-                          }
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <div className="form-columns">
-                        <label>
-                          Type
-                          <select
-                            value={question.type}
-                            onChange={(event) =>
-                              setQuestionSetDraft({
-                                ...questionSetDraft,
-                                questions: questionSetDraft.questions.map((candidate) =>
-                                  candidate.id === question.id
-                                    ? { ...candidate, type: event.target.value as QuestionSetDraft['questions'][number]['type'] }
-                                    : candidate,
-                                ),
-                              })
-                            }
-                          >
-                            <option value="subjective">subjective</option>
-                            <option value="ranking">ranking</option>
-                            <option value="narrative">narrative</option>
-                          </select>
-                        </label>
-                        <label>
-                          Category
-                          <input
-                            value={question.category}
-                            onChange={(event) =>
-                              setQuestionSetDraft({
-                                ...questionSetDraft,
-                                questions: questionSetDraft.questions.map((candidate) =>
-                                  candidate.id === question.id
-                                    ? { ...candidate, category: event.target.value }
-                                    : candidate,
-                                ),
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
+                  <option value="draft">draft</option>
+                  <option value="active">active</option>
+                </select>
+              </label>
+              <label>
+                Header markdown
+                <textarea
+                  rows={3}
+                  value={questionSetDraft.headerMarkdown}
+                  onChange={(event) =>
+                    setQuestionSetDraft({ ...questionSetDraft, headerMarkdown: event.target.value })
+                  }
+                />
+              </label>
+              <div className="admin-stack">
+                {questionSetDraft.questions.map((question, index) => (
+                  <div className="subcard" key={question.id}>
+                    <div className="section-heading">
+                      <strong>Question {index + 1}</strong>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={questionSetDraft.questions.length === 1}
+                        onClick={() =>
+                          setQuestionSetDraft({
+                            ...questionSetDraft,
+                            questions: questionSetDraft.questions
+                              .filter((candidate) => candidate.id !== question.id)
+                              .map((candidate, candidateIndex) => ({
+                                ...candidate,
+                                order: candidateIndex + 1,
+                              })),
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="form-columns">
                       <label>
-                        Prompt
-                        <textarea
-                          rows={3}
-                          value={question.prompt}
+                        Type
+                        <select
+                          value={question.type}
                           onChange={(event) =>
                             setQuestionSetDraft({
                               ...questionSetDraft,
                               questions: questionSetDraft.questions.map((candidate) =>
                                 candidate.id === question.id
-                                  ? { ...candidate, prompt: event.target.value }
+                                  ? { ...candidate, type: event.target.value as QuestionSetDraft['questions'][number]['type'] }
+                                  : candidate,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="subjective">subjective</option>
+                          <option value="ranking">ranking</option>
+                          <option value="narrative">narrative</option>
+                        </select>
+                      </label>
+                      <label>
+                        Category
+                        <input
+                          value={question.category}
+                          onChange={(event) =>
+                            setQuestionSetDraft({
+                              ...questionSetDraft,
+                              questions: questionSetDraft.questions.map((candidate) =>
+                                candidate.id === question.id
+                                  ? { ...candidate, category: event.target.value }
                                   : candidate,
                               ),
                             })
@@ -1626,53 +1952,70 @@ function App() {
                         />
                       </label>
                     </div>
-                  ))}
-                </div>
-                <div className="action-row">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() =>
-                      setQuestionSetDraft({
-                        ...questionSetDraft,
-                        questions: [
-                          ...questionSetDraft.questions,
-                          {
-                            id: window.crypto.randomUUID(),
-                            order: questionSetDraft.questions.length + 1,
-                            type: questionSetDraft.target === 'self' ? 'subjective' : 'ranking',
-                            category: '',
-                            prompt: '',
-                          },
-                        ],
-                      })
-                    }
-                  >
-                    Add question
-                  </button>
-                </div>
-                <label>
-                  Footer markdown
-                  <textarea
-                    rows={3}
-                    value={questionSetDraft.footerMarkdown}
-                    onChange={(event) =>
-                      setQuestionSetDraft({ ...questionSetDraft, footerMarkdown: event.target.value })
-                    }
-                  />
-                </label>
-                <div className="action-row">
-                  <button type="submit" disabled={isSavingReviewAdmin}>
-                    Save question set
-                  </button>
-                  <button type="button" className="secondary-button" onClick={() => setQuestionSetDraft(null)}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </section>
-          ) : null}
-        </section>
+                    <label>
+                      Prompt
+                      <textarea
+                        rows={3}
+                        value={question.prompt}
+                        onChange={(event) =>
+                          setQuestionSetDraft({
+                            ...questionSetDraft,
+                            questions: questionSetDraft.questions.map((candidate) =>
+                              candidate.id === question.id
+                                ? { ...candidate, prompt: event.target.value }
+                                : candidate,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    setQuestionSetDraft({
+                      ...questionSetDraft,
+                      questions: [
+                        ...questionSetDraft.questions,
+                        {
+                          id: window.crypto.randomUUID(),
+                          order: questionSetDraft.questions.length + 1,
+                          type: questionSetDraft.target === 'self' ? 'subjective' : 'ranking',
+                          category: '',
+                          prompt: '',
+                        },
+                      ],
+                    })
+                  }
+                >
+                  Add question
+                </button>
+              </div>
+              <label>
+                Footer markdown
+                <textarea
+                  rows={3}
+                  value={questionSetDraft.footerMarkdown}
+                  onChange={(event) =>
+                    setQuestionSetDraft({ ...questionSetDraft, footerMarkdown: event.target.value })
+                  }
+                />
+              </label>
+              <div className="action-row">
+                <button type="submit" disabled={isSavingReviewAdmin}>
+                  Save question set
+                </button>
+                <button type="button" className="secondary-button" onClick={() => setQuestionSetDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
       </main>
     );
   };
@@ -1693,7 +2036,7 @@ function App() {
         <section className="card">
           <div className="section-heading">
             <div>
-              <p className="section-label">Assignment matrix</p>
+              <p className="section-label">Review period</p>
               <h3>{selectedReviewPeriod.label}</h3>
             </div>
             <label className="inline-field">
@@ -1718,10 +2061,6 @@ function App() {
             <div>
               <dt>Saved assignments</dt>
               <dd>{selectedReviewPeriodSummary.assignmentCount}</dd>
-            </div>
-            <div>
-              <dt>Rule</dt>
-              <dd>Employee assessor matches the assigned peer reviewer.</dd>
             </div>
           </dl>
           <div className="action-row">
@@ -1748,12 +2087,10 @@ function App() {
               Import CSV stub
             </button>
           </div>
-          <div className="toolbar-note">
-            <p>Assignment edits now save through the API and keep each employee assessor aligned with the assigned peer reviewer.</p>
-          </div>
         </section>
 
         <section className="card">
+          <p className="section-label">Assignment matrix</p>
           <div className="assignment-table">
             <div className="assignment-header">
               <span>Employee</span>
@@ -1764,7 +2101,6 @@ function App() {
               <div className="assignment-row" key={row.employeeId}>
                 <div>
                   <strong>{row.employeeName}</strong>
-                  <p className="muted-copy">Assessor stays aligned with the assigned peer reviewer.</p>
                 </div>
                 <label>
                   <span className="sr-only">Manager for {row.employeeName}</span>
@@ -1835,103 +2171,112 @@ function App() {
     return (
       <main className="admin-stack">
         <section className="card">
-          <p className="section-label">Archive controls</p>
-          <h3>Review period archive and restore</h3>
-          <p>
-            Archive actions happen at the review-period level. Archived question sets and assessments stay visible here as read-only history.
-          </p>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Active review periods</p>
+              <h3>Archive review periods</h3>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                setArchivePanelsExpanded((currentState) => ({
+                  ...currentState,
+                  active: !currentState.active,
+                }))
+              }
+            >
+              {archivePanelsExpanded.active ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+          {archivePanelsExpanded.active ? (
+            <div className="archive-list">
+              {activeReviewPeriods.length ? (
+                activeReviewPeriods.map((reviewPeriod) => {
+                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                  return (
+                    <article className="archive-row" key={reviewPeriod.id}>
+                      <div>
+                        <strong>{reviewPeriod.label}</strong>
+                        <p className="muted-copy">
+                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • {summary.questionSetCount} question sets •{' '}
+                          {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
+                        </p>
+                      </div>
+                      <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}>
+                        Archive
+                      </button>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="muted-copy">No active review periods right now.</p>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="card">
-          <p className="section-label">Active review periods</p>
-          <div className="archive-grid">
-            {activeReviewPeriods.map((reviewPeriod) => {
-              const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
-              return (
-                <article className="subcard" key={reviewPeriod.id}>
-                  <div className="section-heading">
-                    <div>
-                      <h3>{reviewPeriod.label}</h3>
-                      <p className="muted-copy">
-                        {reviewPeriod.startDate} → {reviewPeriod.dueDate}
-                      </p>
-                    </div>
-                    <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}>
-                      Archive
-                    </button>
-                  </div>
-                  <dl className="detail-grid compact-detail-grid">
-                    <div>
-                      <dt>Question sets</dt>
-                      <dd>{summary.questionSetCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Assignments</dt>
-                      <dd>{summary.assignmentCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Assessments</dt>
-                      <dd>{summary.assessmentCount}</dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Archived review periods</p>
+              <h3>Restore archived review periods</h3>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                setArchivePanelsExpanded((currentState) => ({
+                  ...currentState,
+                  archived: !currentState.archived,
+                }))
+              }
+            >
+              {archivePanelsExpanded.archived ? 'Collapse' : 'Expand'}
+            </button>
           </div>
-        </section>
-
-        <section className="card">
-          <p className="section-label">Archived review periods</p>
-          <div className="archive-grid">
-            {archivedReviewPeriods.map((reviewPeriod) => {
-              const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
-              return (
-                <article className="subcard" key={reviewPeriod.id}>
-                  <div className="section-heading">
-                    <div>
-                      <h3>{reviewPeriod.label}</h3>
-                      <p className="muted-copy">
-                        Archived at {reviewPeriod.archivedAt ?? 'unknown'} by{' '}
-                        {getEmployeeName(reviewPeriod.archivedByEmployeeId)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={isSavingReviewAdmin}
-                      onClick={() => void handleArchiveToggle(reviewPeriod.id, false)}
-                    >
-                      Unarchive
-                    </button>
-                  </div>
-                  <dl className="detail-grid compact-detail-grid">
-                    <div>
-                      <dt>Question sets</dt>
-                      <dd>{summary.questionSetCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Archived assessments</dt>
-                      <dd>{summary.archivedAssessmentCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Reviewed</dt>
-                      <dd>{summary.reviewedAssessmentCount}</dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
-          </div>
+          {archivePanelsExpanded.archived ? (
+            <div className="archive-list">
+              {archivedReviewPeriods.length ? (
+                archivedReviewPeriods.map((reviewPeriod) => {
+                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                  return (
+                    <article className="archive-row" key={reviewPeriod.id}>
+                      <div>
+                        <strong>{reviewPeriod.label}</strong>
+                        <p className="muted-copy">
+                          Archived at {reviewPeriod.archivedAt ?? 'unknown'} by {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
+                          {summary.archivedAssessmentCount} archived assessments • {summary.reviewedAssessmentCount} reviewed
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={isSavingReviewAdmin}
+                        onClick={() => void handleArchiveToggle(reviewPeriod.id, false)}
+                      >
+                        Unarchive
+                      </button>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="muted-copy">No archived review periods yet.</p>
+              )}
+            </div>
+          ) : null}
         </section>
       </main>
     );
   };
 
   const renderDashboard = () => (
-    <main className="dashboard-grid">
+    <main className="admin-stack">
       <section className="card">
-        <p className="section-label">My profile</p>
-        <h3>{sessionUser?.fullName}</h3>
+        <p className="section-label">Dashboard overview</p>
+        <h3>{dashboardSnapshot?.dueLabel ?? 'Loading review cycle...'}</h3>
+        <p>{dashboardSnapshot?.reviewSummary ?? 'Loading assessment summary...'}</p>
+        {dashboardSnapshot?.adminSummary ? <p>{dashboardSnapshot.adminSummary}</p> : null}
         <dl className="detail-grid">
           <div>
             <dt>Role</dt>
@@ -1954,42 +2299,6 @@ function App() {
             <dd>{getEmployeeName(sessionUser?.assessorId ?? null)}</dd>
           </div>
         </dl>
-      </section>
-
-      <section className="card">
-        <p className="section-label">Cycle status</p>
-        <h3>{dashboardSnapshot?.dueLabel ?? 'Loading review cycle...'}</h3>
-        <p>{dashboardSnapshot?.reviewSummary ?? 'Loading assessment summary...'}</p>
-        {dashboardSnapshot?.adminSummary ? <p>{dashboardSnapshot.adminSummary}</p> : null}
-      </section>
-
-      <section className="card card-wide">
-        <p className="section-label">Assessment queues</p>
-        <div className="queue-grid">
-          {dashboardSnapshot?.queues.map((queue) => (
-            <article className="queue-card" key={queue.title}>
-              <h3>{queue.title}</h3>
-              {queue.items.length ? (
-                <ul className="queue-list">
-                  {queue.items.map((item) => (
-                    <li key={`${queue.title}-${item.title}`}>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p className="status-caption">{item.statusLabel}</p>
-                        <p>{item.detail}</p>
-                      </div>
-                      <button type="button" onClick={() => setSelectedAssessmentId(item.assessmentId)}>
-                        {item.actionLabel}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted-copy">none</p>
-              )}
-            </article>
-          )) ?? <p className="muted-copy">Loading assessment queues...</p>}
-        </div>
       </section>
 
       <section className="card">
@@ -2018,7 +2327,36 @@ function App() {
         </div>
       </section>
 
-      <section className="card card-wide">
+      <section className="card">
+        <p className="section-label">Assessment queues</p>
+        <div className="queue-stack">
+          {dashboardSnapshot?.queues.map((queue) => (
+            <article className="queue-card" key={queue.title}>
+              <h3>{queue.title}</h3>
+              {queue.items.length ? (
+                <ul className="queue-list">
+                  {queue.items.map((item) => (
+                    <li key={`${queue.title}-${item.title}`}>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p className="status-caption">{item.statusLabel}</p>
+                        <p>{item.detail}</p>
+                      </div>
+                      <button type="button" onClick={() => setSelectedAssessmentId(item.assessmentId)}>
+                        {item.actionLabel}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted-copy">none</p>
+              )}
+            </article>
+          )) ?? <p className="muted-copy">Loading assessment queues...</p>}
+        </div>
+      </section>
+
+      <section className="card">
         <p className="section-label">Assessment editor</p>
         {selectedAssessmentEditor ? (
           <div className="review-layout">
@@ -2109,46 +2447,78 @@ function App() {
   );
 
   const renderReviews = () => (
-    <main className="review-layout">
+    <main className="admin-stack">
       <section className="card review-sidebar">
         <div className="section-heading">
           <div>
             <p className="section-label">Review queues</p>
             <h3>Manager and admin review work</h3>
           </div>
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, false])))}
+            >
+              Collapse all
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, true])))}
+            >
+              Expand all
+            </button>
+          </div>
         </div>
 
         <div className="review-queue-stack">
           {reviewQueues.map((queue) => (
             <div className="subcard" key={queue.title}>
-              <h3>{queue.title}</h3>
-              {queue.items.length ? (
-                <div className="admin-list">
-                  {queue.items.map((item) => (
-                    <button
-                      type="button"
-                      className={`admin-list-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
-                      key={item.assessmentId}
-                      onClick={() => setSelectedReviewAssessmentId(item.assessmentId)}
-                    >
-                      <strong>{item.title}</strong>
-                      <small>{item.statusLabel}</small>
-                      <span>{item.detail}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted-copy">No items in this queue right now.</p>
-              )}
+              <button
+                type="button"
+                className="section-toggle"
+                onClick={() =>
+                  setExpandedReviewQueues((currentState) => ({
+                    ...currentState,
+                    [queue.title]: !(currentState[queue.title] ?? true),
+                  }))
+                }
+              >
+                <span>{queue.title}</span>
+                <span className="muted-copy">
+                  {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} •{' '}
+                  {expandedReviewQueues[queue.title] ?? true ? 'Collapse' : 'Expand'}
+                </span>
+              </button>
+              {expandedReviewQueues[queue.title] ?? true ? (
+                queue.items.length ? (
+                  <div className="admin-list">
+                    {queue.items.map((item) => (
+                      <button
+                        type="button"
+                        className={`admin-list-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
+                        key={item.assessmentId}
+                        onClick={() => handleSelectReviewAssessment(item.assessmentId)}
+                      >
+                        <strong>{item.title}</strong>
+                        <small>{item.statusLabel}</small>
+                        <span>{item.detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted-copy">No items in this queue right now.</p>
+                )
+              ) : null}
             </div>
           ))}
         </div>
       </section>
 
-      <section className="detail-panel">
-        {selectedReviewPanel ? (
-          <>
-            <section className="card">
+      {selectedReviewPanel ? (
+        <>
+          <section className="card">
               <div className="section-heading">
                 <div>
                   <p className="section-label">Review panel</p>
@@ -2317,15 +2687,14 @@ function App() {
                   Save reassignment
                 </button>
               </div>
-            </section>
-          </>
-        ) : (
-          <section className="card">
-            <p className="section-label">Review panel</p>
-            <p>Select a submitted or accepted assessment to review it.</p>
           </section>
-        )}
-      </section>
+        </>
+      ) : (
+        <section className="card">
+          <p className="section-label">Review panel</p>
+          <p>Select a submitted or accepted assessment to review it.</p>
+        </section>
+      )}
     </main>
   );
 
@@ -2503,6 +2872,15 @@ function App() {
                 Edit
               </button>
             ) : null}
+            {isAdmin && (selectedEmployeeDetail ?? selectedEmployee) ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => openPasswordDialog((selectedEmployeeDetail ?? selectedEmployee)!.id)}
+              >
+                Manage password
+              </button>
+            ) : null}
             {isAdmin ? (
               <button type="button" className="secondary-button" onClick={markEmployeeInactive}>
                 Remove
@@ -2510,52 +2888,16 @@ function App() {
             ) : null}
           </div>
         </div>
-
-        {isAdmin && selectedEmployeeDetail ? (
-          <div className="card">
-            <p className="section-label">Password management</p>
-            <h3>Admin password controls</h3>
-            <p>
-              {selectedEmployeeDetail.auth.passwordConfigured
-                ? 'This account can sign in with API-backed credentials.'
-                : 'This account still needs a password set before first sign-in.'}
-            </p>
-            <p className="muted-copy">
-              Last updated: {selectedEmployeeDetail.auth.lastPasswordChangeAt ?? 'Not set'}
-            </p>
-            {passwordStatus ? <p className="temporary-password">{passwordStatus}</p> : null}
-            {temporaryPassword ? (
-              <p className="temporary-password">Temporary password: {temporaryPassword}</p>
-            ) : null}
-            <label>
-              Set password
-              <input
-                type="password"
-                value={passwordDraft}
-                onChange={(event) => setPasswordDraft(event.target.value)}
-                placeholder="Enter a known password"
-              />
-            </label>
-            <div className="action-row">
-              <button type="button" onClick={saveKnownPassword} disabled={!passwordDraft.trim() || isUpdatingPassword}>
-                {isUpdatingPassword ? 'Updating…' : 'Set Password'}
-              </button>
-              <button type="button" className="secondary-button" onClick={handleResetPassword} disabled={isUpdatingPassword}>
-                Reset Password
-              </button>
-            </div>
-          </div>
-        ) : null}
       </section>
     );
   };
 
   const renderEmployees = () => (
-    <main className="employees-layout">
+    <main className="admin-stack">
       <section className="card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Active employees</p>
+            <p className="section-label">Employee roster</p>
             <h3>Employee roster</h3>
           </div>
           {isAdmin ? (
@@ -2568,48 +2910,213 @@ function App() {
         {isLoadingEmployees ? <p className="muted-copy">Loading employee roster...</p> : null}
 
         <div className="employee-roster-group">
-          {activeEmployees.map((employee) => (
-            <button
-              type="button"
-              className={`employee-row${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
-              key={employee.id}
-              onClick={() => {
-                setSelectedEmployeeId(employee.id);
-                resetEditingState();
-              }}
-            >
-              <span>{employee.fullName}</span>
-              <small>
-                {employee.role} • {employee.username}
-              </small>
-            </button>
-          ))}
+          <button
+            type="button"
+            className="section-toggle"
+            onClick={() =>
+              setEmployeeRosterExpanded((currentState) => ({
+                ...currentState,
+                active: !currentState.active,
+              }))
+            }
+          >
+            <span>Active employees</span>
+            <span className="muted-copy">
+              {activeEmployees.length} {activeEmployees.length === 1 ? 'employee' : 'employees'} •{' '}
+              {employeeRosterExpanded.active ? 'Collapse' : 'Expand'}
+            </span>
+          </button>
+          {employeeRosterExpanded.active ? (
+            activeEmployees.length ? (
+              activeEmployees.map((employee) => {
+                const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
+                return (
+                  <article
+                    className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
+                    key={employee.id}
+                  >
+                    <button
+                      type="button"
+                      className="employee-row-summary"
+                      onClick={() => {
+                        setSelectedEmployeeId(employee.id);
+                        resetEditingState();
+                      }}
+                    >
+                      <strong>{employee.fullName}</strong>
+                      <span>{employee.email}</span>
+                      <small>
+                        {employee.role} • Manager: {getEmployeeName(employee.managerId)} • Assessor: {getEmployeeName(employee.assessorId)}
+                      </small>
+                    </button>
+                    <div className="employee-row-actions">
+                      {canManageEmployees && canEditEmployeeRow ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            setSelectedEmployeeId(employee.id);
+                            startEditingEmployee(employee);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => openPasswordDialog(employee.id)}
+                        >
+                          Manage password
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="muted-copy">No active employees.</p>
+            )
+          ) : null}
         </div>
 
-        <p className="section-label roster-subheading">Inactive employees</p>
         <div className="employee-roster-group">
-          {inactiveEmployees.map((employee) => (
-            <button
-              type="button"
-              className={`employee-row${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
-              key={employee.id}
-              onClick={() => {
-                setSelectedEmployeeId(employee.id);
-                resetEditingState();
-              }}
-            >
-              <span>{employee.fullName}</span>
-              <small>
-                {employee.role} • {employee.username}
-              </small>
-            </button>
-          ))}
-        </div>
-
-        <div className="toolbar-note">
-          <p>Import and export remain out of scope while this slice focuses on the integrated auth and employee API workflow.</p>
+          <button
+            type="button"
+            className="section-toggle"
+            onClick={() =>
+              setEmployeeRosterExpanded((currentState) => ({
+                ...currentState,
+                inactive: !currentState.inactive,
+              }))
+            }
+          >
+            <span>Inactive employees</span>
+            <span className="muted-copy">
+              {inactiveEmployees.length} {inactiveEmployees.length === 1 ? 'employee' : 'employees'} •{' '}
+              {employeeRosterExpanded.inactive ? 'Collapse' : 'Expand'}
+            </span>
+          </button>
+          {employeeRosterExpanded.inactive ? (
+            inactiveEmployees.length ? (
+              inactiveEmployees.map((employee) => {
+                const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
+                return (
+                  <article
+                    className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
+                    key={employee.id}
+                  >
+                    <button
+                      type="button"
+                      className="employee-row-summary"
+                      onClick={() => {
+                        setSelectedEmployeeId(employee.id);
+                        resetEditingState();
+                      }}
+                    >
+                      <strong>{employee.fullName}</strong>
+                      <span>{employee.email}</span>
+                      <small>
+                        {employee.role} • Manager: {getEmployeeName(employee.managerId)} • Assessor: {getEmployeeName(employee.assessorId)}
+                      </small>
+                    </button>
+                    <div className="employee-row-actions">
+                      {canManageEmployees && canEditEmployeeRow ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            setSelectedEmployeeId(employee.id);
+                            startEditingEmployee(employee);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => openPasswordDialog(employee.id)}
+                        >
+                          Manage password
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="muted-copy">No inactive employees.</p>
+            )
+          ) : null}
         </div>
       </section>
+
+      {isAdmin ? (
+        <section className="card">
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Local user transfer</p>
+              <h3>Import or export local credentials</h3>
+            </div>
+            <label className="inline-field">
+              Format
+              <select
+                value={localUserTransferFormat}
+                disabled={isSyncingLocalUsers}
+                onChange={(event) => setLocalUserTransferFormat(event.target.value as TransferFormat)}
+              >
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+              </select>
+            </label>
+          </div>
+          <p className="muted-copy">
+            Exporting local users generates new one-time passcodes for every exported account, signs them out immediately,
+            and replaces their previous passwords.
+          </p>
+          <div className="action-row">
+            <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport()}>
+              {isSyncingLocalUsers ? 'Working…' : `Export ${localUserTransferFormat.toUpperCase()}`}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSyncingLocalUsers || !localUserImportDraft.trim()}
+              onClick={() => void handleLocalUserImport()}
+            >
+              Import {localUserTransferFormat.toUpperCase()}
+            </button>
+          </div>
+          {localUserTransferPreview ? (
+            <>
+              <p className="temporary-password">
+                Last export prepared {localUserTransferPreview.itemCount} users as {localUserTransferPreview.format.toUpperCase()} at{' '}
+                {localUserTransferPreview.exportedAt}.
+              </p>
+              <label className="stack-form">
+                <span>Latest export payload</span>
+                <textarea readOnly rows={8} value={localUserTransferPreview.content} />
+              </label>
+            </>
+          ) : null}
+          <label className="stack-form">
+            <span>Import payload</span>
+            <textarea
+              rows={8}
+              value={localUserImportDraft}
+              onChange={(event) => setLocalUserImportDraft(event.target.value)}
+              placeholder={localUserImportPlaceholder}
+            />
+          </label>
+          <p className="muted-copy">
+            Paste either the import-ready JSON export object or the matching CSV rows. Imported users keep whatever
+            password-reset requirement is present in the payload.
+          </p>
+        </section>
+      ) : null}
 
       {renderEmployeeDetail()}
     </main>
@@ -2617,62 +3124,146 @@ function App() {
 
   if (!sessionUser) {
     return (
-      <div className="login-shell">
-        <section className="login-card">
-          <p className="eyebrow">Revu</p>
-          <h1>Sign in to the assessment workspace</h1>
-          <p className="login-copy">
-            Use the API-backed local username and password flow to reach the integrated dashboard and employee administration screens.
-          </p>
+      <>
+        <style>{darkThemeStyleOverrides}</style>
+        <div className="login-shell" data-revu-theme={themePreference}>
+          <section className="login-card">
+            <p className="eyebrow">Revu</p>
+            <h1>Sign in to the assessment workspace</h1>
+            <p className="login-copy">
+              Use the API-backed local username and password flow to reach the integrated dashboard and employee
+              administration screens.
+            </p>
+            {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
+            {localUserTransferPreview ? (
+              <div className="card" style={{ marginTop: '1.5rem' }}>
+                <p className="section-label">Latest local-user export</p>
+                <h3>
+                  {localUserTransferPreview.itemCount} users • {localUserTransferPreview.format.toUpperCase()}
+                </h3>
+                <p className="muted-copy">
+                  Generated one-time passcodes replace the previous passwords. Copy this payload before closing the tab.
+                </p>
+                <label className="stack-form">
+                  <span>Import-ready payload</span>
+                  <textarea readOnly rows={8} value={localUserTransferPreview.content} />
+                </label>
+                <div className="action-row">
+                  <button type="button" className="secondary-button" onClick={() => setLocalUserTransferPreview(null)}>
+                    Dismiss payload
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-          <form className="stack-form" onSubmit={handleLogin}>
-            <label>
-              Username
-              <input value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-              />
-            </label>
-            {loginError ? <p className="form-error">{loginError}</p> : null}
-            <button type="submit" disabled={authLoading || isSubmittingLogin}>
-              {authLoading ? 'Checking session…' : isSubmittingLogin ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+            <form className="stack-form" onSubmit={handleLogin}>
+              <label>
+                Username
+                <input value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                />
+              </label>
+              {loginError ? <p className="form-error">{loginError}</p> : null}
+              <button type="submit" disabled={authLoading || isSubmittingLogin}>
+                {authLoading ? 'Checking session…' : isSubmittingLogin ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
 
-          <div className="demo-accounts">
-            <p className="section-label">Seeded API accounts</p>
-            <div className="demo-account-grid">
-              {demoAccounts.map((account) => (
-                <button
-                  className="demo-account-card"
-                  key={account.username}
-                  type="button"
-                  onClick={() => {
-                    setLoginUsername(account.username);
-                    setLoginPassword(account.password);
-                    setLoginError('');
-                  }}
-                >
-                  <strong>{account.fullName}</strong>
-                  <span>{account.role}</span>
-                  <small>{account.username}</small>
-                </button>
-              ))}
+            <div className="demo-accounts">
+              <p className="section-label">Seeded API accounts</p>
+              <div className="demo-account-grid">
+                {demoAccounts.map((account) => (
+                  <button
+                    className="demo-account-card"
+                    key={account.username}
+                    type="button"
+                    onClick={() => {
+                      setLoginUsername(account.username);
+                      setLoginPassword(account.password);
+                      setLoginError('');
+                    }}
+                  >
+                    <strong>{account.fullName}</strong>
+                    <span>{account.role}</span>
+                    <small>{account.username}</small>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      </>
+    );
+  }
+
+  if (passwordResetRequired) {
+    return (
+      <>
+        <style>{darkThemeStyleOverrides}</style>
+        <div className="login-shell" data-revu-theme={themePreference}>
+          <section className="login-card">
+            <p className="eyebrow">Password change required</p>
+            <h1>Set a new password to continue</h1>
+            <p className="login-copy">
+              This account signed in with a generated one-time passcode. Choose a new password before opening the rest
+              of the workspace.
+            </p>
+            <div className="session-card">
+              <p className="section-label">Signed in as</p>
+              <h2>{sessionUser.fullName}</h2>
+              <p>
+                {sessionUser.role} • {sessionUser.username}
+              </p>
+            </div>
+            {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
+            <form className="stack-form" onSubmit={handleChangeOwnPassword}>
+              <label>
+                Current password or one-time passcode
+                <input
+                  type="password"
+                  value={currentPasswordDraft}
+                  onChange={(event) => setCurrentPasswordDraft(event.target.value)}
+                />
+              </label>
+              <label>
+                New password
+                <input type="password" value={nextPasswordDraft} onChange={(event) => setNextPasswordDraft(event.target.value)} />
+              </label>
+              <label>
+                Confirm new password
+                <input
+                  type="password"
+                  value={confirmPasswordDraft}
+                  onChange={(event) => setConfirmPasswordDraft(event.target.value)}
+                />
+              </label>
+              {changePasswordError ? <p className="form-error">{changePasswordError}</p> : null}
+              <div className="action-row">
+                <button type="submit" disabled={isChangingOwnPassword}>
+                  {isChangingOwnPassword ? 'Updating password…' : 'Change password'}
+                </button>
+                <button type="button" className="secondary-button" onClick={handleLogout}>
+                  Sign out
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <>
+      <style>{darkThemeStyleOverrides}</style>
+      <div className="app-shell" data-revu-theme={themePreference}>
+        <aside className="sidebar">
         <div className="brand-block">
           <p className="eyebrow">Revu</p>
           <a className="brand-title-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
@@ -2715,10 +3306,24 @@ function App() {
           ))}
         </nav>
 
-        <div className="sidebar-note">
-          <p className="sidebar-note-title">Terminology guardrails</p>
-          <p>{routeLegend.assessments}</p>
-          <p>{routeLegend.reviews}</p>
+        <div style={{ marginTop: 'auto', display: 'grid', gap: '1rem' }}>
+          <div className="session-card">
+            <p className="section-label">Theme</p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setThemePreference((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
+            >
+              {themePreference === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            </button>
+            <p className="muted-copy">Saved in this browser.</p>
+          </div>
+
+          <div className="sidebar-note">
+            <p className="sidebar-note-title">Terminology guardrails</p>
+            <p>{routeLegend.assessments}</p>
+            <p>{routeLegend.reviews}</p>
+          </div>
         </div>
       </aside>
 
@@ -2728,6 +3333,7 @@ function App() {
             <span className="badge">Integrated API auth mode</span>
             <h2>{currentSection.title}</h2>
             <p>{currentSection.summary}</p>
+            {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
             {appError ? <p className="form-error">{appError}</p> : null}
             {adminNotice && isAdmin ? <p className="temporary-password">{adminNotice}</p> : null}
             {workflowNotice && (pathname === '/dashboard' || pathname === '/reviews') ? (
@@ -2760,8 +3366,74 @@ function App() {
                 : pathname === '/archive'
                   ? renderArchive()
             : renderPlaceholderSection()}
+
+        {isAdmin && passwordDialogEmployeeId ? (
+          <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>
+            <section
+              aria-modal="true"
+              className="card modal-card"
+              role="dialog"
+              aria-labelledby="password-dialog-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="section-heading">
+                <div>
+                  <p className="section-label">Password management</p>
+                  <h3 id="password-dialog-title">{passwordDialogEmployee?.fullName ?? 'Employee account'}</h3>
+                </div>
+                <button type="button" className="secondary-button" onClick={closePasswordDialog}>
+                  Close
+                </button>
+              </div>
+
+              {passwordDialogDetail ? (
+                <>
+                  <p>
+                    {passwordDialogDetail.auth.passwordConfigured
+                      ? passwordDialogDetail.auth.passwordResetRequired
+                        ? 'This account must use a one-time passcode and change it immediately after sign-in.'
+                        : 'This account can sign in with API-backed credentials.'
+                      : 'This account still needs a password set before first sign-in.'}
+                  </p>
+                  <p className="muted-copy">
+                    Last updated: {passwordDialogDetail.auth.lastPasswordChangeAt ?? 'Not set'}
+                  </p>
+                  {passwordStatus ? <p className="temporary-password">{passwordStatus}</p> : null}
+                  {temporaryPassword ? (
+                    <p className="temporary-password">One-time passcode: {temporaryPassword}</p>
+                  ) : null}
+                  <label className="stack-form">
+                    <span>Set known password</span>
+                    <input
+                      type="password"
+                      value={passwordDraft}
+                      onChange={(event) => setPasswordDraft(event.target.value)}
+                      placeholder="Enter a known password"
+                    />
+                  </label>
+                  <div className="action-row">
+                    <button type="button" onClick={saveKnownPassword} disabled={!passwordDraft.trim() || isUpdatingPassword}>
+                      {isUpdatingPassword ? 'Updating…' : 'Set Password'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleResetPassword}
+                      disabled={isUpdatingPassword}
+                    >
+                      Generate one-time passcode
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="muted-copy">Loading employee credentials…</p>
+              )}
+            </section>
+          </div>
+        ) : null}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

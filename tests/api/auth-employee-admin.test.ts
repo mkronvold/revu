@@ -2,11 +2,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  authChangePasswordResponseSchema,
   authLoginResponseSchema,
   authMeResponseSchema,
   deleteEmployeeResponseSchema,
   employeeResponseSchema,
   employeesListResponseSchema,
+  localUsersExportResponseSchema,
+  localUsersImportResponseSchema,
   resetEmployeePasswordResponseSchema,
   setEmployeePasswordResponseSchema,
 } from "@revu/contracts";
@@ -46,6 +49,7 @@ describe("auth and employee admin API", () => {
 
     const loginPayload = authLoginResponseSchema.parse(loginResponse.json());
     expect(loginPayload.session.user.role).toBe("admin");
+    expect(loginPayload.session.passwordResetRequired).toBe(false);
     expect(loginPayload.session.permissions).toContain("employees:create");
 
     const meResponse = await app.inject({
@@ -57,7 +61,9 @@ describe("auth and employee admin API", () => {
     });
 
     expect(meResponse.statusCode).toBe(200);
-    expect(authMeResponseSchema.parse(meResponse.json()).session.user.username).toBe("ada.admin");
+    const mePayload = authMeResponseSchema.parse(meResponse.json());
+    expect(mePayload.session.user.username).toBe("ada.admin");
+    expect(mePayload.session.passwordResetRequired).toBe(false);
 
     const logoutResponse = await app.inject({
       method: "POST",
@@ -206,7 +212,54 @@ describe("auth and employee admin API", () => {
     const resetPayload = resetEmployeePasswordResponseSchema.parse(resetPasswordResponse.json());
     expect(resetPayload.passwordResetRequired).toBe(true);
     expect((await login(app, "new.hire", "ReplacementPass123!")).statusCode).toBe(401);
-    expect((await login(app, "new.hire", resetPayload.temporaryPassword)).statusCode).toBe(200);
+    const resetLoginPayload = authLoginResponseSchema.parse((await login(app, "new.hire", resetPayload.temporaryPassword)).json());
+    expect(resetLoginPayload.session.passwordResetRequired).toBe(true);
+
+    const blockedFoundationResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${resetLoginPayload.session.token}`,
+      },
+    });
+    expect(blockedFoundationResponse.statusCode).toBe(403);
+
+    const resetMeResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${resetLoginPayload.session.token}`,
+      },
+    });
+    expect(resetMeResponse.statusCode).toBe(200);
+    expect(authMeResponseSchema.parse(resetMeResponse.json()).session.passwordResetRequired).toBe(true);
+
+    const changePasswordResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/password/change",
+      headers: {
+        authorization: `Bearer ${resetLoginPayload.session.token}`,
+      },
+      payload: {
+        currentPassword: resetPayload.temporaryPassword,
+        newPassword: "ChangedAfterReset123!",
+      },
+    });
+    expect(changePasswordResponse.statusCode).toBe(200);
+    const changedPasswordPayload = authChangePasswordResponseSchema.parse(changePasswordResponse.json());
+    expect(changedPasswordPayload.session.passwordResetRequired).toBe(false);
+
+    const foundationAfterChangeResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${changedPasswordPayload.session.token}`,
+      },
+    });
+    expect(foundationAfterChangeResponse.statusCode).toBe(200);
+
+    expect((await login(app, "new.hire", resetPayload.temporaryPassword)).statusCode).toBe(401);
+    expect((await login(app, "new.hire", "ChangedAfterReset123!")).statusCode).toBe(200);
 
     const deleteResponse = await app.inject({
       method: "DELETE",
@@ -217,6 +270,102 @@ describe("auth and employee admin API", () => {
     });
     expect(deleteResponse.statusCode).toBe(200);
     expect(deleteEmployeeResponseSchema.parse(deleteResponse.json()).deleted).toBe(true);
+  });
+
+  it("supports local user import/export with password transfer fields", async () => {
+    const exportApp = await createApp();
+    const exportAdminLogin = authLoginResponseSchema.parse((await login(exportApp, "ada.admin", "AdminPass123!")).json());
+
+    const exportResponse = await exportApp.inject({
+      method: "GET",
+      url: "/api/v1/employees/export?format=json",
+      headers: {
+        authorization: `Bearer ${exportAdminLogin.session.token}`,
+      },
+    });
+    expect(exportResponse.statusCode).toBe(200);
+    const exportPayload = localUsersExportResponseSchema.parse(exportResponse.json());
+    expect(exportPayload.itemCount).toBe(4);
+
+    const exportedAdmin = exportPayload.items.find((item) => item.username === "ada.admin");
+    expect(exportedAdmin).toBeDefined();
+    expect(exportedAdmin?.passwordResetRequired).toBe(true);
+
+    const exportedEmployee = exportPayload.items.find((item) => item.username === "elliot.employee");
+    expect(exportedEmployee).toBeDefined();
+    expect(exportedEmployee).toMatchObject({
+      managerUsername: "manny.manager",
+      assessorUsername: "pat.peer",
+      passwordResetRequired: true,
+    });
+    expect((await login(exportApp, "elliot.employee", "EmployeePass123!")).statusCode).toBe(401);
+    const exportedEmployeeLogin = authLoginResponseSchema.parse(
+      (await login(exportApp, "elliot.employee", exportedEmployee!.password)).json(),
+    );
+    expect(exportedEmployeeLogin.session.passwordResetRequired).toBe(true);
+
+    const exportAdminMeResponse = await exportApp.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${exportAdminLogin.session.token}`,
+      },
+    });
+    expect(exportAdminMeResponse.statusCode).toBe(401);
+    expect((await login(exportApp, "ada.admin", "AdminPass123!")).statusCode).toBe(401);
+    const exportedAdminLogin = authLoginResponseSchema.parse((await login(exportApp, "ada.admin", exportedAdmin!.password)).json());
+    expect(exportedAdminLogin.session.passwordResetRequired).toBe(true);
+
+    const importApp = await createApp();
+    const importAdminLogin = authLoginResponseSchema.parse((await login(importApp, "ada.admin", "AdminPass123!")).json());
+    const importResponse = await importApp.inject({
+      method: "POST",
+      url: "/api/v1/employees/import",
+      headers: {
+        authorization: `Bearer ${importAdminLogin.session.token}`,
+      },
+      payload: {
+        format: "json",
+        items: [
+          {
+            username: "elliot.employee",
+            fullName: "Elliot Employee Imported",
+            email: "elliot.imported@example.com",
+            role: "employee",
+            status: "active",
+            managerUsername: "manny.manager",
+            assessorUsername: "pat.peer",
+            password: "ImportedPass123!",
+            passwordResetRequired: true,
+          },
+          {
+            username: "new.transfer",
+            fullName: "New Transfer",
+            email: "new.transfer@example.com",
+            role: "employee",
+            status: "active",
+            managerUsername: "manny.manager",
+            assessorUsername: "pat.peer",
+            password: "TransferPass123!",
+            passwordResetRequired: false,
+          },
+        ],
+      },
+    });
+    expect(importResponse.statusCode).toBe(200);
+
+    const importPayload = localUsersImportResponseSchema.parse(importResponse.json());
+    expect(importPayload.createdCount).toBe(1);
+    expect(importPayload.updatedCount).toBe(1);
+    expect(importPayload.items.find((item) => item.username === "elliot.employee")?.auth.passwordResetRequired).toBe(true);
+    expect(importPayload.items.find((item) => item.username === "new.transfer")?.auth.passwordResetRequired).toBe(false);
+
+    expect((await login(importApp, "elliot.employee", "EmployeePass123!")).statusCode).toBe(401);
+    const importedEmployeeLogin = authLoginResponseSchema.parse((await login(importApp, "elliot.employee", "ImportedPass123!")).json());
+    expect(importedEmployeeLogin.session.passwordResetRequired).toBe(true);
+
+    const transferredUserLogin = authLoginResponseSchema.parse((await login(importApp, "new.transfer", "TransferPass123!")).json());
+    expect(transferredUserLogin.session.passwordResetRequired).toBe(false);
   });
 
   it("captures auth schema invariants in the migration", () => {

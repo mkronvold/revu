@@ -47,6 +47,18 @@ export const employeeAdminSchema = employeeSchema.extend({
   auth: employeeAuthMetadataSchema,
 });
 
+export const localUserTransferItemSchema = z.object({
+  username: usernameSchema,
+  fullName: z.string().min(1),
+  email: z.string().email(),
+  role: appRoleSchema,
+  status: employeeStatusSchema,
+  managerUsername: usernameSchema.nullable(),
+  assessorUsername: usernameSchema.nullable(),
+  password: z.string().min(8),
+  passwordResetRequired: z.boolean().default(false),
+});
+
 export const reviewPeriodSchema = z.object({
   id: idSchema,
   key: z.string().min(1),
@@ -131,6 +143,7 @@ export type AssessmentArchiveState = z.infer<typeof assessmentArchiveStateSchema
 export type Employee = z.infer<typeof employeeSchema>;
 export type EmployeeAuthMetadata = z.infer<typeof employeeAuthMetadataSchema>;
 export type EmployeeAdmin = z.infer<typeof employeeAdminSchema>;
+export type LocalUserTransferItem = z.infer<typeof localUserTransferItemSchema>;
 export type ReviewPeriod = z.infer<typeof reviewPeriodSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type QuestionSet = z.infer<typeof questionSetSchema>;

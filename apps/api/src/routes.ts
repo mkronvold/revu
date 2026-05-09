@@ -8,6 +8,8 @@ import {
   assessmentsListQuerySchema,
   assignmentResponseSchema,
   assignmentsListResponseSchema,
+  authChangePasswordRequestSchema,
+  authChangePasswordResponseSchema,
   authLoginRequestSchema,
   authLoginResponseSchema,
   authLogoutResponseSchema,
@@ -28,6 +30,9 @@ import {
   idSchema,
   importStubRequestSchema,
   importStubResponseSchema,
+  localUsersExportResponseSchema,
+  localUsersImportRequestSchema,
+  localUsersImportResponseSchema,
   questionSetResponseSchema,
   questionSetsListResponseSchema,
   reassignAssessmentRequestSchema,
@@ -90,10 +95,14 @@ function getBearerToken(request: FastifyRequest) {
   return header.slice("Bearer ".length);
 }
 
-function requireSession(request: FastifyRequest, store: ApiStore) {
+function requireSession(request: FastifyRequest, store: ApiStore, options?: { allowPasswordReset?: boolean }) {
   const session = store.getSession(getBearerToken(request));
   if (!session) {
     throw new ApiError(401, "Authentication required");
+  }
+
+  if (!options?.allowPasswordReset && session.passwordResetRequired) {
+    throw new ApiError(403, "Password change required before accessing this resource");
   }
 
   return session;
@@ -203,7 +212,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/auth/me", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = requireSession(request, store, { allowPasswordReset: true });
       return authMeResponseSchema.parse({ session });
     } catch (error) {
       return sendError(reply, error);
@@ -212,9 +221,21 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.post("/auth/logout", async (request, reply) => {
     try {
-      const session = requireSession(request, store);
+      const session = requireSession(request, store, { allowPasswordReset: true });
       store.logout(session.token);
       return authLogoutResponseSchema.parse({ success: true });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/auth/password/change", async (request, reply) => {
+    try {
+      const session = requireSession(request, store, { allowPasswordReset: true });
+      const body = parseWithSchema(authChangePasswordRequestSchema, request.body);
+      return authChangePasswordResponseSchema.parse(
+        store.changeOwnPassword(session.token, body.currentPassword, body.newPassword),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
@@ -282,6 +303,36 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["employees:delete"]);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return deleteEmployeeResponseSchema.parse(store.deleteEmployee(employeeId));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/employees/export", async (request, reply) => {
+    try {
+      const session = requireSession(request, store);
+      requirePermissions(session, ["employees:export"]);
+      const query = parseWithSchema(exportFormatQuerySchema, request.query);
+      return localUsersExportResponseSchema.parse(store.exportLocalUsers(query.format ?? "json"));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/employees/import", async (request, reply) => {
+    try {
+      const session = requireSession(request, store);
+      requirePermissions(session, ["employees:import"]);
+      const body = parseWithSchema(localUsersImportRequestSchema, request.body);
+      return localUsersImportResponseSchema.parse(
+        store.importLocalUsers(
+          body.format,
+          body.items.map((item) => ({
+            ...item,
+            passwordResetRequired: item.passwordResetRequired ?? false,
+          })),
+        ),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
