@@ -54,7 +54,6 @@ import {
 import {
   acceptReviewToApi,
   markReviewReviewedInApi,
-  reassignAssessmentInApi,
   rejectReviewToApi,
   saveAssessmentDraftToApi,
   saveReviewNotesToApi,
@@ -419,8 +418,6 @@ function App() {
   const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
-  const [reviewManagerDraft, setReviewManagerDraft] = useState('');
-  const [reviewAssessorDraft, setReviewAssessorDraft] = useState('');
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
@@ -935,14 +932,10 @@ function App() {
   useEffect(() => {
     if (!selectedReviewPanel) {
       setReviewNotesDraft('');
-      setReviewManagerDraft('');
-      setReviewAssessorDraft('');
       return;
     }
 
     setReviewNotesDraft(selectedReviewPanel.managerNotes);
-    setReviewManagerDraft(selectedReviewPanel.currentManagerId ?? '');
-    setReviewAssessorDraft(selectedReviewPanel.currentAssessorId);
   }, [selectedReviewPanel]);
 
   useEffect(() => {
@@ -1155,8 +1148,6 @@ function App() {
     setAssessmentResponsesDraft({});
     setSelectedReviewAssessmentId(null);
     setReviewNotesDraft('');
-    setReviewManagerDraft('');
-    setReviewAssessorDraft('');
     setWorkflowNotice('');
     setAreReviewQueuesExpanded(true);
     setArchivePanelsExpanded({
@@ -1798,36 +1789,6 @@ function App() {
     try {
       const { notice } = await markReviewReviewedInApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
       await refreshFoundationSnapshot();
-      setWorkflowNotice(notice);
-    } catch (error) {
-      setAppError(getErrorMessage(error));
-    } finally {
-      setIsSavingAssessmentWorkflow(false);
-    }
-  };
-
-  const handleReassignReview = async () => {
-    if (!selectedReviewPanel || !sessionToken) {
-      return;
-    }
-
-    setIsSavingAssessmentWorkflow(true);
-    setAppError('');
-    setWorkflowNotice('');
-
-    try {
-      const { reassignment, notice } = await reassignAssessmentInApi(
-        sessionToken,
-        selectedReviewPanel,
-        reviewManagerDraft || null,
-        selectedReviewPanel.canReassignAssessor ? reviewAssessorDraft || null : null,
-      );
-      syncEmployeeRelationships(
-        reassignment.employee.id,
-        reassignment.employee.managerId,
-        reassignment.employee.assessorId,
-      );
-      await Promise.all([refreshFoundationSnapshot(), refreshEmployeeDirectory()]);
       setWorkflowNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -3326,7 +3287,7 @@ function App() {
               <div className="review-response-header">
                 <span>Question</span>
                 <span>Response</span>
-                <span>Details</span>
+                <span>Category</span>
               </div>
               {selectedReviewPanel.questions.map((question) => (
                 <div className="review-response-row" key={question.questionId}>
@@ -3342,61 +3303,10 @@ function App() {
                       : 'No response provided yet.'}
                   </div>
                   <div className="review-response-meta">
-                    <span>{question.type}</span>
                     <span>{question.category ?? 'Uncategorized'}</span>
                   </div>
                 </div>
               ))}
-            </div>
-          </section>
-
-          <section className="review-dialog-section">
-            <p className="section-label">Adjust assignments</p>
-            <div className="form-columns">
-              <label className="inline-field">
-                <span>Manager</span>
-                <select
-                  disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                  value={reviewManagerDraft}
-                  onChange={(event) => setReviewManagerDraft(event.target.value)}
-                >
-                  <option value="">Not assigned</option>
-                  {managerOptions.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.fullName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selectedReviewPanel.targetLabel === 'Peer assessment' ? (
-                <label className="inline-field">
-                  <span>Peer reviewer</span>
-                  <select
-                    disabled={
-                      !selectedReviewPanel.canReassignAssessor ||
-                      selectedReviewPanel.isArchived ||
-                      isSavingAssessmentWorkflow
-                    }
-                    value={reviewAssessorDraft}
-                    onChange={(event) => setReviewAssessorDraft(event.target.value)}
-                  >
-                    {activeEmployees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-            <div className="action-row">
-              <button
-                type="button"
-                disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                onClick={() => void handleReassignReview()}
-              >
-                Save assignment changes
-              </button>
             </div>
           </section>
 

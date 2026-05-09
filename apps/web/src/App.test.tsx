@@ -793,6 +793,22 @@ describe('reviews screen', () => {
     expect(container.textContent).toContain('Responses');
     expect(container.textContent).toContain('Review notes');
     expect(container.textContent).not.toContain('Review panel');
+    expect(container.textContent).not.toContain('Adjust assignments');
+    expect(container.textContent).not.toContain('Details');
+
+    const dialog = container.querySelector('[role="dialog"]');
+    const responseHeaderLabels = Array.from(dialog?.querySelectorAll('.review-response-header span') ?? []).map((cell) =>
+      cell.textContent?.trim(),
+    );
+    expect(responseHeaderLabels).toEqual(['Question', 'Response', 'Category']);
+
+    const responseMetaCells = Array.from(dialog?.querySelectorAll('.review-response-meta') ?? []);
+    expect(responseMetaCells.length).toBeGreaterThan(0);
+    expect(responseMetaCells.every((cell) => cell.querySelectorAll('span').length === 1)).toBe(true);
+    const responseMetaText = responseMetaCells.map((cell) => cell.textContent?.toLowerCase() ?? '').join(' ');
+    expect(responseMetaText).not.toContain('subjective');
+    expect(responseMetaText).not.toContain('ranking');
+    expect(responseMetaText).not.toContain('narrative');
 
     const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
     expect(closeButton).toBeTruthy();
