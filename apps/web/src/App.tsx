@@ -188,6 +188,22 @@ function getErrorMessage(error: unknown) {
   return 'Something went wrong while talking to the API.';
 }
 
+function formatLocalizedDateTime(value: string | null) {
+  if (!value) {
+    return 'Not set';
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(timestamp);
+}
+
 function App() {
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
@@ -2780,7 +2796,7 @@ function App() {
             </div>
             <div>
               <dt>Last password change</dt>
-              <dd>{selectedEmployeeDetail?.auth.lastPasswordChangeAt ?? 'Not set'}</dd>
+              <dd>{formatLocalizedDateTime(selectedEmployeeDetail?.auth.lastPasswordChangeAt ?? null)}</dd>
             </div>
           </dl>
           <div className="action-row">
@@ -2820,11 +2836,74 @@ function App() {
   const renderEmployees = () => (
     <main className="admin-stack">
       <section className="card">
+        {(() => {
+          const renderEmployeeRosterRow = (employee: Employee) => {
+            const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
+
+            return (
+              <article
+                className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
+                key={employee.id}
+              >
+                <div className="employee-row-line">
+                  <button
+                    type="button"
+                    className="employee-row-summary"
+                    onClick={() => {
+                      setSelectedEmployeeId(employee.id);
+                      resetEditingState();
+                    }}
+                  >
+                    <strong>{employee.fullName}</strong>
+                    <span className="employee-row-divider" aria-hidden="true">
+                      |
+                    </span>
+                    <span>{employee.email}</span>
+                    <span className="employee-row-divider" aria-hidden="true">
+                      |
+                    </span>
+                    <span>{employee.role}</span>
+                    <span className="employee-row-divider" aria-hidden="true">
+                      |
+                    </span>
+                    <span>Manager: {getEmployeeName(employee.managerId)}</span>
+                    <span className="employee-row-divider" aria-hidden="true">
+                      |
+                    </span>
+                    <span>Assessor: {getEmployeeName(employee.assessorId)}</span>
+                  </button>
+                  <div className="employee-row-actions">
+                    {canManageEmployees && canEditEmployeeRow ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          setSelectedEmployeeId(employee.id);
+                          startEditingEmployee(employee);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => openPasswordDialog(employee.id)}
+                      >
+                        Password
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          };
+
+          return (
+            <>
         <div className="section-heading">
-          <div>
-            <p className="section-label">Employee roster</p>
-            <h3>Employee roster</h3>
-          </div>
+          <p className="section-label">Employee roster</p>
           {isAdmin ? (
             <button type="button" onClick={startAddingEmployee}>
               Add employee
@@ -2853,53 +2932,7 @@ function App() {
           </button>
           {employeeRosterExpanded.active ? (
             activeEmployees.length ? (
-              activeEmployees.map((employee) => {
-                const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
-                return (
-                  <article
-                    className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
-                    key={employee.id}
-                  >
-                    <button
-                      type="button"
-                      className="employee-row-summary"
-                      onClick={() => {
-                        setSelectedEmployeeId(employee.id);
-                        resetEditingState();
-                      }}
-                    >
-                      <strong>{employee.fullName}</strong>
-                      <span>{employee.email}</span>
-                      <small>
-                        {employee.role} • Manager: {getEmployeeName(employee.managerId)} • Assessor: {getEmployeeName(employee.assessorId)}
-                      </small>
-                    </button>
-                    <div className="employee-row-actions">
-                      {canManageEmployees && canEditEmployeeRow ? (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => {
-                            setSelectedEmployeeId(employee.id);
-                            startEditingEmployee(employee);
-                          }}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => openPasswordDialog(employee.id)}
-                        >
-                          Manage password
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })
+              activeEmployees.map(renderEmployeeRosterRow)
             ) : (
               <p className="muted-copy">No active employees.</p>
             )
@@ -2925,58 +2958,15 @@ function App() {
           </button>
           {employeeRosterExpanded.inactive ? (
             inactiveEmployees.length ? (
-              inactiveEmployees.map((employee) => {
-                const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
-                return (
-                  <article
-                    className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
-                    key={employee.id}
-                  >
-                    <button
-                      type="button"
-                      className="employee-row-summary"
-                      onClick={() => {
-                        setSelectedEmployeeId(employee.id);
-                        resetEditingState();
-                      }}
-                    >
-                      <strong>{employee.fullName}</strong>
-                      <span>{employee.email}</span>
-                      <small>
-                        {employee.role} • Manager: {getEmployeeName(employee.managerId)} • Assessor: {getEmployeeName(employee.assessorId)}
-                      </small>
-                    </button>
-                    <div className="employee-row-actions">
-                      {canManageEmployees && canEditEmployeeRow ? (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => {
-                            setSelectedEmployeeId(employee.id);
-                            startEditingEmployee(employee);
-                          }}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => openPasswordDialog(employee.id)}
-                        >
-                          Manage password
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })
+              inactiveEmployees.map(renderEmployeeRosterRow)
             ) : (
               <p className="muted-copy">No inactive employees.</p>
             )
           ) : null}
         </div>
+            </>
+          );
+        })()}
       </section>
 
       {isAdmin ? (
@@ -3315,14 +3305,16 @@ function App() {
               {passwordDialogDetail ? (
                 <>
                   <p>
-                    {passwordDialogDetail.auth.passwordConfigured
-                      ? passwordDialogDetail.auth.passwordResetRequired
-                        ? 'This account must use a one-time passcode and change it immediately after sign-in.'
-                        : 'This account can sign in with API-backed credentials.'
-                      : 'This account still needs a password set before first sign-in.'}
+                    {passwordDialogDetail.status === 'inactive'
+                      ? 'This account is inactive.'
+                      : passwordDialogDetail.auth.passwordConfigured
+                        ? passwordDialogDetail.auth.passwordResetRequired
+                          ? 'This account must use a one-time passcode and change it immediately after sign-in.'
+                          : 'This account can sign in.'
+                        : 'This account needs a password before first sign-in.'}
                   </p>
                   <p className="muted-copy">
-                    Last updated: {passwordDialogDetail.auth.lastPasswordChangeAt ?? 'Not set'}
+                    Last updated: {formatLocalizedDateTime(passwordDialogDetail.auth.lastPasswordChangeAt)}
                   </p>
                   {passwordStatus ? <p className="temporary-password">{passwordStatus}</p> : null}
                   {temporaryPassword ? (

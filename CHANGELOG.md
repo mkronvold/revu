@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Simplified the Employees roster into single-line entries and localized password dialog/account timestamps
 - Tightened the sidebar brand row, utility panel placement, signed-in card spacing, and global button height
 - Replaced the sidebar light/dark toggle with a cycling multi-theme switcher and added Spring, Summer, Autumn, and Winter Nights palettes
 - Fixed deployed runtime company-name branding so the sidebar title reads the current `.env` value instead of a cached default
