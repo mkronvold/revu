@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed deployed runtime company-name branding so the sidebar title reads the current `.env` value instead of a cached default
 - Refined the Reviews screen terminology, queue density, status display, and subjective response formatting
 - Added a root `test.sh` helper to run the full workspace validation flow
 - Reworked the dashboard, reviews, employees, questions, assignments, and archive admin screens into the new single-column, collapsible layouts
