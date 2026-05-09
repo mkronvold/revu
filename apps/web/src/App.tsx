@@ -2173,41 +2173,6 @@ function App() {
               Edit period
             </button>
           </div>
-          <div className="action-row">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isSavingReviewAdmin}
-              onClick={() => void handleQuestionSetExport('json')}
-            >
-              Export JSON stub
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={isSavingReviewAdmin}
-              onClick={() => void handleQuestionSetExport('csv')}
-            >
-              Export CSV stub
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-              onClick={() => void handleQuestionSetImport('json')}
-            >
-              Import JSON stub
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-              onClick={() => void handleQuestionSetImport('csv')}
-            >
-              Import CSV stub
-            </button>
-          </div>
-
           {reviewPeriodDraft ? (
             <form className="stack-form" onSubmit={saveReviewPeriodDraft}>
               <label>
@@ -2687,6 +2652,175 @@ function App() {
   };
 
   const renderArchive = () => <main className="admin-stack">{renderArchiveContent()}</main>;
+
+  const renderLocalUserTransferCard = () => {
+    if (!isAdmin) {
+      return null;
+    }
+
+    return (
+      <section className="card admin-section-card file-management-transfer-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Employees</p>
+            <h3>Local user transfer files</h3>
+          </div>
+        </div>
+        <p className="muted-copy">
+          Export or import employee accounts here. The employee directory stays focused on editing people, roles, and
+          passwords.
+        </p>
+        <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
+          {localUserExportModeOptions.map((option) => (
+            <label
+              key={option.value}
+              className={`local-user-export-mode-option${localUserExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="local-user-export-mode"
+                value={option.value}
+                checked={localUserExportMode === option.value}
+                onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
+              />
+              <span className="local-user-export-mode-copy">
+                <strong>{option.label}</strong>
+                <span className="muted-copy">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="action-row">
+          <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
+            {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSyncingLocalUsers}
+            onClick={() => void handleLocalUserExport('csv')}
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSyncingLocalUsers}
+            onClick={() => void handleLocalUserImport()}
+          >
+            Import users
+          </button>
+        </div>
+        <input
+          ref={localUserImportInputRef}
+          type="file"
+          accept=".json,.csv,application/json,text/csv,text/plain"
+          style={{ display: 'none' }}
+          onChange={(event) => void handleLocalUserImportFileChange(event)}
+        />
+      </section>
+    );
+  };
+
+  const renderQuestionTransferCard = () => {
+    if (!reviewAdmin || !selectedReviewPeriod || !selectedReviewPeriodSummary) {
+      return (
+        <section className="card admin-section-card file-management-transfer-card">
+          <p className="section-label">Questions</p>
+          <h3>Question set transfer files</h3>
+          <p className="muted-copy">Loading review period transfer tools...</p>
+        </section>
+      );
+    }
+
+    return (
+      <section className="card admin-section-card file-management-transfer-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Questions</p>
+            <h3>Question set transfer files</h3>
+          </div>
+          <label className="inline-field review-period-picker">
+            <span className="sr-only">Review period</span>
+            <select
+              value={selectedReviewPeriod.id}
+              onChange={(event) => {
+                setSelectedReviewPeriodId(event.target.value);
+                setQuestionSetDraft(null);
+              }}
+            >
+              {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
+                <option key={reviewPeriod.id} value={reviewPeriod.id}>
+                  {reviewPeriod.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="muted-copy">
+          Run question-set import and export actions for the selected review period here. Question editing stays on the
+          Questions page.
+        </p>
+        <dl className="detail-grid compact-detail-grid">
+          <div>
+            <dt>Window</dt>
+            <dd>
+              {selectedReviewPeriod.startDate} → {selectedReviewPeriod.dueDate}
+            </dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{selectedReviewPeriod.status}</dd>
+          </div>
+          <div>
+            <dt>Question sets</dt>
+            <dd>{selectedReviewPeriodSummary.questionSetCount}</dd>
+          </div>
+          <div>
+            <dt>Assignments</dt>
+            <dd>{selectedReviewPeriodSummary.assignmentCount}</dd>
+          </div>
+        </dl>
+        {selectedReviewPeriod.status === 'archived' ? (
+          <p className="toolbar-note">Question-set imports stay disabled while this review period is archived.</p>
+        ) : null}
+        <div className="action-row">
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSavingReviewAdmin}
+            onClick={() => void handleQuestionSetExport('json')}
+          >
+            Export JSON
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSavingReviewAdmin}
+            onClick={() => void handleQuestionSetExport('csv')}
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+            onClick={() => void handleQuestionSetImport('json')}
+          >
+            Import JSON
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+            onClick={() => void handleQuestionSetImport('csv')}
+          >
+            Import CSV
+          </button>
+        </div>
+      </section>
+    );
+  };
 
   const renderDashboard = () => (
     <main className="admin-stack">
@@ -3320,14 +3454,31 @@ function App() {
   const renderFileManagement = () => (
     <main className="admin-stack">
       <section className="card">
-        <p className="section-label">Current scope</p>
-        <h3>Archive and backup controls</h3>
+        <p className="section-label">Admin workspace</p>
+        <h3>File Management</h3>
         <p>
-          Archive review periods and run backup or restore tasks from one admin workspace. Remaining import and export
-          tools will move into File Management in the next slice.
+          Run employee transfers, question-set transfers, archive actions, and full backup tasks from one consolidated
+          admin page.
         </p>
       </section>
+
+      <div className="file-management-card-grid">
+        {renderLocalUserTransferCard()}
+        {renderQuestionTransferCard()}
+      </div>
+
+      <section className="card">
+        <p className="section-label">Review period lifecycle</p>
+        <h3>Archive review periods</h3>
+        <p>Archive completed cycles or reopen archived ones before editing review data again.</p>
+      </section>
       {renderArchiveContent()}
+
+      <section className="card">
+        <p className="section-label">Backups</p>
+        <h3>Backup and restore</h3>
+        <p>Runtime backup status, full backup downloads, and restore actions remain available here unchanged.</p>
+      </section>
       {renderBackupsContent()}
     </main>
   );
@@ -3658,63 +3809,6 @@ function App() {
           )}
         </section>
 
-        {isAdmin ? (
-          <section className="card">
-            <div className="section-heading">
-              <div>
-                <p className="section-label">Import/Export users</p>
-              </div>
-            </div>
-            <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
-              {localUserExportModeOptions.map((option) => (
-                <label
-                  key={option.value}
-                  className={`local-user-export-mode-option${localUserExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="local-user-export-mode"
-                    value={option.value}
-                    checked={localUserExportMode === option.value}
-                    onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
-                  />
-                  <span className="local-user-export-mode-copy">
-                    <strong>{option.label}</strong>
-                    <span className="muted-copy">{option.description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="action-row">
-              <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
-                {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isSyncingLocalUsers}
-                onClick={() => void handleLocalUserExport('csv')}
-              >
-                Export CSV
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isSyncingLocalUsers}
-                onClick={() => void handleLocalUserImport()}
-              >
-                Import Users
-              </button>
-              <input
-                ref={localUserImportInputRef}
-                type="file"
-                accept=".json,.csv,application/json,text/csv,text/plain"
-                style={{ display: 'none' }}
-                onChange={(event) => void handleLocalUserImportFileChange(event)}
-              />
-            </div>
-          </section>
-        ) : null}
       </main>
     );
   };

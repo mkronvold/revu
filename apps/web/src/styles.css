@@ -923,6 +923,16 @@ button.employee-row:focus-visible {
   color: inherit;
 }
 
+.file-management-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.file-management-card-grid > .card {
+  min-height: 100%;
+}
+
 .warning-banner {
   display: grid;
   gap: 0.35rem;

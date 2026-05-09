@@ -67,9 +67,13 @@ import App from './App';
 import {
   acceptAssessment,
   exportBackup,
+  exportLocalUsers,
+  exportQuestionSets,
   getBackupStatus,
   getEmployee,
   getFoundation,
+  importLocalUsers,
+  importQuestionSets,
   listEmployees,
   listQuestionCategories,
   me,
@@ -259,6 +263,12 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Self questions') ?? false);
 
+    const reviewPeriodCard = container.querySelector('.review-period-card');
+    expect(reviewPeriodCard?.textContent).not.toContain('Export JSON');
+    expect(reviewPeriodCard?.textContent).not.toContain('Export CSV');
+    expect(reviewPeriodCard?.textContent).not.toContain('Import JSON');
+    expect(reviewPeriodCard?.textContent).not.toContain('Import CSV');
+
     const questionSetCard = container.querySelector('.question-set-card');
     expect(questionSetCard?.innerHTML).toContain('<strong>Lead with clarity</strong>');
     expect(questionSetCard?.innerHTML).toContain('<br');
@@ -393,8 +403,11 @@ describe('file management screen', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders backup status, downloads backups, and restores uploaded backup targets', async () => {
+  it('renders consolidated transfer cards, archive controls, and backup restore tools', async () => {
     const backup = createBackupExample();
+    const questionSnapshot = cloneQuestionSlice();
+    const selectedReviewPeriod = questionSnapshot.reviewPeriods[0]!;
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const session: AuthSession = {
       ...adminLoginExample.session,
       permissions: [
@@ -409,11 +422,68 @@ describe('file management screen', () => {
     };
 
     vi.mocked(me).mockResolvedValue({ session });
-    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(getFoundation).mockResolvedValue(questionSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(exportLocalUsers).mockResolvedValue({
+      format: 'json',
+      mode: 'preserve-passwords',
+      exportedAt: '2026-06-03T07:45:00.000Z',
+      itemCount: 2,
+      items: [
+        {
+          id: adminEmployeeExample.item.id,
+          username: adminEmployeeExample.item.username,
+          fullName: adminEmployeeExample.item.fullName,
+          email: adminEmployeeExample.item.email,
+          role: adminEmployeeExample.item.role,
+          status: adminEmployeeExample.item.status,
+          managerUsername: null,
+          assessorUsername: null,
+          password: '',
+          credentialKind: 'password',
+          passwordResetRequired: false,
+        },
+        {
+          id: elliot.id,
+          username: elliot.username,
+          fullName: elliot.fullName,
+          email: elliot.email,
+          role: elliot.role,
+          status: elliot.status,
+          managerUsername: 'manny.manager',
+          assessorUsername: 'pat.peer',
+          password: '',
+          credentialKind: 'password',
+          passwordResetRequired: false,
+        },
+      ],
+    });
+    vi.mocked(importLocalUsers).mockResolvedValue({
+      format: 'json',
+      importedAt: '2026-06-03T07:50:00.000Z',
+      itemCount: 1,
+      createdCount: 0,
+      updatedCount: 1,
+      items: [createEmployeeDetail(elliot.id).item],
+    });
+    vi.mocked(exportQuestionSets).mockResolvedValue({
+      reviewPeriodId: selectedReviewPeriod.id,
+      resource: 'questionSets',
+      format: 'json',
+      exportedAt: '2026-06-03T08:00:00.000Z',
+      stub: true,
+      itemCount: 2,
+    });
+    vi.mocked(importQuestionSets).mockResolvedValue({
+      reviewPeriodId: selectedReviewPeriod.id,
+      resource: 'questionSets',
+      accepted: false,
+      status: 'not_implemented',
+      supportedFormats: ['json', 'csv'],
+    });
     vi.mocked(exportBackup).mockResolvedValue(backup);
     vi.mocked(restoreBackup).mockResolvedValue({
       mode: 'replace',
@@ -437,10 +507,98 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('Runtime backup configuration') ?? false);
 
     expect(window.location.pathname).toBe('/file-management');
+    expect(container.textContent).toContain('Local user transfer files');
+    expect(container.textContent).toContain('Question set transfer files');
     expect(container.textContent).toContain('Archive review periods');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');
+
+    const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
+    const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Local user transfer files'));
+    const questionTransferCard = transferCards.find((card) => card.textContent?.includes('Question set transfer files'));
+    expect(localUserTransferCard).toBeTruthy();
+    expect(questionTransferCard).toBeTruthy();
+
+    const localUserExportButton = Array.from(localUserTransferCard?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Export JSON',
+    );
+    expect(localUserExportButton).toBeTruthy();
+
+    await act(async () => {
+      localUserExportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(exportLocalUsers).toHaveBeenCalledWith('session-token', 'json', 'rotate-passcodes');
+
+    const localUserInput = localUserTransferCard?.querySelector(
+      'input[type="file"][accept=".json,.csv,application/json,text/csv,text/plain"]',
+    ) as HTMLInputElement | null;
+    expect(localUserInput).toBeTruthy();
+
+    const importedUsersFile = new File(
+      [
+        JSON.stringify({
+          format: 'json',
+          items: [
+            {
+              username: elliot.username,
+              fullName: elliot.fullName,
+              email: elliot.email,
+              role: elliot.role,
+              status: elliot.status,
+              managerUsername: 'manny.manager',
+              assessorUsername: 'pat.peer',
+              password: 'EmployeePass123!',
+            },
+          ],
+        }),
+      ],
+      'local-users.json',
+      { type: 'application/json' },
+    );
+    Object.defineProperty(localUserInput!, 'files', {
+      configurable: true,
+      value: [importedUsersFile],
+    });
+
+    await act(async () => {
+      localUserInput!.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(importLocalUsers).mock.calls.length === 1);
+    expect(importLocalUsers).toHaveBeenCalledWith(
+      'session-token',
+      expect.objectContaining({
+        format: 'json',
+        items: [
+          expect.objectContaining({
+            username: elliot.username,
+            fullName: elliot.fullName,
+          }),
+        ],
+      }),
+    );
+
+    const questionExportButton = Array.from(questionTransferCard?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Export JSON',
+    );
+    const questionImportButton = Array.from(questionTransferCard?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Import CSV',
+    );
+    expect(questionExportButton).toBeTruthy();
+    expect(questionImportButton).toBeTruthy();
+
+    await act(async () => {
+      questionExportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      questionImportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(exportQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, 'json');
+    expect(importQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, { format: 'csv' });
 
     const downloadButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Backup now / download',
@@ -768,6 +926,8 @@ describe('employees screen', () => {
     expect(container.textContent).toContain('Status');
     expect(container.textContent).not.toContain('Active employees');
     expect(container.textContent).not.toContain('Inactive employees');
+    expect(container.textContent).not.toContain('Local user transfer files');
+    expect(container.textContent).not.toContain('Import users');
 
     const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
       row.textContent?.includes('Elliot Employee'),
