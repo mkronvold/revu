@@ -16,13 +16,6 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
-
 if ! command -v docker >/dev/null 2>&1; then
   printf 'docker is required to reset the example dataset.\n' >&2
   exit 1

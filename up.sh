@@ -128,5 +128,11 @@ reconcile_env_file
 printf 'Pulling deployment images...\n'
 docker compose pull
 
+printf 'Applying database migrations...\n'
+bash ./scripts/db-migrate.sh
+
+printf 'Bootstrapping example data when needed...\n'
+bash ./scripts/db-seed-if-empty.sh
+
 printf 'Starting deployment stack...\n'
 docker compose up -d "$@"

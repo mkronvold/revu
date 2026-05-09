@@ -295,6 +295,12 @@ restart_stack() {
   log 'Stopping deployment stack...'
   docker compose down
 
+  log 'Applying database migrations...'
+  bash ./scripts/db-migrate.sh
+
+  log 'Bootstrapping example data when needed...'
+  bash ./scripts/db-seed-if-empty.sh
+
   log 'Starting deployment stack...'
   docker compose up -d
 }

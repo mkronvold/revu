@@ -104,7 +104,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./up.sh
    ```
 
-   The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images and starts Compose.
+   The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images, applies database migrations, seeds the built-in example dataset only when the database is still empty, and starts Compose.
 
    To stop the deployment stack later:
 
@@ -133,13 +133,13 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run dev:web` | Runs the Vite web workspace on the host. |
 | `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
 | `npm run deploy:up` | Starts the deployment stack from published images. |
-| `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, then pulls images and starts the deployment stack. |
+| `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, pulls images, applies migrations, seeds the example dataset only when the database is empty, and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
-| `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, and sleeps 30 minutes between checks by default. |
+| `./autoupdate.sh [minutes]` | Checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, applies migrations, seeds the example dataset if the database is empty, and sleeps 30 minutes between checks by default. |
 | `./reset-to-example.sh` | Applies migrations and reloads Postgres with the exact example dataset used by development and tests. |
 | `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
 | `npm run db:up` | Starts only the Postgres service. |
-| `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
+| `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container and backfills migration history when the schema already exists. |
 | `npm run db:down` | Stops Compose services. |
 | `npm test` | Runs all workspace tests. |
 | `npm run typecheck` | Runs TypeScript checks across workspaces. |
