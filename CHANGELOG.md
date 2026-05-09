@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Reworked the Employees roster into a table-style layout with Name, Role, Email, Manager, Assessor, and retained Edit/Password actions
 - Darkened the Summer Nights theme overall to feel like dusk instead of bright late-evening, with deeper sand and rock tones while keeping the warm beach-at-sunset direction
 - Warmed up the Summer Nights theme to feel like hot late-evening sun on the beach with mojito and mai tai card colors and sand/rock tones
 - Updated `autoupdate.sh` to check GHCR manifest digests before pulling so Compose only downloads and restarts when `api` or `web` actually changed

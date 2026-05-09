@@ -497,46 +497,77 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
-.employee-row-card {
-  padding: 0.75rem 0.9rem;
+.employee-roster-table-scroll {
+  overflow-x: auto;
+  padding: 0.85rem 0.95rem;
   border: 1px solid rgba(148, 163, 184, 0.32);
   border-radius: 1rem;
   background: #f8fafc;
 }
 
-.employee-row-line {
-  display: flex;
+.employee-roster-table {
+  --employee-roster-columns: minmax(150px, 1.2fr) minmax(90px, 0.75fr) minmax(240px, 1.85fr) minmax(150px, 1.1fr)
+    minmax(150px, 1.1fr);
+  min-width: 980px;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.employee-roster-header,
+.employee-row-card {
+  display: grid;
+  grid-template-columns: var(--employee-roster-columns) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: wrap;
+}
+
+.employee-roster-header {
+  padding: 0 0.35rem 0.45rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.employee-row-card {
+  padding: 0.2rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 0.9rem;
+  background: transparent;
 }
 
 .employee-row-summary {
-  display: flex;
-  flex: 1 1 520px;
-  flex-wrap: wrap;
+  grid-column: 1 / 6;
+  display: grid;
+  grid-template-columns: var(--employee-roster-columns);
   align-items: center;
-  gap: 0.4rem;
-  padding: 0;
-  border: none;
+  gap: 0.75rem;
+  padding: 0.55rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
   color: #0f172a;
   text-align: left;
   background: transparent;
 }
 
-.employee-row-summary span {
-  color: #475569;
+.employee-row-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.employee-row-divider {
-  color: #94a3b8;
+.employee-row-name strong {
+  color: inherit;
 }
 
 .employee-row-actions {
+  grid-column: 6;
   display: flex;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .employee-row-active {
@@ -847,13 +878,6 @@ button.employee-row:focus-visible {
   .assignment-row,
   .form-columns {
     grid-template-columns: 1fr;
-  }
-
-  .archive-row,
-  .section-toggle,
-  .employee-row-line {
-    align-items: start;
-    flex-direction: column;
   }
 
   .brand-row {

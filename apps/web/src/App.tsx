@@ -2841,64 +2841,71 @@ function App() {
             const canEditEmployeeRow = isAdmin || employee.role !== 'admin';
 
             return (
-              <article
+              <div
                 className={`employee-row-card${employee.id === selectedEmployeeId ? ' employee-row-active' : ''}`}
                 key={employee.id}
               >
-                <div className="employee-row-line">
-                  <button
-                    type="button"
-                    className="employee-row-summary"
-                    onClick={() => {
-                      setSelectedEmployeeId(employee.id);
-                      resetEditingState();
-                    }}
-                  >
+                <button
+                  type="button"
+                  className="employee-row-summary"
+                  onClick={() => {
+                    setSelectedEmployeeId(employee.id);
+                    resetEditingState();
+                  }}
+                >
+                  <span className="employee-row-cell employee-row-name">
                     <strong>{employee.fullName}</strong>
-                    <span className="employee-row-divider" aria-hidden="true">
-                      |
-                    </span>
-                    <span>{employee.email}</span>
-                    <span className="employee-row-divider" aria-hidden="true">
-                      |
-                    </span>
-                    <span>{employee.role}</span>
-                    <span className="employee-row-divider" aria-hidden="true">
-                      |
-                    </span>
-                    <span>Manager: {getEmployeeName(employee.managerId)}</span>
-                    <span className="employee-row-divider" aria-hidden="true">
-                      |
-                    </span>
-                    <span>Assessor: {getEmployeeName(employee.assessorId)}</span>
-                  </button>
-                  <div className="employee-row-actions">
-                    {canManageEmployees && canEditEmployeeRow ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => {
-                          setSelectedEmployeeId(employee.id);
-                          startEditingEmployee(employee);
-                        }}
-                      >
-                        Edit
-                      </button>
-                    ) : null}
-                    {isAdmin ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => openPasswordDialog(employee.id)}
-                      >
-                        Password
-                      </button>
-                    ) : null}
-                  </div>
+                  </span>
+                  <span className="employee-row-cell">{employee.role}</span>
+                  <span className="employee-row-cell">{employee.email}</span>
+                  <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
+                  <span className="employee-row-cell">{getEmployeeName(employee.assessorId)}</span>
+                </button>
+                <div className="employee-row-actions">
+                  {canManageEmployees && canEditEmployeeRow ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setSelectedEmployeeId(employee.id);
+                        startEditingEmployee(employee);
+                      }}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => openPasswordDialog(employee.id)}
+                    >
+                      Password
+                    </button>
+                  ) : null}
                 </div>
-              </article>
+              </div>
             );
           };
+
+          const renderEmployeeRosterTable = (employees: Employee[], emptyMessage: string, label: string) =>
+            employees.length ? (
+              <div className="employee-roster-table-scroll" role="region" aria-label={label}>
+                <div className="employee-roster-table" aria-label={label}>
+                  <div className="employee-roster-header">
+                    <span>Name</span>
+                    <span>Role</span>
+                    <span>Email</span>
+                    <span>Manager</span>
+                    <span>Assessor</span>
+                    <span>Actions</span>
+                  </div>
+                  {employees.map(renderEmployeeRosterRow)}
+                </div>
+              </div>
+            ) : (
+              <p className="muted-copy">{emptyMessage}</p>
+            );
 
           return (
             <>
@@ -2931,11 +2938,7 @@ function App() {
             </span>
           </button>
           {employeeRosterExpanded.active ? (
-            activeEmployees.length ? (
-              activeEmployees.map(renderEmployeeRosterRow)
-            ) : (
-              <p className="muted-copy">No active employees.</p>
-            )
+            renderEmployeeRosterTable(activeEmployees, 'No active employees.', 'Active employees')
           ) : null}
         </div>
 
@@ -2957,11 +2960,7 @@ function App() {
             </span>
           </button>
           {employeeRosterExpanded.inactive ? (
-            inactiveEmployees.length ? (
-              inactiveEmployees.map(renderEmployeeRosterRow)
-            ) : (
-              <p className="muted-copy">No inactive employees.</p>
-            )
+            renderEmployeeRosterTable(inactiveEmployees, 'No inactive employees.', 'Inactive employees')
           ) : null}
         </div>
             </>
