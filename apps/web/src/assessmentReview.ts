@@ -30,7 +30,7 @@ export type AssessmentQueueGroup = {
 export type ReviewQueueItem = {
   assessmentId: string;
   title: string;
-  detail: string;
+  assessorLabel: string;
   statusLabel: string;
   actionLabel: string;
 };
@@ -78,6 +78,8 @@ export type ReviewPanel = {
   statusLabel: string;
   detail: string;
   targetLabel: string;
+  assessmentStatusLabel: string;
+  reviewStatusLabel: string;
   reviewPeriodLabel: string;
   dueDate: string;
   subjectName: string;
@@ -135,6 +137,14 @@ function getEmployeeName(employeesById: Map<string, Employee>, employeeId: strin
   return employeesById.get(employeeId)?.fullName ?? 'Unknown employee';
 }
 
+function buildAssessmentKindLabel(assessment: Assessment) {
+  return assessment.target === 'self' ? 'Self Assessment' : 'Peer Assessment';
+}
+
+function getAssessorLabel(assessment: Assessment, employeesById: Map<string, Employee>) {
+  return assessment.target === 'self' ? 'self' : getEmployeeName(employeesById, assessment.assessorId);
+}
+
 function buildAssessmentTitle(
   assessment: Assessment,
   snapshot: AssessmentWorkflowSnapshot,
@@ -142,8 +152,7 @@ function buildAssessmentTitle(
 ) {
   const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
   const subjectName = getEmployeeName(employeesById, assessment.employeeId);
-  const targetLabel = assessment.target === 'self' ? 'Self-Assessment' : `Peer-Assessment for ${subjectName}`;
-  return `${reviewPeriod?.key ?? 'Current'} ${targetLabel}`;
+  return `${reviewPeriod?.key ?? 'Current'} ${buildAssessmentKindLabel(assessment)} - ${subjectName}`;
 }
 
 function buildReviewTitle(
@@ -151,11 +160,7 @@ function buildReviewTitle(
   snapshot: AssessmentWorkflowSnapshot,
   employeesById: Map<string, Employee>,
 ) {
-  const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
-  const subjectName = getEmployeeName(employeesById, assessment.employeeId);
-  const assessorName = getEmployeeName(employeesById, assessment.assessorId);
-  const targetLabel = assessment.target === 'self' ? 'Self review' : 'Peer review';
-  return `${reviewPeriod?.key ?? 'Current'} ${targetLabel} for ${subjectName}`;
+  return buildAssessmentTitle(assessment, snapshot, employeesById);
 }
 
 function toResponseMap(assessment: Assessment) {
@@ -236,6 +241,45 @@ function buildAssessmentStatusLabel(snapshot: AssessmentWorkflowSnapshot, assess
   }
 }
 
+function buildReviewStatusLabel(assessment: Assessment) {
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return 'Waiting for acceptance';
+    case 'accepted':
+      return 'In review';
+    case 'reviewed':
+      return 'Review complete';
+    case 'new':
+    case 'draft':
+      return 'Not started';
+  }
+}
+
+export function formatSubjectiveResponse(response: string) {
+  const normalized = response.trim().toLowerCase();
+
+  switch (normalized) {
+    case '0':
+    case "don't know":
+    case 'dont know':
+      return "0 - don't know";
+    case '1':
+    case 'strongly disagree':
+      return '1 - strongly disagree';
+    case '2':
+    case 'disagree':
+      return '2 - disagree';
+    case '3':
+    case 'agree':
+      return '3 - agree';
+    case '4':
+    case 'strongly agree':
+      return '4 - strongly agree';
+    default:
+      return response;
+  }
+}
+
 function toAssessmentQueueItem(
   assessment: Assessment,
   snapshot: AssessmentWorkflowSnapshot,
@@ -257,13 +301,10 @@ function toReviewQueueItem(
   snapshot: AssessmentWorkflowSnapshot,
   employeesById: Map<string, Employee>,
 ): ReviewQueueItem {
-  const subjectName = getEmployeeName(employeesById, assessment.employeeId);
-  const assessorName = getEmployeeName(employeesById, assessment.assessorId);
-
   return {
     assessmentId: assessment.id,
     title: buildReviewTitle(assessment, snapshot, employeesById),
-    detail: `${subjectName} • authored by ${assessorName}`,
+    assessorLabel: getAssessorLabel(assessment, employeesById),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     actionLabel: 'Open',
   };
@@ -476,11 +517,13 @@ export function getReviewPanel(
     title: buildReviewTitle(assessment, snapshot, employeesById),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     detail: buildAssessmentDetail(assessment, snapshot, employeesById),
-    targetLabel: assessment.target === 'self' ? 'Self assessment review' : 'Peer assessment review',
+    targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
+    assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
+    reviewStatusLabel: buildReviewStatusLabel(assessment),
     reviewPeriodLabel: reviewPeriod?.label ?? 'Current review period',
     dueDate: reviewPeriod ? formatDate(reviewPeriod.dueDate) : 'Unknown due date',
     subjectName: getEmployeeName(employeesById, assessment.employeeId),
-    assessorName: getEmployeeName(employeesById, assessment.assessorId),
+    assessorName: getAssessorLabel(assessment, employeesById),
     managerName: getEmployeeName(employeesById, currentManagerId),
     currentAssessorId: assessment.assessorId,
     currentManagerId,

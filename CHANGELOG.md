@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Refined the Reviews screen terminology, queue density, status display, and subjective response formatting
+- Added a root `test.sh` helper to run the full workspace validation flow
 - Reworked the dashboard, reviews, employees, questions, assignments, and archive admin screens into the new single-column, collapsible layouts
 - Wired the web login flow into backend-enforced password reset and password change handling
 - Added local user import/export UI for the new backend contracts, including export warnings and one-time passcode messaging

@@ -10,7 +10,7 @@ describe('integrated dashboard snapshot', () => {
 
     expect(snapshot.dueLabel).toBe('Complete by 2/28/2026');
     expect(snapshot.reviewSummary).toMatch(/employee dashboard stays centered on assessments/i);
-    expect(snapshot.queues[3]?.items[0]?.title).toContain('2026 Self-Assessment');
+    expect(snapshot.queues[3]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
   });
 
   it('shows review attention counts for managers and admin directory follow-up', () => {

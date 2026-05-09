@@ -450,10 +450,14 @@ button.employee-row:focus-visible {
 }
 
 .review-sidebar,
-.review-queue-stack,
 .question-list {
   display: grid;
   gap: 1rem;
+}
+
+.review-sidebar,
+.review-queue-stack {
+  gap: 0.75rem;
 }
 
 .employee-roster-group {
@@ -623,6 +627,59 @@ button.employee-row:focus-visible {
 .admin-list-item-active {
   border-color: rgba(37, 99, 235, 0.58);
   background: #dbeafe;
+}
+
+.review-queue-group {
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.review-queue-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.review-queue-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.review-queue-item {
+  display: block;
+  padding: 0.7rem 0.85rem;
+}
+
+.review-queue-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  line-height: 1.35;
+}
+
+.review-queue-separator {
+  color: #94a3b8;
+}
+
+.review-response-list {
+  gap: 0.75rem;
+}
+
+.review-response-row {
+  gap: 0.4rem;
+  padding: 0.85rem 1rem;
+}
+
+.review-notes-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.review-notes-actions {
+  padding-top: 0.25rem;
 }
 
 .compact-detail-grid {

@@ -7,7 +7,7 @@ import type {
   QuestionTarget,
   ReviewPeriod,
 } from '@revu/contracts';
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiClientError,
@@ -37,6 +37,7 @@ import {
 import {
   buildReviewQueues,
   createAssessmentWorkflowSnapshot,
+  formatSubjectiveResponse,
   getAssessmentEditor,
   getReviewPanel,
 } from './assessmentReview';
@@ -319,7 +320,7 @@ function App() {
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
   const [reviewManagerDraft, setReviewManagerDraft] = useState('');
   const [reviewAssessorDraft, setReviewAssessorDraft] = useState('');
-  const [expandedReviewQueues, setExpandedReviewQueues] = useState<Record<string, boolean>>({});
+  const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [employeeRosterExpanded, setEmployeeRosterExpanded] = useState({
     active: true,
     inactive: false,
@@ -332,6 +333,7 @@ function App() {
   const [localUserTransferFormat, setLocalUserTransferFormat] = useState<TransferFormat>('json');
   const [localUserImportDraft, setLocalUserImportDraft] = useState('');
   const [localUserTransferPreview, setLocalUserTransferPreview] = useState<LocalUserTransferPreview | null>(null);
+  const reviewPanelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const syncLocation = () => {
@@ -694,12 +696,6 @@ function App() {
   }, [reviewAssessmentIds, selectedReviewAssessmentId]);
 
   useEffect(() => {
-    setExpandedReviewQueues((currentState) =>
-      Object.fromEntries(reviewQueues.map((queue) => [queue.title, currentState[queue.title] ?? true])),
-    );
-  }, [reviewQueues]);
-
-  useEffect(() => {
     if (!selectedReviewPanel) {
       setReviewNotesDraft('');
       setReviewManagerDraft('');
@@ -711,6 +707,18 @@ function App() {
     setReviewManagerDraft(selectedReviewPanel.currentManagerId ?? '');
     setReviewAssessorDraft(selectedReviewPanel.currentAssessorId);
   }, [selectedReviewPanel]);
+
+  useEffect(() => {
+    if (!selectedReviewAssessmentId || !selectedReviewPanel) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      reviewPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [selectedReviewAssessmentId, selectedReviewPanel]);
 
   useEffect(() => {
     if (!selectedEmployeeId || !sessionToken || !hasEmployeeReadAccess || draftEmployee) {
@@ -805,7 +813,6 @@ function App() {
 
   const handleSelectReviewAssessment = (assessmentId: string) => {
     setSelectedReviewAssessmentId(assessmentId);
-    setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, false])));
   };
 
   const clearSession = (options?: {
@@ -842,7 +849,7 @@ function App() {
     setReviewManagerDraft('');
     setReviewAssessorDraft('');
     setWorkflowNotice('');
-    setExpandedReviewQueues({});
+    setAreReviewQueuesExpanded(true);
     setEmployeeRosterExpanded({
       active: true,
       inactive: false,
@@ -2450,60 +2457,53 @@ function App() {
     <main className="admin-stack">
       <section className="card review-sidebar">
         <div className="section-heading">
-          <div>
-            <p className="section-label">Review queues</p>
-            <h3>Manager and admin review work</h3>
-          </div>
+          <h3>Review Queue</h3>
           <div className="action-row">
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, false])))}
+              onClick={() => setAreReviewQueuesExpanded(false)}
             >
-              Collapse all
+              Collapse
             </button>
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setExpandedReviewQueues(Object.fromEntries(reviewQueues.map((queue) => [queue.title, true])))}
+              onClick={() => setAreReviewQueuesExpanded(true)}
             >
-              Expand all
+              Expand
             </button>
           </div>
         </div>
 
         <div className="review-queue-stack">
           {reviewQueues.map((queue) => (
-            <div className="subcard" key={queue.title}>
-              <button
-                type="button"
-                className="section-toggle"
-                onClick={() =>
-                  setExpandedReviewQueues((currentState) => ({
-                    ...currentState,
-                    [queue.title]: !(currentState[queue.title] ?? true),
-                  }))
-                }
-              >
-                <span>{queue.title}</span>
-                <span className="muted-copy">
-                  {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} •{' '}
-                  {expandedReviewQueues[queue.title] ?? true ? 'Collapse' : 'Expand'}
-                </span>
-              </button>
-              {expandedReviewQueues[queue.title] ?? true ? (
+            <div className="subcard review-queue-group" key={queue.title}>
+              <div className="review-queue-group-heading">
+                <strong>{queue.title}</strong>
+                <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
+              </div>
+              {areReviewQueuesExpanded ? (
                 queue.items.length ? (
-                  <div className="admin-list">
+                  <div className="review-queue-list">
                     {queue.items.map((item) => (
                       <button
                         type="button"
-                        className={`admin-list-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
+                        className={`admin-list-item review-queue-item${item.assessmentId === selectedReviewAssessmentId ? ' admin-list-item-active' : ''}`}
                         key={item.assessmentId}
                         onClick={() => handleSelectReviewAssessment(item.assessmentId)}
                       >
-                        <strong>{item.title}</strong>
-                        <small>{item.statusLabel}</small>
-                        <span>{item.detail}</span>
+                        <span className="review-queue-line">
+                          <strong>{item.title}</strong>
+                          <span className="review-queue-separator" aria-hidden="true">
+                            |
+                          </span>
+                          <span>{item.assessorLabel}</span>
+                          <span className="review-queue-separator" aria-hidden="true">
+                            |
+                          </span>
+                          <span>{item.statusLabel}</span>
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -2518,13 +2518,13 @@ function App() {
 
       {selectedReviewPanel ? (
         <>
-          <section className="card">
+          <section className="card" ref={reviewPanelRef}>
               <div className="section-heading">
                 <div>
                   <p className="section-label">Review panel</p>
                   <h3>{selectedReviewPanel.title}</h3>
                 </div>
-                <span className="pill">{selectedReviewPanel.statusLabel}</span>
+                <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
               </div>
               <p>{selectedReviewPanel.detail}</p>
               <dl className="detail-grid">
@@ -2552,14 +2552,22 @@ function App() {
                   <dt>Review type</dt>
                   <dd>{selectedReviewPanel.targetLabel}</dd>
                 </div>
+                <div>
+                  <dt>Assessment status</dt>
+                  <dd>{selectedReviewPanel.assessmentStatusLabel}</dd>
+                </div>
+                <div>
+                  <dt>Review status</dt>
+                  <dd>{selectedReviewPanel.reviewStatusLabel}</dd>
+                </div>
               </dl>
             </section>
 
             <section className="card">
               <p className="section-label">Responses</p>
-              <div className="question-list">
+              <div className="question-list review-response-list">
                 {selectedReviewPanel.questions.map((question) => (
-                  <article className="subcard" key={question.questionId}>
+                  <article className="subcard review-response-row" key={question.questionId}>
                     <strong>
                       #{question.order} {question.prompt}
                     </strong>
@@ -2567,7 +2575,13 @@ function App() {
                       {question.type}
                       {question.category ? ` • ${question.category}` : ''}
                     </small>
-                    <p>{question.response || 'No response provided yet.'}</p>
+                    <p>
+                      {question.response
+                        ? question.type === 'subjective'
+                          ? formatSubjectiveResponse(question.response)
+                          : question.response
+                        : 'No response provided yet.'}
+                    </p>
                   </article>
                 ))}
               </div>
@@ -2575,9 +2589,10 @@ function App() {
 
             <section className="card">
               <p className="section-label">Review notes</p>
-              <label className="stack-form">
-                <span>Manager or admin notes</span>
+              <div className="review-notes-form">
+                <label className="stack-form">
                 <textarea
+                  aria-label="Review notes"
                   rows={5}
                   readOnly={
                     selectedReviewPanel.isArchived ||
@@ -2588,8 +2603,8 @@ function App() {
                   value={reviewNotesDraft}
                   onChange={(event) => setReviewNotesDraft(event.target.value)}
                 />
-              </label>
-              <div className="action-row">
+                </label>
+              <div className="action-row review-notes-actions">
                 <button
                   type="button"
                   disabled={!selectedReviewPanel.canAccept || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
@@ -2631,14 +2646,12 @@ function App() {
                   Mark reviewed
                 </button>
               </div>
+              </div>
             </section>
 
             <section className="card">
               <div className="section-heading">
-                <div>
-                  <p className="section-label">Reassignment controls</p>
-                  <h3>Update manager and peer reviewer routing</h3>
-                </div>
+                <h3>Adjust Assignments</h3>
               </div>
               <div className="form-columns">
                 <label className="inline-field">
@@ -2657,7 +2670,7 @@ function App() {
                   </select>
                 </label>
                 <label className="inline-field">
-                  <span>{selectedReviewPanel.canReassignAssessor ? 'Peer reviewer' : 'Peer reviewer'}</span>
+                  <span>Peer reviewer</span>
                   <select
                     disabled={
                       !selectedReviewPanel.canReassignAssessor ||
@@ -2675,16 +2688,13 @@ function App() {
                   </select>
                 </label>
               </div>
-              <p className="muted-copy">
-                Reassignments update the employee relationship and future peer-review routing without rewriting existing authored responses.
-              </p>
               <div className="action-row">
                 <button
                   type="button"
                   disabled={selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
                   onClick={() => void handleReassignReview()}
                 >
-                  Save reassignment
+                  Save assignment changes
                 </button>
               </div>
           </section>
@@ -3330,7 +3340,7 @@ function App() {
       <div className="content">
         <header className="hero card">
           <div className="hero-copy">
-            <span className="badge">Integrated API auth mode</span>
+            {pathname === '/reviews' ? null : <span className="badge">Integrated API auth mode</span>}
             <h2>{currentSection.title}</h2>
             <p>{currentSection.summary}</p>
             {authNotice ? <p className="temporary-password">{authNotice}</p> : null}

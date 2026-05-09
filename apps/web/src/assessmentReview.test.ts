@@ -7,6 +7,7 @@ import {
   buildReviewQueues,
   completeAssessmentReview,
   createAssessmentWorkflowSnapshot,
+  formatSubjectiveResponse,
   reassignAssessmentRelationships,
   rejectAssessmentToDraft,
   saveAssessmentDraft,
@@ -58,6 +59,16 @@ describe('assessment and review helpers', () => {
 
     expect(initialQueues[0]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
     expect(initialQueues[1]?.items.map((item) => item.assessmentId)).toContain(peerAssessmentId);
+    expect(initialQueues[0]?.items[0]).toMatchObject({
+      title: '2026 Self Assessment - Elliot Employee',
+      assessorLabel: 'self',
+      statusLabel: 'Submitted',
+    });
+    expect(initialQueues[1]?.items[0]).toMatchObject({
+      title: '2026 Peer Assessment - Elliot Employee',
+      assessorLabel: 'Pat Peer',
+      statusLabel: 'Accepted',
+    });
 
     const acceptedSnapshot = acceptAssessmentReview(snapshot, selfAssessmentId, 'Ready for final notes.', {
       actorId: manny.id,
@@ -94,5 +105,12 @@ describe('assessment and review helpers', () => {
     expect(result.snapshot.assessments.find((assessment) => assessment.id === peerAssessmentId)?.assessorId).toBe(
       foundationSnapshotExample.assessments.find((assessment) => assessment.id === peerAssessmentId)?.assessorId,
     );
+  });
+
+  it('formats subjective assessment responses with numeric labels', () => {
+    expect(formatSubjectiveResponse('strongly agree')).toBe('4 - strongly agree');
+    expect(formatSubjectiveResponse('4')).toBe('4 - strongly agree');
+    expect(formatSubjectiveResponse("don't know")).toBe("0 - don't know");
+    expect(formatSubjectiveResponse('0')).toBe("0 - don't know");
   });
 });

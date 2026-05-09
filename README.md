@@ -135,6 +135,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `npm run deploy:up` | Starts the deployment stack from published images. |
 | `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, then pulls images and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
+| `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
 | `npm run db:up` | Starts only the Postgres service. |
 | `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container. |
 | `npm run db:down` | Stops Compose services. |
