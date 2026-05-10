@@ -343,6 +343,7 @@ const themedMutedTextSelectors = [
   '.status-caption',
   '.brand-copy',
   '.employee-roster-header',
+  '.review-queue-header',
   '.stack-form label',
   '.inline-field',
   '.detail-grid dt',
@@ -356,6 +357,8 @@ const themedMutedTextSelectors = [
   '.review-response-meta',
   '.question-order',
 ];
+
+const themedTableHeaderSelectors = ['.employee-roster-header', '.review-queue-header'];
 
 const themedInteractiveSurfaceSelectors = [
   '.section-toggle',
@@ -405,6 +408,11 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
 
   [data-revu-theme='${theme}'] ${themedMutedTextSelectors.join(`,\n  [data-revu-theme='${theme}'] `)} {
     color: ${palette.mutedText};
+  }
+
+  [data-revu-theme='${theme}'] ${themedTableHeaderSelectors.join(`,\n  [data-revu-theme='${theme}'] `)} {
+    border-color: ${palette.surfaceBorder};
+    background: ${palette.noteBackground};
   }
 
   [data-revu-theme='${theme}'] .detail-grid dd {

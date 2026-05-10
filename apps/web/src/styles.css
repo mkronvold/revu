@@ -801,19 +801,23 @@ button.employee-row:focus-visible {
   width: 100%;
   min-width: 0;
   display: grid;
-  gap: 0.15rem;
+  grid-template-columns: var(--employee-roster-columns);
+  column-gap: var(--employee-roster-column-gap);
+  row-gap: 0.15rem;
 }
 
 .employee-roster-header {
   display: grid;
-  grid-template-columns: var(--employee-roster-columns);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--employee-roster-column-gap);
 }
 
 .employee-roster-header {
-  padding: 0 0.35rem 0.45rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 0.45rem 0.35rem 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.08);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -822,6 +826,9 @@ button.employee-row:focus-visible {
 }
 
 .employee-row-card {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   padding: 0;
   border: 0;
   background: transparent;
@@ -843,8 +850,7 @@ button.employee-row:focus-visible {
 .employee-row-summary {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: var(--employee-roster-columns);
-  gap: var(--employee-roster-column-gap);
+  grid-template-columns: subgrid;
   width: 100%;
 }
 
@@ -855,7 +861,8 @@ button.employee-row:focus-visible {
 
 .review-queue-item {
   grid-column: 1 / -1;
-  grid-template-columns: var(--review-queue-columns);
+  grid-template-columns: subgrid;
+  width: 100%;
 }
 
 .employee-row-summary:hover,
@@ -1123,21 +1130,27 @@ button.employee-row:focus-visible {
 
 .review-queue-table {
   --review-queue-columns: minmax(0, 1.7fr) fit-content(9rem) fit-content(11rem) minmax(0, 1fr) fit-content(10rem);
+  width: 100%;
+  min-width: 0;
   display: grid;
-  gap: 0.15rem;
+  grid-template-columns: var(--review-queue-columns);
+  column-gap: 0.6rem;
+  row-gap: 0.15rem;
 }
 
 .review-queue-header,
 .review-queue-row-card {
   display: grid;
-  grid-template-columns: var(--review-queue-columns);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 0.6rem;
 }
 
 .review-queue-header {
-  padding: 0 0.35rem 0.45rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 0.45rem 0.35rem 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.08);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1146,9 +1159,8 @@ button.employee-row:focus-visible {
 }
 
 .review-queue-row-card {
-  padding: 0.2rem 0.35rem;
-  border: 1px solid transparent;
-  border-radius: 0.9rem;
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 
