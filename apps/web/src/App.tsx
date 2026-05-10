@@ -128,6 +128,10 @@ function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
 }
 
+function serializeWorkflowDraft(markdown: string, visibility: WorkflowVisibility) {
+  return JSON.stringify({ markdown, visibility });
+}
+
 function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
   if (type === 'narrative') {
     return <p className="toolbar-note question-response-helper">Use a written self-rating with supporting context and examples.</p>;
@@ -454,6 +458,7 @@ function App() {
   const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(() => getStoredWorkflowVisibility());
   const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
   const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
+  const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
@@ -1146,12 +1151,28 @@ function App() {
   const openWorkflowEditor = () => {
     setWorkflowDraft(workflowContent);
     setWorkflowVisibilityDraft(workflowVisibility);
+    setWorkflowInitialDraft(serializeWorkflowDraft(workflowContent, workflowVisibility));
     setAppError('');
   };
 
-  const closeWorkflowEditor = () => {
+  const closeWorkflowEditor = (options?: { force?: boolean }) => {
+    const isDirty =
+      workflowDraft !== null &&
+      workflowVisibilityDraft !== null &&
+      workflowInitialDraft !== null &&
+      serializeWorkflowDraft(workflowDraft, workflowVisibilityDraft) !== workflowInitialDraft;
+
+    if (!options?.force && isDirty) {
+      const confirmed = window.confirm('Close this workflow without saving your changes?');
+      if (!confirmed) {
+        return false;
+      }
+    }
+
     setWorkflowDraft(null);
     setWorkflowVisibilityDraft(null);
+    setWorkflowInitialDraft(null);
+    return true;
   };
 
   const saveWorkflowContent = () => {
@@ -1161,8 +1182,7 @@ function App() {
 
     setWorkflowContent(workflowDraft);
     setWorkflowVisibility(workflowVisibilityDraft);
-    setWorkflowDraft(null);
-    setWorkflowVisibilityDraft(null);
+    closeWorkflowEditor({ force: true });
     setAdminNotice('Updated the workflow settings.');
   };
 
@@ -1218,11 +1238,14 @@ function App() {
     setSelectedAssessmentId(null);
     setAssessmentResponsesDraft({});
     setSelectedReviewAssessmentId(null);
-    setReviewNotesDraft('');
-    setWorkflowNotice('');
-    setAreReviewQueuesExpanded(true);
-    setArchivePanelsExpanded({
-      active: true,
+      setReviewNotesDraft('');
+      setWorkflowNotice('');
+      setWorkflowDraft(null);
+      setWorkflowVisibilityDraft(null);
+      setWorkflowInitialDraft(null);
+      setAreReviewQueuesExpanded(true);
+      setArchivePanelsExpanded({
+        active: true,
       archived: true,
     });
     setPasswordDialogEmployeeId(null);
@@ -4422,7 +4445,7 @@ function App() {
         ) : null}
 
         {isAdmin && workflowDraft !== null && workflowVisibilityDraft !== null ? (
-          <div className="modal-backdrop" role="presentation" onClick={closeWorkflowEditor}>
+          <div className="modal-backdrop" role="presentation" onClick={() => void closeWorkflowEditor()}>
             <section
               aria-modal="true"
               className="card modal-card workflow-editor-dialog"
@@ -4435,7 +4458,7 @@ function App() {
                   <p className="section-label">Workflow</p>
                   <h3 id="workflow-editor-title">Edit workflow markdown</h3>
                 </div>
-                <button type="button" className="secondary-button" onClick={closeWorkflowEditor}>
+                <button type="button" className="secondary-button" onClick={() => void closeWorkflowEditor()}>
                   Close
                 </button>
               </div>
@@ -4472,7 +4495,7 @@ function App() {
                 <button type="button" onClick={saveWorkflowContent}>
                   Save workflow
                 </button>
-                <button type="button" className="secondary-button" onClick={closeWorkflowEditor}>
+                <button type="button" className="secondary-button" onClick={() => void closeWorkflowEditor()}>
                   Cancel
                 </button>
               </div>

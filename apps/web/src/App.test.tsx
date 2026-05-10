@@ -606,6 +606,67 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
 
+  it('warns before closing the workflow editor when there are unsaved changes', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/workflow');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Reference the full review lifecycle') ?? false);
+
+    const workflowEditButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit workflow',
+    );
+    expect(workflowEditButton).toBeTruthy();
+
+    await act(async () => {
+      workflowEditButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Edit workflow markdown') ?? false);
+
+    const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
+    const cancelButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Cancel');
+
+    expect(workflowTextarea).toBeTruthy();
+    expect(cancelButton).toBeTruthy();
+
+    await act(async () => {
+      if (workflowTextarea) {
+        setFieldValue(workflowTextarea, '## Unsaved workflow\n- Draft change');
+      }
+      await flushRender();
+    });
+
+    await act(async () => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('Close this workflow without saving your changes?');
+    expect(container.querySelector('.workflow-editor-dialog')).toBeTruthy();
+
+    confirmSpy.mockReturnValue(true);
+
+    await act(async () => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('.workflow-editor-dialog')).toBeNull();
+  });
+
   it('toggles the sidebar width without removing navigation or utility controls', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
