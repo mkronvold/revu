@@ -34,11 +34,17 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-revu}:${POSTGRES_PASSWORD:-revu}@db:5432/${POSTGRES_DB:-revu}
       BACKUP_ARCHIVE_DIR: ${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
       BACKUP_HANDOFF_DIR: ${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      BACKUP_CONFIG_DIR: ${BACKUP_CONFIG_DIR:-/var/lib/revu/backups/config}
+      BACKUP_STATUS_PATH: ${BACKUP_STATUS_PATH:-/var/lib/revu/backups/config/status.json}
+      BACKUP_AUTOMATIC_ENABLED: ${BACKUP_AUTOMATIC_ENABLED:-false}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-daily}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
     expose:
       - "4000"
     volumes:
       - backup-archive:${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
       - backup-handoff:${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      - backup-config:${BACKUP_CONFIG_DIR:-/var/lib/revu/backups/config}
       - ./scripts:/opt/revu/scripts:ro
     healthcheck:
       test:
@@ -70,12 +76,15 @@ services:
     environment:
       BACKUP_ARCHIVE_DIR: ${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
       BACKUP_HANDOFF_DIR: ${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      BACKUP_CONFIG_DIR: ${BACKUP_CONFIG_DIR:-/var/lib/revu/backups/config}
+      BACKUP_STATUS_PATH: ${BACKUP_STATUS_PATH:-/var/lib/revu/backups/config/status.json}
       BACKUP_DOWNLOAD_URL: ${BACKUP_DOWNLOAD_URL:-http://api:4000/api/v1/admin/backups/export}
       BACKUP_RESTORE_URL: ${BACKUP_RESTORE_URL:-http://api:4000/api/v1/admin/backups/restore}
       BACKUP_FILE_PREFIX: ${BACKUP_FILE_PREFIX:-revu-backup}
       BACKUP_FILE_EXTENSION: ${BACKUP_FILE_EXTENSION:-json}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-      BACKUP_SCHEDULE_UTC: ${BACKUP_SCHEDULE_UTC:-02:00}
+      BACKUP_AUTOMATIC_ENABLED: ${BACKUP_AUTOMATIC_ENABLED:-false}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-daily}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
       BACKUP_RESTORE_MODE: ${BACKUP_RESTORE_MODE:-replace}
       BACKUP_RESTORE_TARGET: ${BACKUP_RESTORE_TARGET:-full}
       BACKUP_BEARER_TOKEN: ${BACKUP_BEARER_TOKEN:-}
@@ -85,6 +94,7 @@ services:
       - ./scripts:/opt/revu/scripts:ro
       - backup-archive:${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
       - backup-handoff:${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
+      - backup-config:${BACKUP_CONFIG_DIR:-/var/lib/revu/backups/config}
     depends_on:
       api:
         condition: service_healthy
@@ -124,6 +134,7 @@ volumes:
   postgres-data:
   backup-archive:
   backup-handoff:
+  backup-config:
 
 networks:
   proxy-net:

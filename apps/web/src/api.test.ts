@@ -20,6 +20,7 @@ import {
   restoreBackup,
   reviewAssessment,
   submitAssessment,
+  updateBackupStatus,
 } from './api';
 
 describe('web api client', () => {
@@ -278,13 +279,15 @@ describe('web api client', () => {
   it('uses backup status, export, and multipart restore endpoints', async () => {
     const { employees: _employees, ...reviewData } = foundationSnapshotExample;
     const backupStatusResponse = {
-      dailyBackupsEnabled: true,
-      retentionDays: 14,
+      automaticBackupsEnabled: true,
+      schedule: 'daily' as const,
+      retentionCount: 14,
       lastBackupAt: '2026-06-01T12:00:00.000Z',
       lastRestoreAt: null,
       defaultUserExportMode: 'preserve-passwords' as const,
       replaceStrategy: 'replace' as const,
       supportedFormats: ['json'] as const,
+      supportedSchedules: ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'] as const,
       supportedRestoreModes: ['replace'] as const,
       supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'] as const,
       supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'] as const,
@@ -328,10 +331,26 @@ describe('web api client', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(backupStatusResponse), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ...backupStatusResponse,
+            automaticBackupsEnabled: false,
+            schedule: 'weekly',
+            retentionCount: 6,
+          }),
+          { status: 200 },
+        ),
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify(backupExportResponse), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }));
 
     await getBackupStatus('session-token');
+    await updateBackupStatus('session-token', {
+      automaticBackupsEnabled: false,
+      schedule: 'weekly',
+      retentionCount: 6,
+    });
     await exportBackup('session-token');
     await restoreBackup('session-token', {
       file: new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }),
@@ -350,6 +369,16 @@ describe('web api client', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      `${apiBaseUrl}/admin/backups/status`,
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       `${apiBaseUrl}/admin/backups/export?mode=preserve-passwords`,
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -358,7 +387,7 @@ describe('web api client', () => {
       }),
     );
 
-    const restoreCall = fetchMock.mock.calls[2];
+    const restoreCall = fetchMock.mock.calls[3];
     expect(restoreCall?.[0]).toBe(`${apiBaseUrl}/admin/backups/restore`);
     expect(restoreCall?.[1]).toEqual(
       expect.objectContaining({

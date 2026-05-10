@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added editable automatic-backup settings for enable/disable, backup period, and retention count in File Management, and wired the backup sidecar plus Compose volumes to the shared scheduler config
 - Added unsaved-change confirmation when closing the workflow editor dialog after editing markdown or visibility
 - Unified all modal windows to the same shared width as the Employee Detail popup
 - Moved the admin-only Edit workflow control onto the Workflow page and removed the old workflow card from File Management while keeping the shared markdown editor behavior intact

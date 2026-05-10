@@ -403,6 +403,7 @@ export const backupSnapshotSchema = z.object({
 
 export const backupRestoreScopeSchema = z.enum(["all", "users", "questions", "reviews"]);
 export const backupRestoreModeSchema = z.literal("replace");
+export const backupScheduleSchema = z.enum(["1hr", "3hr", "6hr", "12hr", "daily", "weekly"]);
 export const backupRestoreTargetSchema = z
   .union([backupRestoreScopeSchema, z.literal("full")])
   .transform((value) => (value === "full" ? "all" : value));
@@ -411,16 +412,24 @@ export const backupExportQuerySchema = z.object({
 });
 
 export const backupStatusResponseSchema = z.object({
-  dailyBackupsEnabled: z.boolean(),
-  retentionDays: z.number().int().positive().nullable(),
+  automaticBackupsEnabled: z.boolean(),
+  schedule: backupScheduleSchema,
+  retentionCount: z.number().int().positive(),
   lastBackupAt: isoTimestampSchema.nullable(),
   lastRestoreAt: isoTimestampSchema.nullable(),
   defaultUserExportMode: z.literal("preserve-passwords"),
   replaceStrategy: z.literal("replace"),
   supportedFormats: z.array(z.literal("json")).length(1),
+  supportedSchedules: z.array(backupScheduleSchema).min(1),
   supportedRestoreModes: z.array(backupRestoreModeSchema).length(1),
   supportedRestoreScopes: z.array(backupRestoreScopeSchema).min(1),
   supportedUserExportModes: z.array(localUsersExportModeSchema).length(2),
+});
+
+export const updateBackupStatusRequestSchema = z.object({
+  automaticBackupsEnabled: z.boolean(),
+  schedule: backupScheduleSchema,
+  retentionCount: z.number().int().positive(),
 });
 
 export const backupExportResponseSchema = backupSnapshotSchema;
@@ -501,9 +510,11 @@ export type BackupReviewData = z.infer<typeof backupReviewDataSchema>;
 export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
 export type BackupExportQuery = z.infer<typeof backupExportQuerySchema>;
 export type BackupExportResponse = z.infer<typeof backupExportResponseSchema>;
+export type BackupSchedule = z.infer<typeof backupScheduleSchema>;
 export type BackupRestoreMode = z.infer<typeof backupRestoreModeSchema>;
 export type BackupRestoreScope = z.infer<typeof backupRestoreScopeSchema>;
 export type BackupRestoreTarget = z.infer<typeof backupRestoreTargetSchema>;
 export type BackupStatusResponse = z.infer<typeof backupStatusResponseSchema>;
+export type UpdateBackupStatusRequest = z.infer<typeof updateBackupStatusRequestSchema>;
 export type BackupRestoreRequest = z.infer<typeof backupRestoreRequestSchema>;
 export type BackupRestoreResponse = z.infer<typeof backupRestoreResponseSchema>;

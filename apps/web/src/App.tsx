@@ -1,5 +1,6 @@
 import type {
   AuthSession,
+  BackupSchedule,
   BackupRestoreScope,
   BackupSnapshot,
   BackupStatusResponse,
@@ -30,6 +31,7 @@ import {
   resetEmployeePassword,
   restoreBackup,
   setEmployeePassword,
+  updateBackupStatus,
   updateEmployee,
 } from './api';
 import { buildDashboardSnapshot } from './dashboard';
@@ -116,8 +118,14 @@ const workflowVisibilityStorageKey = 'revu-workflow-visibility';
 const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
 const lastResponseTimeoutMs = 120000;
 const newQuestionCategoryOptionValue = '__new-question-category__';
+const backupScheduleOptions: BackupSchedule[] = ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'];
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
+type BackupSettingsDraft = {
+  automaticBackupsEnabled: boolean;
+  schedule: BackupSchedule;
+  retentionCount: string;
+};
 
 const questionTypeHelperOptions = {
   subjective: ['strongly agree', 'somewhat agree', 'not sure', 'somewhat disagree', 'strongly disagree'],
@@ -149,6 +157,18 @@ function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
       ))}
     </div>
   );
+}
+
+function getBackupScheduleLabel(schedule: BackupSchedule) {
+  return schedule;
+}
+
+function toBackupSettingsDraft(status: BackupStatusResponse): BackupSettingsDraft {
+  return {
+    automaticBackupsEnabled: status.automaticBackupsEnabled,
+    schedule: status.schedule,
+    retentionCount: String(status.retentionCount),
+  };
 }
 
 type EmployeeDraft = {
@@ -430,6 +450,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isLoadingBackupStatus, setIsLoadingBackupStatus] = useState(false);
+  const [isSavingBackupSettings, setIsSavingBackupSettings] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
@@ -443,6 +464,7 @@ function App() {
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
   const [reviewAdmin, setReviewAdmin] = useState<ReviewAdminSnapshot | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
+  const [backupSettingsDraft, setBackupSettingsDraft] = useState<BackupSettingsDraft | null>(null);
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [backupFileSummary, setBackupFileSummary] = useState<BackupSnapshot | null>(null);
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
@@ -574,6 +596,7 @@ function App() {
     const supportedModes = new Set(backupStatus?.supportedUserExportModes ?? localUserExportModeOptions.map((option) => option.value));
     return localUserExportModeOptions.filter((option) => supportedModes.has(option.value));
   }, [backupStatus]);
+  const availableBackupSchedules = useMemo(() => backupStatus?.supportedSchedules ?? backupScheduleOptions, [backupStatus]);
   const availableBackupRestoreActions = useMemo(() => {
     const supportedScopes = new Set(backupStatus?.supportedRestoreScopes ?? backupRestoreActions.map((action) => action.target));
     return backupRestoreActions.filter((action) => supportedScopes.has(action.target));
@@ -858,9 +881,11 @@ function App() {
   useEffect(() => {
     if (!sessionToken || !isAdmin || passwordResetRequired) {
       setBackupStatus(null);
+      setBackupSettingsDraft(null);
       setBackupFile(null);
       setBackupFileSummary(null);
       setIsLoadingBackupStatus(false);
+      setIsSavingBackupSettings(false);
       return;
     }
 
@@ -888,6 +913,15 @@ function App() {
       cancelled = true;
     };
   }, [isAdmin, passwordResetRequired, sessionToken]);
+
+  useEffect(() => {
+    if (!backupStatus) {
+      setBackupSettingsDraft(null);
+      return;
+    }
+
+    setBackupSettingsDraft(toBackupSettingsDraft(backupStatus));
+  }, [backupStatus]);
 
   useEffect(() => {
     if (!backupStatus) {
@@ -1120,6 +1154,38 @@ function App() {
     }
   };
 
+  const handleBackupSettingsSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!sessionToken || !backupSettingsDraft) {
+      return;
+    }
+
+    const retentionCount = Number(backupSettingsDraft.retentionCount.trim());
+    if (!Number.isInteger(retentionCount) || retentionCount < 1) {
+      setAppError('Automatic backup retention must be a whole number greater than 0.');
+      return;
+    }
+
+    setIsSavingBackupSettings(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const response = await updateBackupStatus(sessionToken, {
+        automaticBackupsEnabled: backupSettingsDraft.automaticBackupsEnabled,
+        schedule: backupSettingsDraft.schedule,
+        retentionCount,
+      });
+      setBackupStatus(response);
+      setAdminNotice('Updated automatic backup settings.');
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingBackupSettings(false);
+    }
+  };
+
   const resetEditingState = () => {
     setEditingEmployeeId(null);
     setDraftEmployee(null);
@@ -1225,10 +1291,12 @@ function App() {
     setAdminNotice('');
     setQuestionCategories([]);
     setBackupStatus(null);
+    setBackupSettingsDraft(null);
     setBackupFile(null);
     setBackupFileSummary(null);
     setIsLoadingBackupStatus(false);
     setIsSyncingBackups(false);
+    setIsSavingBackupSettings(false);
     setIsReadingBackupFile(false);
     setLoginPassword('');
     setPasswordDraft('');
@@ -3596,7 +3664,7 @@ function App() {
           <button
             type="button"
             className="secondary-button"
-            disabled={isLoadingBackupStatus || isSyncingBackups}
+            disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
             onClick={() => void handleBackupStatusRefresh()}
           >
             {isLoadingBackupStatus ? 'Refreshing…' : 'Refresh status'}
@@ -3604,16 +3672,99 @@ function App() {
         </div>
         {isLoadingBackupStatus && !backupStatus ? (
           <p className="muted-copy">Loading backup status...</p>
-        ) : backupStatus ? (
+        ) : backupStatus && backupSettingsDraft ? (
           <>
+            <form className="stack-form" onSubmit={(event) => void handleBackupSettingsSave(event)}>
+              <div className="form-columns">
+                <label className="inline-field">
+                  <span>Automatic backups</span>
+                  <select
+                    aria-label="Automatic backups enabled"
+                    disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
+                    value={backupSettingsDraft.automaticBackupsEnabled ? 'enabled' : 'disabled'}
+                    onChange={(event) =>
+                      setBackupSettingsDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              automaticBackupsEnabled: event.target.value === 'enabled',
+                            }
+                          : currentDraft,
+                      )
+                    }
+                  >
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </label>
+                <label className="inline-field">
+                  <span>Backup period</span>
+                  <select
+                    aria-label="Backup period"
+                    disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
+                    value={backupSettingsDraft.schedule}
+                    onChange={(event) =>
+                      setBackupSettingsDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              schedule: event.target.value as BackupSchedule,
+                            }
+                          : currentDraft,
+                      )
+                    }
+                  >
+                    {availableBackupSchedules.map((schedule) => (
+                      <option key={schedule} value={schedule}>
+                        {getBackupScheduleLabel(schedule)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="inline-field">
+                  <span>Retention</span>
+                  <input
+                    aria-label="Backup retention count"
+                    disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={backupSettingsDraft.retentionCount}
+                    onChange={(event) =>
+                      setBackupSettingsDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              retentionCount: event.target.value,
+                            }
+                          : currentDraft,
+                      )
+                    }
+                  />
+                </label>
+              </div>
+              <p className="muted-copy">
+                Automatic backups are written to the dedicated Docker backup volume and keep the latest configured number
+                of snapshots.
+              </p>
+              <div className="action-row">
+                <button type="submit" disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}>
+                  {isSavingBackupSettings ? 'Saving…' : 'Save automatic backups'}
+                </button>
+              </div>
+            </form>
             <dl className="detail-grid backup-status-grid">
               <div>
-                <dt>Daily backups</dt>
-                <dd>{backupStatus.dailyBackupsEnabled ? 'Enabled' : 'Disabled'}</dd>
+                <dt>Current status</dt>
+                <dd>{backupStatus.automaticBackupsEnabled ? 'Enabled' : 'Disabled'}</dd>
+              </div>
+              <div>
+                <dt>Backup period</dt>
+                <dd>{getBackupScheduleLabel(backupStatus.schedule)}</dd>
               </div>
               <div>
                 <dt>Retention</dt>
-                <dd>{backupStatus.retentionDays ? `${backupStatus.retentionDays} days` : 'Not configured'}</dd>
+                <dd>Keep latest {backupStatus.retentionCount} backups</dd>
               </div>
               <div>
                 <dt>Last backup</dt>

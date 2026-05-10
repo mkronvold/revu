@@ -54,6 +54,7 @@ import {
   setEmployeePasswordRequestSchema,
   setEmployeePasswordResponseSchema,
   submitAssessmentRequestSchema,
+  updateBackupStatusRequestSchema,
   updateAssignmentRequestSchema,
   updateEmployeeRequestSchema,
   updateQuestionSetRequestSchema,
@@ -315,6 +316,17 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
           },
         }),
       );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleBackupStatusUpdate = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:create"]);
+      const body = parseWithSchema(updateBackupStatusRequestSchema, request.body);
+      return backupStatusResponseSchema.parse(await store.updateBackupStatus(body));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -766,6 +778,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
 
   app.get("/backups/status", handleBackupStatus);
   app.get("/admin/backups/status", handleBackupStatus);
+  app.patch("/admin/backups/status", handleBackupStatusUpdate);
   app.get("/admin/backups/export", handleBackupExport);
   app.post("/admin/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, handleBackupRestore);
 

@@ -55,6 +55,7 @@ vi.mock('./api', () => {
     submitAssessment: vi.fn(),
     unarchiveReviewPeriod: vi.fn(),
     updateAssignment: vi.fn(),
+    updateBackupStatus: vi.fn(),
     updateEmployee: vi.fn(),
     updateQuestionSet: vi.fn(),
     updateReviewPeriod: vi.fn(),
@@ -77,6 +78,7 @@ import {
   me,
   resetEmployeePassword,
   restoreBackup,
+  updateBackupStatus,
   updateEmployee,
 } from './api';
 
@@ -127,18 +129,21 @@ function createBackupExample() {
   };
 }
 
-function createBackupStatusExample(): BackupStatusResponse {
+function createBackupStatusExample(overrides: Partial<BackupStatusResponse> = {}): BackupStatusResponse {
   return {
-    dailyBackupsEnabled: true,
-    retentionDays: 14,
+    automaticBackupsEnabled: true,
+    schedule: 'daily' as const,
+    retentionCount: 14,
     lastBackupAt: '2026-06-01T12:00:00.000Z',
     lastRestoreAt: null,
     defaultUserExportMode: 'preserve-passwords' as const,
     replaceStrategy: 'replace' as const,
-    supportedFormats: ['json'],
-    supportedRestoreModes: ['replace'],
-    supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'],
-    supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'],
+    supportedFormats: ['json'] as const,
+    supportedSchedules: ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'] as const,
+    supportedRestoreModes: ['replace'] as const,
+    supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'] as const,
+    supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'] as const,
+    ...overrides,
   };
 }
 
@@ -1078,6 +1083,71 @@ describe('file management screen', () => {
     await waitFor(() => window.location.pathname === '/workflow');
     expect(container.textContent).toContain('Updated workflow');
     expect(container.querySelector('.workflow-page-markdown')?.innerHTML).toContain('<strong>Bold</strong>');
+  });
+
+  it('saves automatic backup schedule, retention, and enablement settings', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(updateBackupStatus).mockResolvedValue(
+      createBackupStatusExample({
+        automaticBackupsEnabled: false,
+        schedule: 'weekly',
+        retentionCount: 5,
+      }),
+    );
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/file-management');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
+
+    const enableField = container.querySelector('select[aria-label="Automatic backups enabled"]') as HTMLSelectElement | null;
+    const periodField = container.querySelector('select[aria-label="Backup period"]') as HTMLSelectElement | null;
+    const retentionField = container.querySelector('input[aria-label="Backup retention count"]') as HTMLInputElement | null;
+    const saveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save automatic backups',
+    );
+
+    expect(enableField).toBeTruthy();
+    expect(periodField).toBeTruthy();
+    expect(retentionField).toBeTruthy();
+    expect(saveButton).toBeTruthy();
+
+    await act(async () => {
+      if (enableField) {
+        setFieldValue(enableField, 'disabled');
+      }
+      if (periodField) {
+        setFieldValue(periodField, 'weekly');
+      }
+      if (retentionField) {
+        setFieldValue(retentionField, '5');
+      }
+      await flushRender();
+    });
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Updated automatic backup settings.') ?? false);
+
+    expect(updateBackupStatus).toHaveBeenCalledWith('session-token', {
+      automaticBackupsEnabled: false,
+      schedule: 'weekly',
+      retentionCount: 5,
+    });
+    expect(container.textContent).toContain('Keep latest 5 backups');
+    expect(container.textContent).toContain('Disabled');
+    expect(container.textContent).toContain('weekly');
   });
 });
 

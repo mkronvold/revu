@@ -104,7 +104,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./up.sh
    ```
 
-    The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images, applies database migrations, seeds the built-in example dataset only when the database is still empty, and starts Compose. The deployment stack now also starts a `backup` sidecar that keeps a retained archive volume plus a separate handoff volume for backup download/upload and restore workflows.
+    The helper pulls the latest git changes first, compares `.env.example` to your local `.env`, and offers to add newly introduced keys or remove keys that no longer exist before it pulls images, applies database migrations, seeds the built-in example dataset only when the database is still empty, and starts Compose. The deployment stack now also starts a `backup` sidecar that keeps automatic backups in a dedicated archive volume, uses a separate handoff volume for backup download/upload and restore workflows, and shares a small config/status volume with the API.
 
    To stop the deployment stack later:
 
@@ -116,11 +116,15 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 
 ## Backup runtime
 
-- The deployment compose file mounts two named backup volumes into both the `api` and `backup` containers:
-  - `backup-archive` stores retained backup files.
+- The deployment compose file mounts three named backup volumes into the backup runtime:
+  - `backup-archive` stores retained automatic backup files.
   - `backup-handoff` is reserved for download, upload, and restore handoff files.
-- The `backup` sidecar runs `scripts/backup-entrypoint.sh scheduler` and triggers one full backup every day at `BACKUP_SCHEDULE_UTC` (default `02:00` UTC).
-- Old archived backups are pruned after `BACKUP_RETENTION_DAYS` days (default `14`).
+  - `backup-config` stores the shared automatic-backup schedule and last-run status file.
+- The `backup` sidecar runs `scripts/backup-entrypoint.sh scheduler` and reads the same backup settings the File Management page edits:
+  - `BACKUP_AUTOMATIC_ENABLED` enables or disables scheduled backups.
+  - `BACKUP_SCHEDULE` accepts `1hr`, `3hr`, `6hr`, `12hr`, `daily`, or `weekly`.
+  - `BACKUP_RETENTION_COUNT` keeps the latest N archived backups.
+- The API and backup sidecar both read and update `BACKUP_STATUS_PATH`, so the UI reflects the latest backup and restore timestamps from the shared config volume.
 - The scheduler and helper scripts expect the API backup endpoints to be reachable at:
   - `BACKUP_DOWNLOAD_URL` (default `http://api:4000/api/v1/admin/backups/export`)
   - `BACKUP_RESTORE_URL` (default `http://api:4000/api/v1/admin/backups/restore`)

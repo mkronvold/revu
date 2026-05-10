@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 import type {
   Assessment,
@@ -11,6 +12,7 @@ import type {
   AuthChangePasswordResponse,
   AuthPermission,
   AuthSession,
+  BackupSchedule,
   BackupRestoreResponse,
   BackupRestoreScope,
   BackupSnapshot,
@@ -41,6 +43,7 @@ import type {
   SetEmployeePasswordResponse,
   SubmitAssessmentRequest,
   UpdateAssignmentRequest,
+  UpdateBackupStatusRequest,
   UpdateEmployeeRequest,
   UpdateQuestionSetRequest,
   UpdateReviewPeriodRequest,
@@ -197,6 +200,12 @@ export class ApiError extends Error {
 }
 
 const eightHoursInMs = 8 * 60 * 60 * 1000;
+const supportedBackupSchedules: BackupSchedule[] = ["1hr", "3hr", "6hr", "12hr", "daily", "weekly"];
+
+type BackupStatusConfig = Pick<
+  BackupStatusResponse,
+  "automaticBackupsEnabled" | "schedule" | "retentionCount" | "lastBackupAt" | "lastRestoreAt"
+>;
 
 const seedPasswordsByUsername: Record<string, string> = {
   "ada.admin": "AdminPass123!",
@@ -1283,6 +1292,10 @@ export class ApiStore {
     return Number.isNaN(parsed.valueOf()) ? null : parsed.toISOString();
   }
 
+  private parseBackupScheduleEnv(value: string | undefined): BackupSchedule {
+    return supportedBackupSchedules.includes(value as BackupSchedule) ? (value as BackupSchedule) : "daily";
+  }
+
   private readBackupStatusOverrides() {
     const path = process.env.BACKUP_STATUS_PATH;
     if (!path || !existsSync(path)) {
@@ -1292,12 +1305,21 @@ export class ApiStore {
     try {
       const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
       return {
-        dailyBackupsEnabled: typeof parsed.dailyBackupsEnabled === "boolean" ? parsed.dailyBackupsEnabled : undefined,
-        retentionDays:
-          typeof parsed.retentionDays === "number" && Number.isInteger(parsed.retentionDays) && parsed.retentionDays > 0
-            ? parsed.retentionDays
-            : parsed.retentionDays === null
-              ? null
+        automaticBackupsEnabled:
+          typeof parsed.automaticBackupsEnabled === "boolean"
+            ? parsed.automaticBackupsEnabled
+            : typeof parsed.dailyBackupsEnabled === "boolean"
+              ? parsed.dailyBackupsEnabled
+              : undefined,
+        schedule:
+          typeof parsed.schedule === "string" && supportedBackupSchedules.includes(parsed.schedule as BackupSchedule)
+            ? (parsed.schedule as BackupSchedule)
+            : undefined,
+        retentionCount:
+          typeof parsed.retentionCount === "number" && Number.isInteger(parsed.retentionCount) && parsed.retentionCount > 0
+            ? parsed.retentionCount
+            : typeof parsed.retentionDays === "number" && Number.isInteger(parsed.retentionDays) && parsed.retentionDays > 0
+              ? parsed.retentionDays
               : undefined,
         lastBackupAt:
           typeof parsed.lastBackupAt === "string" && !Number.isNaN(new Date(parsed.lastBackupAt).valueOf())
@@ -1315,6 +1337,38 @@ export class ApiStore {
     } catch {
       return null;
     }
+  }
+
+  private getBackupStatusConfig(): BackupStatusConfig {
+    const overrides = this.readBackupStatusOverrides();
+
+    return {
+      automaticBackupsEnabled:
+        overrides?.automaticBackupsEnabled ??
+        this.parseBooleanEnv(process.env.BACKUP_AUTOMATIC_ENABLED ?? process.env.BACKUP_DAILY_ENABLED),
+      schedule: overrides?.schedule ?? this.parseBackupScheduleEnv(process.env.BACKUP_SCHEDULE),
+      retentionCount:
+        overrides?.retentionCount ??
+        this.parseNumberEnv(process.env.BACKUP_RETENTION_COUNT ?? process.env.BACKUP_RETENTION_DAYS) ??
+        14,
+      lastBackupAt: overrides?.lastBackupAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_BACKUP_AT),
+      lastRestoreAt: overrides?.lastRestoreAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_RESTORE_AT),
+    };
+  }
+
+  private writeBackupStatusConfig(patch: Partial<BackupStatusConfig>) {
+    const path = process.env.BACKUP_STATUS_PATH;
+    if (!path) {
+      return;
+    }
+
+    const nextStatus = {
+      ...this.getBackupStatusConfig(),
+      ...patch,
+    } satisfies BackupStatusConfig;
+
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(nextStatus, null, 2)}\n`, "utf8");
   }
 
   private canManagerEdit(target: Employee, updates: UpdateEmployeeRequest) {
@@ -2661,20 +2715,32 @@ export class ApiStore {
   }
 
   async getBackupStatus(): Promise<BackupStatusResponse> {
-    const overrides = this.readBackupStatusOverrides();
+    const config = this.getBackupStatusConfig();
 
     return {
-      dailyBackupsEnabled: overrides?.dailyBackupsEnabled ?? this.parseBooleanEnv(process.env.BACKUP_DAILY_ENABLED),
-      retentionDays: overrides?.retentionDays ?? this.parseNumberEnv(process.env.BACKUP_RETENTION_DAYS),
-      lastBackupAt: overrides?.lastBackupAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_BACKUP_AT),
-      lastRestoreAt: overrides?.lastRestoreAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_RESTORE_AT),
+      automaticBackupsEnabled: config.automaticBackupsEnabled,
+      schedule: config.schedule,
+      retentionCount: config.retentionCount,
+      lastBackupAt: config.lastBackupAt,
+      lastRestoreAt: config.lastRestoreAt,
       defaultUserExportMode: "preserve-passwords",
       replaceStrategy: "replace",
       supportedFormats: ["json"],
+      supportedSchedules: supportedBackupSchedules,
       supportedRestoreModes: ["replace"],
       supportedRestoreScopes: ["all", "users", "questions", "reviews"],
       supportedUserExportModes: ["rotate-passcodes", "preserve-passwords"],
     };
+  }
+
+  async updateBackupStatus(input: UpdateBackupStatusRequest): Promise<BackupStatusResponse> {
+    this.writeBackupStatusConfig({
+      automaticBackupsEnabled: input.automaticBackupsEnabled,
+      schedule: input.schedule,
+      retentionCount: input.retentionCount,
+    });
+
+    return this.getBackupStatus();
   }
 
   async createBackup(mode: LocalUsersExportMode = "preserve-passwords"): Promise<BackupSnapshot> {
@@ -2686,8 +2752,8 @@ export class ApiStore {
       this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
     ]);
 
-    return {
-      version: 1,
+    const backup = {
+      version: 1 as const,
       exportedAt: users.exportedAt,
       users: {
         mode: users.mode,
@@ -2701,6 +2767,12 @@ export class ApiStore {
         assessments,
       },
     };
+
+    this.writeBackupStatusConfig({
+      lastBackupAt: backup.exportedAt,
+    });
+
+    return backup;
   }
 
   private async assertReviewDataEmployeesExist(client: DbClient, reviewData: BackupReviewData) {
@@ -3200,7 +3272,7 @@ export class ApiStore {
 
   async restoreBackup(scope: BackupRestoreScope, backup: BackupSnapshot): Promise<BackupRestoreResponse> {
     try {
-      return await withTransaction(async (client) => {
+      const response = await withTransaction(async (client) => {
         const restoredAt = nowIso();
         await client.query("SET LOCAL session_replication_role = replica");
 
@@ -3226,7 +3298,7 @@ export class ApiStore {
         }
 
         return {
-          mode: "replace",
+          mode: "replace" as const,
           target: scope,
           restoredAt,
           counts: {
@@ -3238,6 +3310,12 @@ export class ApiStore {
           },
         };
       });
+
+      this.writeBackupStatusConfig({
+        lastRestoreAt: response.restoredAt,
+      });
+
+      return response;
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;

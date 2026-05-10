@@ -8,6 +8,7 @@ import {
   backupExportResponseSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
+  updateBackupStatusRequestSchema,
   authChangePasswordRequestSchema,
   authChangePasswordResponseSchema,
   authLoginResponseSchema,
@@ -65,6 +66,7 @@ import {
   type SaveAssessmentDraftRequest,
   type SetEmployeePasswordRequest,
   type SubmitAssessmentRequest,
+  type UpdateBackupStatusRequest,
   type UpdateAssignmentRequest,
   type UpdateEmployeeRequest,
   type UpdateQuestionSetRequest,
@@ -203,6 +205,17 @@ export function exportLocalUsers(token: string, format: ExportFormat, mode: Loca
 
 export function getBackupStatus(token: string) {
   return request('/admin/backups/status', backupStatusResponseSchema, withAuthorization(token));
+}
+
+export function updateBackupStatus(token: string, payload: UpdateBackupStatusRequest) {
+  return request(
+    '/admin/backups/status',
+    backupStatusResponseSchema,
+    withAuthorization(token, {
+      method: 'PATCH',
+      body: JSON.stringify(updateBackupStatusRequestSchema.parse(payload)),
+    }),
+  );
 }
 
 export function exportBackup(token: string, mode: LocalUsersExportMode = 'preserve-passwords') {
