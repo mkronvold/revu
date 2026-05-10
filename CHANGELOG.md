@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Added admin delete-from-edit support for employees, backed by hidden database tombstones so deleted employees drop out of lists and dialogs without reusing hard deletes
+- Updated the password-management dialog copy so the manual password action consistently says `Set password` and prompts for a new password
 - Added spacing and wrapping inside detail-grid fields so long employee detail values like email addresses no longer collide with adjacent dialog fields
 - Added API outage recovery detection that polls `/health` and shows a `New version. Refresh Now` button in the signed-in sidebar card after the API comes back
 - Realigned the Reviews queue and Employee directory columns with shared grid tracks and moved the employee table header onto the same themed header surface as Reviews

@@ -21,6 +21,7 @@ import {
   createQuestionSetRequestSchema,
   createReviewPeriodRequestSchema,
   deleteAssignmentResponseSchema,
+  deleteEmployeeResponseSchema,
   employeeResponseSchema,
   employeesListResponseSchema,
   exportStubResponseSchema,
@@ -328,6 +329,16 @@ export function updateEmployee(token: string, employeeId: string, payload: Updat
     withAuthorization(token, {
       method: 'PATCH',
       body: JSON.stringify(updateEmployeeRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function deleteEmployee(token: string, employeeId: string) {
+  return request(
+    `/employees/${employeeId}`,
+    deleteEmployeeResponseSchema,
+    withAuthorization(token, {
+      method: 'DELETE',
     }),
   );
 }

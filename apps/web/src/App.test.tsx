@@ -31,6 +31,7 @@ vi.mock('./api', () => {
     createQuestionSet: vi.fn(),
     createReviewPeriod: vi.fn(),
     deleteAssignment: vi.fn(),
+    deleteEmployee: vi.fn(),
     exportBackup: vi.fn(),
     exportAssignments: vi.fn(),
     exportLocalUsers: vi.fn(),
@@ -69,6 +70,7 @@ import App from './App';
 import {
   acceptAssessment,
   checkApiHealth,
+  deleteEmployee,
   exportBackup,
   exportLocalUsers,
   exportQuestionSets,
@@ -1737,6 +1739,8 @@ describe('employees screen', () => {
     });
 
     await waitFor(() => container.textContent?.includes('Password management') ?? false);
+    expect(container.textContent).toContain('Set password');
+    expect((container.querySelector('input[placeholder="Enter a new password"]') as HTMLInputElement | null)).toBeTruthy();
 
     await waitFor(() =>
       Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Generate one-time passcode'),
@@ -1755,6 +1759,69 @@ describe('employees screen', () => {
     await waitFor(() => container.textContent?.includes('One-time passcode: OneTime123!') ?? false);
 
     expect(resetEmployeePassword).toHaveBeenCalledWith('session-token', elliot.id);
+  });
+
+  it('lets admins tombstone-delete employees from the edit dialog', async () => {
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+    vi.mocked(deleteEmployee).mockResolvedValue({
+      employeeId: elliot.id,
+      deleted: true,
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Employee'),
+    );
+    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+
+    await act(async () => {
+      summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
+
+    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit');
+    expect(editButton).toBeTruthy();
+
+    await act(async () => {
+      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Edit employee') ?? false);
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete Employee');
+    expect(deleteButton).toBeTruthy();
+
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Delete this employee? The employee will be removed from the app and kept as a hidden tombstone in the database.',
+    );
+    expect(deleteEmployee).toHaveBeenCalledWith('session-token', elliot.id);
+    expect(container.textContent).toContain('Employee deleted.');
+    expect(
+      Array.from(container.querySelectorAll('.employee-row-card')).some((row) => row.textContent?.includes('Elliot Employee') ?? false),
+    ).toBe(false);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('keeps password actions admin-only while managers can still edit non-admin employees', async () => {

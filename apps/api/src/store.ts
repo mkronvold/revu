@@ -82,6 +82,7 @@ type EmployeeRow = {
   password_changed_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+  deleted_at: Date | string | null;
 };
 
 type ReviewPeriodRow = {
@@ -321,8 +322,10 @@ function mapDatabaseError(error: unknown) {
     switch (error.constraint) {
       case "employees_username_unique_idx":
       case "employees_username_unique_ci_idx":
+      case "employees_username_active_unique_ci_idx":
         return new ApiError(409, "Username already exists");
       case "employees_email_key":
+      case "employees_email_active_unique_idx":
         return new ApiError(409, "Email already exists");
       case "review_periods_key_key":
         return new ApiError(409, "Review period key already exists");
@@ -448,11 +451,49 @@ export class ApiStore {
     return username.trim().toLocaleLowerCase();
   }
 
-  private async ensureEmployeeUsernameStorage(client: DbClient) {
+  private async ensureEmployeeDeletedColumn(client: DbClient) {
     await client.query(
       `
-        CREATE UNIQUE INDEX IF NOT EXISTS employees_username_unique_ci_idx
+        ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ
+      `,
+    );
+  }
+
+  private async ensureEmployeeTombstoneStorage(client: DbClient) {
+    await this.ensureEmployeeDeletedColumn(client);
+    await client.query(
+      `
+        ALTER TABLE employees
+        DROP CONSTRAINT IF EXISTS employees_email_key
+      `,
+    );
+    await client.query(
+      `
+        CREATE UNIQUE INDEX IF NOT EXISTS employees_email_active_unique_idx
+        ON employees(email)
+        WHERE deleted_at IS NULL
+      `,
+    );
+  }
+
+  private async ensureEmployeeUsernameStorage(client: DbClient) {
+    await this.ensureEmployeeTombstoneStorage(client);
+    await client.query(
+      `
+        DROP INDEX IF EXISTS employees_username_unique_idx
+      `,
+    );
+    await client.query(
+      `
+        DROP INDEX IF EXISTS employees_username_unique_ci_idx
+      `,
+    );
+    await client.query(
+      `
+        CREATE UNIQUE INDEX IF NOT EXISTS employees_username_active_unique_ci_idx
         ON employees (lower(username))
+        WHERE deleted_at IS NULL
       `,
     );
 
@@ -489,10 +530,21 @@ export class ApiStore {
 
   private async loadEmployeeRows(
     client: DbClient,
-    filters: { employeeId?: string; usernames?: readonly string[]; employeeIds?: readonly string[] } = {},
+    filters: {
+      employeeId?: string;
+      usernames?: readonly string[];
+      employeeIds?: readonly string[];
+      includeDeleted?: boolean;
+    } = {},
   ) {
+    await this.ensureEmployeeDeletedColumn(client);
+
     const clauses: string[] = [];
     const values: Array<string | readonly string[]> = [];
+
+    if (!filters.includeDeleted) {
+      clauses.push("deleted_at IS NULL");
+    }
 
     if (filters.employeeId) {
       values.push(filters.employeeId);
@@ -525,7 +577,8 @@ export class ApiStore {
           password_reset_required,
           password_changed_at,
           created_at,
-          updated_at
+          updated_at,
+          deleted_at
         FROM employees
         ${whereClause}
         ORDER BY created_at, id
@@ -536,8 +589,8 @@ export class ApiStore {
     return result.rows;
   }
 
-  private async employeeOrThrow(client: DbClient, employeeId: string) {
-    const [employee] = await this.loadEmployeeRows(client, { employeeId });
+  private async employeeOrThrow(client: DbClient, employeeId: string, options: { includeDeleted?: boolean } = {}) {
+    const [employee] = await this.loadEmployeeRows(client, { employeeId, includeDeleted: options.includeDeleted });
     if (!employee) {
       throw new ApiError(404, "Employee not found");
     }
@@ -988,12 +1041,14 @@ export class ApiStore {
             SELECT 1
             FROM employees
             WHERE lower(username) = lower($1)
+              AND deleted_at IS NULL
               AND ($2::uuid IS NULL OR id <> $2)
           ) AS username_exists,
           EXISTS(
             SELECT 1
             FROM employees
             WHERE email = $3
+              AND deleted_at IS NULL
               AND ($2::uuid IS NULL OR id <> $2)
           ) AS email_exists
       `,
@@ -1018,6 +1073,7 @@ export class ApiStore {
             SELECT id, role, status
             FROM employees
             WHERE id = ANY($1::uuid[])
+              AND deleted_at IS NULL
           `,
           [relationshipIds],
         )
@@ -1635,7 +1691,8 @@ export class ApiStore {
               password_reset_required,
               password_changed_at,
               created_at,
-              updated_at
+              updated_at,
+              deleted_at
           `,
           [
             id,
@@ -1714,7 +1771,8 @@ export class ApiStore {
               password_reset_required,
               password_changed_at,
               created_at,
-              updated_at
+              updated_at,
+              deleted_at
           `,
           [
             employeeId,
@@ -1746,6 +1804,7 @@ export class ApiStore {
   async deleteEmployee(employeeId: string) {
     try {
       return await withTransaction(async (client) => {
+        await this.ensureEmployeeDeletedColumn(client);
         await this.employeeOrThrow(client, employeeId);
 
         const relationshipReference = await client.query<ExistsRow>(
@@ -1753,8 +1812,11 @@ export class ApiStore {
             SELECT EXISTS(
               SELECT 1
               FROM employees
-              WHERE manager_employee_id = $1
-                 OR assessor_employee_id = $1
+              WHERE deleted_at IS NULL
+                AND (
+                  manager_employee_id = $1
+                  OR assessor_employee_id = $1
+                )
             ) AS exists
           `,
           [employeeId],
@@ -1796,8 +1858,22 @@ export class ApiStore {
           throw new ApiError(409, "Employee is still referenced by assessments");
         }
 
+        const tombstonedAt = nowIso();
         await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
-        const deleteResult = await client.query("DELETE FROM employees WHERE id = $1", [employeeId]);
+        const deleteResult = await client.query(
+          `
+            UPDATE employees
+            SET password_hash = NULL,
+                password_reset_required = FALSE,
+                password_changed_at = NULL,
+                password_changed_by_employee_id = NULL,
+                deleted_at = $2::timestamptz,
+                updated_at = $2::timestamptz
+            WHERE id = $1
+              AND deleted_at IS NULL
+          `,
+          [employeeId, tombstonedAt],
+        );
         if (deleteResult.rowCount === 0) {
           throw new ApiError(404, "Employee not found");
         }
@@ -2447,7 +2523,10 @@ export class ApiStore {
           seenEmails.add(item.email);
         }
 
-        const existingRows = await this.loadEmployeeRows(client, { usernames: items.map((item) => item.username) });
+        const existingRows = await this.loadEmployeeRows(client, {
+          usernames: items.map((item) => item.username),
+          includeDeleted: true,
+        });
         const existingByUsername = new Map(
           existingRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
         );
@@ -2469,7 +2548,8 @@ export class ApiStore {
                 SET full_name = $2,
                     email = $3,
                     role = $4,
-                    status = $5
+                    status = $5,
+                    deleted_at = NULL
                 WHERE id = $1
               `,
               [existing.id, item.fullName, item.email, item.role, item.status],
@@ -3170,9 +3250,13 @@ export class ApiStore {
     this.validateRestoreUsers(items, true);
 
     const itemsById = new Map(items.map((item) => [item.id!, item]));
-    const existingRows = await this.loadEmployeeRows(client);
+    const existingRows = await this.loadEmployeeRows(client, { includeDeleted: true });
     const existingById = new Map(existingRows.map((row) => [row.id, row]));
-    const existingByUsername = new Map(existingRows.map((row) => [this.normalizeUsername(row.username), row] as const));
+    const existingByUsername = new Map(
+      existingRows
+        .filter((row) => row.deleted_at === null)
+        .map((row) => [this.normalizeUsername(row.username), row] as const),
+    );
 
     for (const item of items) {
       const currentById = existingById.get(item.id!);
@@ -3190,17 +3274,18 @@ export class ApiStore {
         await client.query(
           `
             UPDATE employees
-            SET username = $2,
-                full_name = $3,
-                email = $4,
-                role = $5,
-                status = $6,
-                password_hash = $7,
-                password_reset_required = $8,
-                password_changed_at = $9::timestamptz,
-                password_changed_by_employee_id = NULL
-            WHERE id = $1
-          `,
+              SET username = $2,
+                  full_name = $3,
+                  email = $4,
+                  role = $5,
+                  status = $6,
+                  password_hash = $7,
+                  password_reset_required = $8,
+                  password_changed_at = $9::timestamptz,
+                  password_changed_by_employee_id = NULL,
+                  deleted_at = NULL
+             WHERE id = $1
+           `,
           [
             item.id,
             item.username,

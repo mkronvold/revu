@@ -288,6 +288,56 @@ describe("auth and employee admin API", () => {
     });
     expect(deleteResponse.statusCode).toBe(200);
     expect(deleteEmployeeResponseSchema.parse(deleteResponse.json()).deleted).toBe(true);
+
+    const deletedEmployeeResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/employees/${createdEmployee.id}`,
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(deletedEmployeeResponse.statusCode).toBe(404);
+
+    const listedEmployeesAfterDelete = employeesListResponseSchema.parse(
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/v1/employees",
+          headers: {
+            authorization: `Bearer ${adminLogin.session.token}`,
+          },
+        })
+      ).json(),
+    );
+    expect(listedEmployeesAfterDelete.items.some((employee) => employee.id === createdEmployee.id)).toBe(false);
+
+    const deletedEmployeeSessionResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${changedPasswordPayload.session.token}`,
+      },
+    });
+    expect(deletedEmployeeSessionResponse.statusCode).toBe(401);
+
+    const recreateDeletedEmployeeResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/employees",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        username: "New.Hire",
+        fullName: "Recreated Hire",
+        email: "new.hire@example.com",
+        role: "employee",
+        status: "active",
+        managerId: "22222222-2222-4222-8222-222222222222",
+        assessorId: "44444444-4444-4444-8444-444444444444",
+      },
+    });
+    expect(recreateDeletedEmployeeResponse.statusCode).toBe(201);
+    expect(employeeResponseSchema.parse(recreateDeletedEmployeeResponse.json()).item.username).toBe("New.Hire");
   });
 
   it("supports local user import/export with password transfer fields", async () => {
@@ -463,6 +513,7 @@ describe("auth and employee admin API", () => {
       resolve(process.cwd(), "../../prisma/migrations/006_employee_username_case_support.sql"),
       "utf8",
     );
+    const tombstoneSql = readFileSync(resolve(process.cwd(), "../../prisma/migrations/007_employee_tombstones.sql"), "utf8");
 
     expect(authSql).toContain("ADD COLUMN username TEXT");
     expect(authSql).toContain("employees_username_format");
@@ -472,5 +523,10 @@ describe("auth and employee admin API", () => {
     expect(usernameUpgradeSql).toContain("employees_username_unique_ci_idx");
     expect(usernameUpgradeSql).toContain("lower(username)");
     expect(usernameUpgradeSql).toContain("^[A-Za-z0-9._-]+$");
+    expect(tombstoneSql).toContain("ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ");
+    expect(tombstoneSql).toContain("DROP CONSTRAINT IF EXISTS employees_email_key");
+    expect(tombstoneSql).toContain("employees_email_active_unique_idx");
+    expect(tombstoneSql).toContain("employees_username_active_unique_ci_idx");
+    expect(tombstoneSql).toContain("WHERE deleted_at IS NULL");
   });
 });

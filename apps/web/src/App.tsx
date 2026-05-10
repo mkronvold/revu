@@ -21,6 +21,7 @@ import {
   checkApiHealth,
   changePassword,
   createEmployee,
+  deleteEmployee,
   exportBackup,
   getEmployee,
   getBackupStatus,
@@ -457,6 +458,7 @@ function App() {
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [isSyncingLocalUsers, setIsSyncingLocalUsers] = useState(false);
   const [localUserExportMode, setLocalUserExportMode] = useState<LocalUsersExportMode>('rotate-passcodes');
   const [backupExportMode, setBackupExportMode] = useState<LocalUsersExportMode>('preserve-passwords');
@@ -1181,6 +1183,20 @@ function App() {
     setEmployees(response.items);
   };
 
+  const removeEmployeeFromState = (employeeId: string) => {
+    setEmployees((currentEmployees) => currentEmployees.filter((employee) => employee.id !== employeeId));
+    setFoundation((currentFoundation) =>
+      currentFoundation
+        ? {
+            ...currentFoundation,
+            employees: currentFoundation.employees.filter((employee) => employee.id !== employeeId),
+          }
+        : currentFoundation,
+    );
+    setSelectedEmployeeId((currentEmployeeId) => (currentEmployeeId === employeeId ? null : currentEmployeeId));
+    setSelectedEmployeeDetail((currentDetail) => (currentDetail?.id === employeeId ? null : currentDetail));
+  };
+
   const refreshQuestionCategorySuggestions = async () => {
     if (!sessionToken || !isAdmin) {
       setQuestionCategories([]);
@@ -1888,6 +1904,41 @@ function App() {
     }
   };
 
+  const handleDeleteEmployee = async () => {
+    if (!draftEmployee?.id || !sessionToken) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Delete this employee? The employee will be removed from the app and kept as a hidden tombstone in the database.',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingEmployee(true);
+    setFormError('');
+
+    try {
+      await deleteEmployee(sessionToken, draftEmployee.id);
+
+      if (sessionUser?.id === draftEmployee.id) {
+        clearSession({
+          authNotice: 'This account was deleted.',
+        });
+        return;
+      }
+
+      removeEmployeeFromState(draftEmployee.id);
+      closeEmployeeDialog();
+      setAdminNotice('Employee deleted.');
+    } catch (error) {
+      setFormError(getErrorMessage(error));
+    } finally {
+      setIsDeletingEmployee(false);
+    }
+  };
+
   const markEmployeeInactive = async () => {
     if (!selectedEmployee || !sessionToken) {
       return;
@@ -1926,7 +1977,7 @@ function App() {
       });
       setPasswordDraft('');
       setTemporaryPassword(null);
-      setPasswordStatus('Admin set a known password for this employee.');
+      setPasswordStatus('Admin set a new password for this employee.');
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -4297,10 +4348,25 @@ function App() {
               ) : null}
               {formError ? <p className="form-error">{formError}</p> : null}
               <div className="action-row">
-                <button type="submit" disabled={isSavingEmployee}>
+                <button type="submit" disabled={isSavingEmployee || isDeletingEmployee}>
                   {isSavingEmployee ? 'Saving…' : 'Save employee'}
                 </button>
-                <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                {isAdmin && draftEmployee.id ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void handleDeleteEmployee()}
+                    disabled={isSavingEmployee || isDeletingEmployee}
+                  >
+                    {isDeletingEmployee ? 'Deleting…' : 'Delete Employee'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeEmployeeDialog}
+                  disabled={isSavingEmployee || isDeletingEmployee}
+                >
                   Cancel
                 </button>
               </div>
@@ -4793,12 +4859,12 @@ function App() {
                     <p className="temporary-password">One-time passcode: {temporaryPassword}</p>
                   ) : null}
                   <label className="stack-form">
-                    <span>Set known password</span>
+                    <span>Set password</span>
                     <input
                       type="password"
                       value={passwordDraft}
                       onChange={(event) => setPasswordDraft(event.target.value)}
-                      placeholder="Enter a known password"
+                      placeholder="Enter a new password"
                     />
                   </label>
                   <div className="action-row">
