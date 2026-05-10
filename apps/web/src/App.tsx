@@ -3687,6 +3687,11 @@ function App() {
             </label>
             <div className="dialog-footer">
               <div className="dialog-footer-end">
+                {selectedReviewPeriod?.status === 'archived' ? null : (
+                  <button type="submit" disabled={isSavingReviewAdmin || !isQuestionEditorDirty}>
+                    Save question
+                  </button>
+                )}
                 <button
                   type="button"
                   className="secondary-button"
@@ -3695,11 +3700,6 @@ function App() {
                 >
                   Cancel
                 </button>
-                {selectedReviewPeriod?.status === 'archived' ? null : (
-                  <button type="submit" disabled={isSavingReviewAdmin || !isQuestionEditorDirty}>
-                    Save question
-                  </button>
-                )}
               </div>
             </div>
           </form>

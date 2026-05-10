@@ -429,8 +429,8 @@ describe('questions screen', () => {
     expect(questionEditor).toBeTruthy();
     expect(Array.from(questionEditor?.querySelectorAll('button') ?? []).map((button) => button.textContent)).toEqual([
       'Close',
-      'Cancel',
       'Save question',
+      'Cancel',
     ]);
     expect(questionEditor?.querySelector('.question-edit-preview')).toBeNull();
 
