@@ -34,7 +34,7 @@ describe('assessment and review helpers', () => {
       readyToSubmitSnapshot,
       selfAssessmentId,
       {
-        'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa': 'agree',
+        'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa': 'somewhat agree',
         'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa': '',
       },
       { now: '2026-02-14T12:00:00.000Z' },
@@ -52,7 +52,7 @@ describe('assessment and review helpers', () => {
       { now: '2026-02-15T09:30:00.000Z' },
     );
     const submittedQueues = buildAssessmentQueues(elliot, submittedSnapshot, employeesListExample.items);
-    expect(submittedQueues[3]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
+    expect(submittedQueues.every((queue) => queue.items.every((item) => item.assessmentId !== selfAssessmentId))).toBe(true);
   });
 
   it('tracks manager review queues across accept, reject-to-draft, and reviewed transitions', () => {
@@ -93,7 +93,7 @@ describe('assessment and review helpers', () => {
     const reviewedQueue = buildReviewQueues(manny, reviewedSnapshot, employeesListExample.items);
     expect(reviewedQueue.find((item) => item.assessmentId === selfAssessmentId)).toMatchObject({
       nextStepLabel: 'review complete',
-      statusLabel: 'Reviewed',
+      statusLabel: 'Review Complete',
     });
 
     const rejectedSnapshot = rejectAssessmentToDraft(snapshot, selfAssessmentId, 'Please expand the self-review examples.');
@@ -259,6 +259,8 @@ describe('assessment and review helpers', () => {
   it('formats subjective assessment responses with numeric labels', () => {
     expect(formatSubjectiveResponse('strongly agree')).toBe('4 - strongly agree');
     expect(formatSubjectiveResponse('4')).toBe('4 - strongly agree');
+    expect(formatSubjectiveResponse('agree')).toBe('3 - somewhat agree');
+    expect(formatSubjectiveResponse('somewhat disagree')).toBe('2 - somewhat disagree');
     expect(formatSubjectiveResponse("don't know")).toBe("0 - don't know");
     expect(formatSubjectiveResponse('0')).toBe("0 - don't know");
   });

@@ -17,12 +17,15 @@ export type AssessmentQueueItem = {
   assessmentId: string;
   title: string;
   detail: string;
+  subjectName: string;
+  targetLabel: string;
+  assessorLabel: string;
   statusLabel: string;
   actionLabel: string;
 };
 
 export type AssessmentQueueGroup = {
-  id: 'ready' | 'in-progress' | 'ready-to-submit' | 'awaiting-acceptance' | 'complete';
+  id: 'not-started' | 'incomplete' | 'ready-to-submit';
   title: string;
   items: AssessmentQueueItem[];
 };
@@ -56,6 +59,12 @@ export type AssessmentEditorQuestion = {
   category: string | null;
   prompt: string;
   response: string;
+};
+
+export type AssessmentEditorQuestionGroup = {
+  id: string;
+  category: string | null;
+  questions: AssessmentEditorQuestion[];
 };
 
 export type AssessmentEditor = {
@@ -133,6 +142,10 @@ function formatDate(date: string) {
 
 function getReviewPeriod(snapshot: AssessmentWorkflowSnapshot, reviewPeriodId: string) {
   return snapshot.reviewPeriods.find((reviewPeriod) => reviewPeriod.id === reviewPeriodId) ?? null;
+}
+
+function getActiveReviewPeriod(snapshot: AssessmentWorkflowSnapshot) {
+  return snapshot.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null;
 }
 
 function getQuestionSet(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
@@ -258,23 +271,21 @@ function hasAssessmentResponses(snapshot: AssessmentWorkflowSnapshot, assessment
   return getAssessmentQuestionRows(snapshot, assessment).some((question) => question.response.trim().length > 0);
 }
 
-type AssessmentQueueStatus = 'ready' | 'in-progress' | 'ready-to-submit' | 'awaiting-acceptance' | 'complete';
+type DashboardAssessmentQueueStatus = 'not-started' | 'incomplete' | 'ready-to-submit';
 
-function getAssessmentQueueStatus(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment): AssessmentQueueStatus {
-  switch (assessment.reviewState) {
-    case 'submitted':
-      return 'awaiting-acceptance';
-    case 'accepted':
-    case 'reviewed':
-      return 'complete';
-    case 'new':
-    case 'draft':
-      if (isAssessmentComplete(snapshot, assessment)) {
-        return 'ready-to-submit';
-      }
-
-      return assessment.reviewState === 'draft' || hasAssessmentResponses(snapshot, assessment) ? 'in-progress' : 'ready';
+function getDashboardAssessmentQueueStatus(
+  snapshot: AssessmentWorkflowSnapshot,
+  assessment: Assessment,
+): DashboardAssessmentQueueStatus | null {
+  if (assessment.reviewState !== 'new' && assessment.reviewState !== 'draft') {
+    return null;
   }
+
+  if (isAssessmentComplete(snapshot, assessment)) {
+    return 'ready-to-submit';
+  }
+
+  return assessment.reviewState === 'draft' || hasAssessmentResponses(snapshot, assessment) ? 'incomplete' : 'not-started';
 }
 
 function buildAssessmentDetail(
@@ -284,40 +295,52 @@ function buildAssessmentDetail(
 ) {
   const subjectName = getEmployeeName(employeesById, assessment.employeeId);
 
-  switch (getAssessmentQueueStatus(snapshot, assessment)) {
-    case 'ready':
+  switch (getDashboardAssessmentQueueStatus(snapshot, assessment)) {
+    case 'not-started':
       return `Assigned for ${subjectName} and ready to start.`;
-    case 'in-progress':
-      return `Draft in progress for ${subjectName}.`;
+    case 'incomplete':
+      return `In progress for ${subjectName}.`;
     case 'ready-to-submit':
       return `Completed for ${subjectName} and ready to submit.`;
-    case 'awaiting-acceptance':
-      return `Submitted and waiting for manager or admin acceptance.`;
-    case 'complete':
-      if (assessment.reviewState === 'accepted') {
-        return `Accepted and ready for manager or admin review notes.`;
-      }
+    case null:
+      break;
+  }
 
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return `Submitted and waiting for manager or admin acceptance.`;
+    case 'accepted':
+      return `Accepted and ready for manager or admin review notes.`;
+    case 'reviewed':
       return `Reviewed and kept for historical reference.`;
+    case 'new':
+    case 'draft':
+      return `Assigned for ${subjectName} and ready to start.`;
   }
 }
 
 function buildAssessmentStatusLabel(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
-  switch (getAssessmentQueueStatus(snapshot, assessment)) {
-    case 'ready':
-      return 'Ready to start';
-    case 'in-progress':
-      return 'Draft';
+  switch (getDashboardAssessmentQueueStatus(snapshot, assessment)) {
+    case 'not-started':
+      return 'Not Started';
+    case 'incomplete':
+      return 'Incomplete';
     case 'ready-to-submit':
-      return 'Ready to submit';
-    case 'awaiting-acceptance':
-      return 'Submitted';
-    case 'complete':
-      if (assessment.reviewState === 'accepted') {
-        return 'Accepted';
-      }
+      return 'Complete but Not Submitted';
+    case null:
+      break;
+  }
 
-      return 'Reviewed';
+  switch (assessment.reviewState) {
+    case 'submitted':
+      return 'Submitted';
+    case 'accepted':
+      return 'Accepted';
+    case 'reviewed':
+      return 'Review Complete';
+    case 'new':
+    case 'draft':
+      return 'Not Started';
   }
 }
 
@@ -370,16 +393,21 @@ export function formatSubjectiveResponse(response: string) {
     case '0':
     case "don't know":
     case 'dont know':
+    case 'not sure':
+    case 'n/a':
+    case 'na':
       return "0 - don't know";
     case '1':
     case 'strongly disagree':
       return '1 - strongly disagree';
     case '2':
     case 'disagree':
-      return '2 - disagree';
+    case 'somewhat disagree':
+      return '2 - somewhat disagree';
     case '3':
     case 'agree':
-      return '3 - agree';
+    case 'somewhat agree':
+      return '3 - somewhat agree';
     case '4':
     case 'strongly agree':
       return '4 - strongly agree';
@@ -393,14 +421,17 @@ function toAssessmentQueueItem(
   snapshot: AssessmentWorkflowSnapshot,
   employeesById: Map<string, Employee>,
 ): AssessmentQueueItem {
-  const readOnly = assessment.isReadOnly || assessment.archiveState === 'archived';
+  const subjectName = getEmployeeName(employeesById, assessment.employeeId);
 
   return {
     assessmentId: assessment.id,
     title: buildAssessmentTitle(assessment, snapshot, employeesById),
     detail: buildAssessmentDetail(assessment, snapshot, employeesById),
+    subjectName,
+    targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
+    assessorLabel: getAssessorLabel(assessment, employeesById),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
-    actionLabel: readOnly || assessment.reviewState === 'submitted' ? 'View' : 'Edit',
+    actionLabel: 'Open',
   };
 }
 
@@ -465,47 +496,37 @@ export function buildAssessmentQueues(
   employees: Employee[],
 ): AssessmentQueueGroup[] {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+  const activeReviewPeriodId = getActiveReviewPeriod(snapshot)?.id ?? null;
   const authoredAssessments = orderAssessments(
-    snapshot.assessments.filter((assessment) => assessment.assessorId === user.id && assessment.archiveState === 'active'),
+    snapshot.assessments.filter(
+      (assessment) =>
+        assessment.assessorId === user.id &&
+        assessment.archiveState === 'active' &&
+        assessment.reviewPeriodId === activeReviewPeriodId,
+    ),
     snapshot,
   );
 
   return [
     {
-      id: 'ready',
-      title: snapshot.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active')
-        ? `Complete by ${formatDate(snapshot.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active')!.dueDate)}`
-        : 'Ready to start',
+      id: 'not-started',
+      title: 'Not Started',
       items: authoredAssessments
-        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'ready')
+        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'not-started')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
-      id: 'in-progress',
-      title: 'Started but not completed',
+      id: 'incomplete',
+      title: 'Incomplete',
       items: authoredAssessments
-        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'in-progress')
+        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'incomplete')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'ready-to-submit',
-      title: 'Complete but not submitted yet',
+      title: 'Complete but Not Submitted',
       items: authoredAssessments
-        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'ready-to-submit')
-        .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
-    },
-    {
-      id: 'awaiting-acceptance',
-      title: 'Complete but not accepted yet',
-      items: authoredAssessments
-        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'awaiting-acceptance')
-        .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
-    },
-    {
-      id: 'complete',
-      title: 'Complete',
-      items: authoredAssessments
-        .filter((assessment) => getAssessmentQueueStatus(snapshot, assessment) === 'complete')
+        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'ready-to-submit')
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
   ];
@@ -556,9 +577,18 @@ function getReviewableAssessments(
   employees: Employee[],
 ) {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+  const activeReviewPeriodId = getActiveReviewPeriod(snapshot)?.id ?? null;
+
+  if (!activeReviewPeriodId) {
+    return [];
+  }
 
   return snapshot.assessments.filter((assessment) => {
     if (assessment.archiveState !== 'active') {
+      return false;
+    }
+
+    if (assessment.reviewPeriodId !== activeReviewPeriodId) {
       return false;
     }
 
@@ -679,6 +709,28 @@ export function getReviewPanel(
     isArchived: assessment.archiveState === 'archived' || reviewPeriod?.status === 'archived',
     questions: getAssessmentQuestionRows(snapshot, assessment),
   };
+}
+
+export function groupAssessmentEditorQuestions(questions: AssessmentEditorQuestion[]): AssessmentEditorQuestionGroup[] {
+  const groups: AssessmentEditorQuestionGroup[] = [];
+
+  for (const question of questions.slice().sort((left, right) => left.order - right.order)) {
+    const category = question.category?.trim() || null;
+    const previousGroup = groups[groups.length - 1];
+
+    if (previousGroup?.category === category) {
+      previousGroup.questions.push(question);
+      continue;
+    }
+
+    groups.push({
+      id: `${category ?? 'uncategorized'}-${question.questionId}`,
+      category,
+      questions: [question],
+    });
+  }
+
+  return groups;
 }
 
 function replaceAssessment(

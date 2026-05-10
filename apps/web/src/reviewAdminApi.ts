@@ -221,6 +221,20 @@ function toQuestionInput(questionSetDraft: QuestionSetDraft, options?: { include
   }));
 }
 
+function replaceReviewPeriodText(value: string, sourceReviewPeriod: ReviewPeriod, targetReviewPeriod: ReviewPeriod) {
+  let nextValue = value;
+
+  if (sourceReviewPeriod.label && sourceReviewPeriod.label !== targetReviewPeriod.label) {
+    nextValue = nextValue.replaceAll(sourceReviewPeriod.label, targetReviewPeriod.label);
+  }
+
+  if (sourceReviewPeriod.key && sourceReviewPeriod.key !== targetReviewPeriod.key) {
+    nextValue = nextValue.replaceAll(sourceReviewPeriod.key, targetReviewPeriod.key);
+  }
+
+  return nextValue;
+}
+
 function findAssignment(
   reviewAdmin: ReviewAdminSnapshot,
   reviewPeriodId: string,
@@ -299,6 +313,37 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
       draft.status === 'active'
         ? `Created and activated the ${draft.target} question set in the API.`
         : `Created the ${draft.target} question set in the API.`,
+  };
+}
+
+export async function copyQuestionSetToReviewPeriodInApi(
+  token: string,
+  sourceQuestionSet: QuestionSet,
+  sourceReviewPeriod: ReviewPeriod,
+  targetReviewPeriod: ReviewPeriod,
+): Promise<{
+  notice: string;
+  questionSet: QuestionSet;
+}> {
+  const response = await createQuestionSet(token, targetReviewPeriod.id, {
+    target: sourceQuestionSet.target,
+    title: replaceReviewPeriodText(sourceQuestionSet.title, sourceReviewPeriod, targetReviewPeriod),
+    headerMarkdown: replaceReviewPeriodText(sourceQuestionSet.headerMarkdown, sourceReviewPeriod, targetReviewPeriod),
+    footerMarkdown: replaceReviewPeriodText(sourceQuestionSet.footerMarkdown, sourceReviewPeriod, targetReviewPeriod),
+    questions: sourceQuestionSet.questions
+      .slice()
+      .sort((left, right) => left.order - right.order)
+      .map((question, index) => ({
+        order: index + 1,
+        type: question.type,
+        category: question.category,
+        prompt: question.prompt,
+      })),
+  });
+
+  return {
+    questionSet: response.item,
+    notice: `Copied the ${sourceQuestionSet.target} question set to ${targetReviewPeriod.label} as a draft.`,
   };
 }
 

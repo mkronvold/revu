@@ -55,11 +55,13 @@ import {
   type WorkflowVisibility,
 } from './navigation';
 import {
+  type AssessmentEditorQuestion,
   buildAdminAssessmentRows,
   buildReviewQueues,
   createAssessmentWorkflowSnapshot,
   formatSubjectiveResponse,
   getAssessmentEditor,
+  groupAssessmentEditorQuestions,
   getReviewPanel,
 } from './assessmentReview';
 import {
@@ -91,6 +93,7 @@ import {
   buildImportNotice,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
+  copyQuestionSetToReviewPeriodInApi,
   buildLocalUsersImportPayloadFromFile,
   exportAssignmentsFromApi,
   exportLocalUsersFromApi,
@@ -138,9 +141,29 @@ type BackupSettingsDraft = {
 };
 
 const questionTypeHelperOptions = {
-  subjective: ['strongly agree', 'somewhat agree', 'not sure', 'somewhat disagree', 'strongly disagree'],
-  ranking: ['4', '3', '2', '1', 'n/a'],
+  subjective: ['Strongly agree', 'Somewhat agree', "Don't know", 'Somewhat disagree', 'Strongly disagree'],
+  ranking: ['Strongly agree', 'Somewhat agree', "Don't know", 'Somewhat disagree', 'Strongly disagree'],
 } as const satisfies Record<Exclude<QuestionSetQuestionDraft['type'], 'narrative'>, readonly string[]>;
+
+const assessmentResponseOptions = {
+  subjective: [
+    { value: 'strongly agree', label: 'Strongly agree' },
+    { value: 'somewhat agree', label: 'Somewhat agree' },
+    { value: 'not sure', label: "Don't know" },
+    { value: 'somewhat disagree', label: 'Somewhat disagree' },
+    { value: 'strongly disagree', label: 'Strongly disagree' },
+  ],
+  ranking: [
+    { value: '4', label: 'Strongly agree' },
+    { value: '3', label: 'Somewhat agree' },
+    { value: '0', label: "Don't know" },
+    { value: '2', label: 'Somewhat disagree' },
+    { value: '1', label: 'Strongly disagree' },
+  ],
+} as const satisfies Record<
+  Exclude<QuestionSetQuestionDraft['type'], 'narrative'>,
+  readonly { value: string; label: string }[]
+>;
 
 function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
@@ -155,18 +178,73 @@ function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
     return <p className="toolbar-note question-response-helper">Use a written self-rating with supporting context and examples.</p>;
   }
 
-  const inputType = type === 'subjective' ? 'checkbox' : 'radio';
-
   return (
     <div className="toolbar-note question-response-helper question-response-helper-options" role="presentation">
       {questionTypeHelperOptions[type].map((option) => (
         <label className="question-response-helper-option" key={option}>
-          <input type={inputType} disabled />
+          <input type="radio" disabled />
           <span>{option}</span>
         </label>
       ))}
     </div>
   );
+}
+
+function normalizeAssessmentResponseValue(type: AssessmentEditorQuestion['type'], response: string) {
+  const normalized = response.trim().toLowerCase();
+
+  if (type === 'narrative' || !normalized) {
+    return response;
+  }
+
+  if (type === 'subjective') {
+    switch (normalized) {
+      case '4':
+      case 'strongly agree':
+        return 'strongly agree';
+      case '3':
+      case 'agree':
+      case 'somewhat agree':
+        return 'somewhat agree';
+      case '2':
+      case 'disagree':
+      case 'somewhat disagree':
+        return 'somewhat disagree';
+      case '1':
+      case 'strongly disagree':
+        return 'strongly disagree';
+      case '0':
+      case 'dont know':
+      case "don't know":
+      case 'not sure':
+      case 'n/a':
+      case 'na':
+        return 'not sure';
+      default:
+        return normalized;
+    }
+  }
+
+  switch (normalized) {
+    case 'strongly agree':
+      return '4';
+    case 'agree':
+    case 'somewhat agree':
+      return '3';
+    case 'disagree':
+    case 'somewhat disagree':
+      return '2';
+    case 'strongly disagree':
+      return '1';
+    case 'dont know':
+    case "don't know":
+    case 'not sure':
+    case 'n/a':
+    case 'na':
+      return '0';
+    default:
+      return normalized;
+  }
 }
 
 function getBackupScheduleLabel(schedule: BackupSchedule) {
@@ -818,6 +896,10 @@ function App() {
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
   }, [editingQuestionDraft?.category, questionCategorySuggestions]);
+  const activeReviewAdminPeriod = useMemo(
+    () => reviewAdmin?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
+    [reviewAdmin],
+  );
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -2751,6 +2833,39 @@ function App() {
     }
   };
 
+  const handleCopyQuestionSetToCurrentReviewPeriod = async (questionSet: QuestionSet) => {
+    if (!selectedReviewPeriod || !activeReviewAdminPeriod || !sessionToken) {
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+
+    try {
+      const { notice, questionSet: copiedQuestionSet } = await copyQuestionSetToReviewPeriodInApi(
+        sessionToken,
+        questionSet,
+        selectedReviewPeriod,
+        activeReviewAdminPeriod,
+      );
+      await refreshFoundationSnapshot();
+      setSelectedReviewPeriodId(activeReviewAdminPeriod.id);
+      const nextDraft = toQuestionSetDraft(activeReviewAdminPeriod.id, copiedQuestionSet.target, copiedQuestionSet);
+      setQuestionSetDraft(nextDraft);
+      setQuestionSetInitialDraft(serializeQuestionSetDraft(nextDraft));
+      setEditingQuestionDraftId(null);
+      setIsNewQuestionCategoryDialogOpen(false);
+      setNewQuestionCategoryDraft('');
+      setNewQuestionCategoryError('');
+      setReviewPeriodDraft(null);
+      setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
+  };
+
   const handleQuestionSetImport = async (format: TransferFormat) => {
     if (!selectedReviewPeriod || !sessionToken) {
       return;
@@ -2857,6 +2972,13 @@ function App() {
   const renderQuestionSetCard = (target: QuestionTarget, questionSet: QuestionSet | null) => {
     const isReadOnly = selectedReviewPeriod?.status === 'archived';
     const canOpenQuestionSet = !isSavingReviewAdmin && (!isReadOnly || Boolean(questionSet));
+    const canCopyQuestionSet =
+      Boolean(
+        selectedReviewPeriod?.status === 'inactive' &&
+          questionSet &&
+          activeReviewAdminPeriod &&
+          activeReviewAdminPeriod.id !== selectedReviewPeriod?.id,
+      ) && !isSavingReviewAdmin;
 
     return (
       <section
@@ -2887,6 +3009,23 @@ function App() {
         </div>
       </dl>
       <MarkdownContent markdown={questionSet?.headerMarkdown || 'No header text yet.'} className="markdown-content" />
+      {canCopyQuestionSet ? (
+        <div className="action-row question-set-card-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={isSavingReviewAdmin}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (questionSet) {
+                void handleCopyQuestionSetToCurrentReviewPeriod(questionSet);
+              }
+            }}
+          >
+            Copy to current review period
+          </button>
+        </div>
+      ) : null}
       <div className="question-set-question-list">
         {questionSet?.questions.map((question) => (
           <article className="question-set-question" key={question.id}>
@@ -3919,26 +4058,39 @@ function App() {
                   <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
                 </div>
                 {queue.items.length ? (
-                  <ul className="queue-list dashboard-queue-list">
-                    {queue.items.map((item) => (
-                      <li key={`${queue.title}-${item.title}`} className="dashboard-queue-row">
-                        <div className="dashboard-queue-line">
-                          <strong>{item.title}</strong>
-                          <span className="dashboard-queue-separator" aria-hidden="true">
-                            |
-                          </span>
-                          <span>{item.detail}</span>
-                          <span className="dashboard-queue-separator" aria-hidden="true">
-                            |
-                          </span>
-                          <span className="status-caption">{item.statusLabel}</span>
+                  <div
+                    className="employee-roster-table-scroll review-queue-table-scroll"
+                    role="region"
+                    aria-label={`${queue.title} assessments`}
+                  >
+                    <div className="review-queue-table dashboard-queue-table" aria-label={`${queue.title} assessments`}>
+                      <div className="review-queue-header">
+                        <span>Name</span>
+                        <span>Assessment type</span>
+                        <span>Assessor</span>
+                        <span>Status</span>
+                      </div>
+                      {queue.items.map((item) => (
+                        <div className="review-queue-row-card" key={item.assessmentId}>
+                          <button
+                            type="button"
+                            className={`review-queue-item dashboard-queue-item${item.assessmentId === selectedAssessmentId ? ' admin-list-item-active' : ''}`}
+                            onClick={() => setSelectedAssessmentId(item.assessmentId)}
+                          >
+                            <span className="employee-row-cell review-queue-primary">
+                              <strong>{item.subjectName}</strong>
+                              <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                            </span>
+                            <span className="employee-row-cell">{item.targetLabel}</span>
+                            <span className="employee-row-cell">{item.assessorLabel}</span>
+                            <span className="employee-row-cell review-queue-step-cell">
+                              <span className="pill">{item.statusLabel}</span>
+                            </span>
+                          </button>
                         </div>
-                        <button type="button" onClick={() => setSelectedAssessmentId(item.assessmentId)}>
-                          {item.actionLabel}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <p className="muted-copy">none</p>
                 )}
@@ -3962,9 +4114,9 @@ function App() {
         >
           <div className="section-heading">
             <div>
-              <p className="section-label">Assessment editor</p>
-              <h3 id="assessment-dialog-title">{selectedAssessmentEditor.title}</h3>
-              <p className="muted-copy">{selectedAssessmentEditor.detail}</p>
+              <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
+              <h3 id="assessment-dialog-title">{selectedAssessmentEditor.questionSetTitle}</h3>
+              <p className="muted-copy">{selectedAssessmentEditor.title}</p>
             </div>
             <div className="action-row">
               <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
@@ -3973,50 +4125,107 @@ function App() {
               </button>
             </div>
           </div>
-          <dl className="detail-grid compact-detail-grid">
-            <div>
-              <dt>Review period</dt>
-              <dd>{selectedAssessmentEditor.reviewPeriodLabel}</dd>
-            </div>
-            <div>
-              <dt>Due date</dt>
-              <dd>{selectedAssessmentEditor.dueDate}</dd>
-            </div>
-            <div>
-              <dt>Assessment type</dt>
-              <dd>{selectedAssessmentEditor.targetLabel}</dd>
-            </div>
-            <div>
-              <dt>Manager</dt>
-              <dd>{selectedAssessmentEditor.managerName}</dd>
-            </div>
-          </dl>
+          <section className="assessment-editor-intro">
+            <p className="review-dialog-copy">{selectedAssessmentEditor.detail}</p>
+            <dl className="detail-grid compact-detail-grid assessment-editor-meta">
+              <div>
+                <dt>Employee</dt>
+                <dd>{selectedAssessmentEditor.subjectName}</dd>
+              </div>
+              <div>
+                <dt>Assessment type</dt>
+                <dd>{selectedAssessmentEditor.targetLabel}</dd>
+              </div>
+              <div>
+                <dt>Assessor</dt>
+                <dd>{selectedAssessmentEditor.assessorName}</dd>
+              </div>
+              <div>
+                <dt>Manager</dt>
+                <dd>{selectedAssessmentEditor.managerName}</dd>
+              </div>
+              <div>
+                <dt>Review period</dt>
+                <dd>{selectedAssessmentEditor.reviewPeriodLabel}</dd>
+              </div>
+              <div>
+                <dt>Due date</dt>
+                <dd>{selectedAssessmentEditor.dueDate}</dd>
+              </div>
+            </dl>
+          </section>
           {selectedAssessmentEditor.headerMarkdown ? (
-            <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content" />
+            <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content assessment-editor-copy" />
           ) : null}
-          <div className="question-list">
-            {selectedAssessmentEditor.questions.map((question) => (
-              <label className="subcard" key={question.questionId}>
-                <div className="question-prompt-block">
-                  <span className="question-order">#{question.order}</span>
-                  <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+          <div className="assessment-editor-sections">
+            {groupAssessmentEditorQuestions(selectedAssessmentEditor.questions).map((group) => (
+              <section className="assessment-editor-section" key={group.id}>
+                {group.category ? (
+                  <div className="assessment-editor-category">
+                    <p className="section-label">Category</p>
+                    <h4>{group.category}</h4>
+                  </div>
+                ) : null}
+                <div className="assessment-editor-question-list">
+                  {group.questions.map((question) => {
+                    const currentResponse = assessmentResponsesDraft[question.questionId] ?? '';
+                    const normalizedResponse = normalizeAssessmentResponseValue(question.type, currentResponse);
+
+                    return (
+                      <article className="assessment-editor-question" key={question.questionId}>
+                        <div className="question-prompt-block">
+                          <span className="question-order">#{question.order}</span>
+                          <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                        </div>
+                        <div className="assessment-question-response">
+                          {question.type === 'narrative' ? (
+                            <textarea
+                              rows={5}
+                              disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
+                              value={currentResponse}
+                              onChange={(event) =>
+                                setAssessmentResponsesDraft((currentDraft) => ({
+                                  ...currentDraft,
+                                  [question.questionId]: event.target.value,
+                                }))
+                              }
+                            />
+                          ) : (
+                            <fieldset
+                              className="assessment-question-scale"
+                              disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
+                            >
+                              <legend className="sr-only">{`Response for question ${question.order}`}</legend>
+                              <div className="assessment-question-options">
+                                {assessmentResponseOptions[question.type].map((option) => (
+                                  <label
+                                    className={`assessment-question-option${normalizedResponse === option.value ? ' assessment-question-option-selected' : ''}`}
+                                    key={option.value}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={question.questionId}
+                                      value={option.value}
+                                      checked={normalizedResponse === option.value}
+                                      onChange={(event) =>
+                                        setAssessmentResponsesDraft((currentDraft) => ({
+                                          ...currentDraft,
+                                          [question.questionId]: event.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <span className="assessment-question-option-label">{option.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </fieldset>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
-                <small className="muted-copy">
-                  {question.type}
-                  {question.category ? ` • ${question.category}` : ''}
-                </small>
-                <textarea
-                  rows={question.type === 'narrative' ? 4 : 3}
-                  disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
-                  value={assessmentResponsesDraft[question.questionId] ?? ''}
-                  onChange={(event) =>
-                    setAssessmentResponsesDraft((currentDraft) => ({
-                      ...currentDraft,
-                      [question.questionId]: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              </section>
             ))}
           </div>
           {selectedAssessmentEditor.managerNotes ? (
@@ -4027,7 +4236,10 @@ function App() {
             </div>
           ) : null}
           {selectedAssessmentEditor.footerMarkdown ? (
-            <MarkdownContent markdown={selectedAssessmentEditor.footerMarkdown} className="markdown-content muted-copy" />
+            <MarkdownContent
+              markdown={selectedAssessmentEditor.footerMarkdown}
+              className="markdown-content muted-copy assessment-editor-copy"
+            />
           ) : null}
           <div className="action-row">
             <button
@@ -4254,9 +4466,9 @@ function App() {
                   </div>
                   <div className="review-response-answer">
                     {question.response
-                      ? question.type === 'subjective'
-                        ? formatSubjectiveResponse(question.response)
-                        : question.response
+                      ? question.type === 'narrative'
+                        ? question.response
+                        : formatSubjectiveResponse(question.response)
                       : 'No response provided yet.'}
                   </div>
                   <div className="review-response-meta">

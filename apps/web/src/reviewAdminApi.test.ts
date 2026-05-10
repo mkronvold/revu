@@ -35,6 +35,7 @@ import {
   buildLocalUsersImportPayloadFromFile,
   buildExportNotice,
   buildImportNotice,
+  copyQuestionSetToReviewPeriodInApi,
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
@@ -107,6 +108,46 @@ describe('review admin API orchestration', () => {
     expect(activateQuestionSet).toHaveBeenCalledWith('session-token', '99999999-9999-4999-8999-999999999999');
     expect(result.questionSet.status).toBe('active');
     expect(result.notice).toContain('activated');
+  });
+
+  it('copies an inactive review-period question set into the current review period as a draft', async () => {
+    const sourceReviewPeriod = foundationSnapshotExample.reviewPeriods[1]!;
+    const targetReviewPeriod = foundationSnapshotExample.reviewPeriods[0]!;
+    const sourceQuestionSet = foundationSnapshotExample.questionSets[2]!;
+
+    vi.mocked(createQuestionSet).mockResolvedValue({
+      item: {
+        ...sourceQuestionSet,
+        id: '56565656-5656-4565-8565-565656565656',
+        reviewPeriodId: targetReviewPeriod.id,
+        isReadOnly: false,
+        title: '2026 Self Questions',
+      },
+    });
+
+    const result = await copyQuestionSetToReviewPeriodInApi(
+      'session-token',
+      sourceQuestionSet,
+      sourceReviewPeriod,
+      targetReviewPeriod,
+    );
+
+    expect(createQuestionSet).toHaveBeenCalledWith('session-token', targetReviewPeriod.id, {
+      target: 'self',
+      title: '2026 Self Questions',
+      headerMarkdown: 'Archived self questions.',
+      footerMarkdown: 'Archive only.',
+      questions: [
+        {
+          order: 1,
+          type: 'subjective',
+          category: 'Impact',
+          prompt: 'Archived prompt',
+        },
+      ],
+    });
+    expect(result.questionSet.reviewPeriodId).toBe(targetReviewPeriod.id);
+    expect(result.notice).toContain('as a draft');
   });
 
   it('removes assignments through the API and clears the synced employee assessor', async () => {

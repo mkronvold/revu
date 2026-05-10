@@ -704,6 +704,10 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
+.dashboard-queue-table {
+  --review-queue-columns: minmax(0, 1.8fr) fit-content(10rem) minmax(0, 1fr) fit-content(12rem);
+}
+
 .queue-card {
   display: flex;
   flex-direction: column;
@@ -1325,6 +1329,103 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
+.assessment-editor-intro,
+.assessment-editor-sections,
+.assessment-editor-section,
+.assessment-editor-question-list,
+.assessment-question-response {
+  display: grid;
+}
+
+.assessment-editor-intro,
+.assessment-editor-section,
+.assessment-editor-question-list,
+.assessment-question-response {
+  gap: 0.75rem;
+}
+
+.assessment-editor-intro {
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.assessment-editor-sections {
+  gap: 1rem;
+}
+
+.assessment-editor-meta {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.assessment-editor-copy {
+  gap: 0.65rem;
+}
+
+.assessment-editor-category {
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.assessment-editor-category h4 {
+  margin: 0;
+}
+
+.assessment-editor-question {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.assessment-question-scale {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.assessment-question-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+
+.assessment-question-option {
+  display: flex;
+  gap: 0.55rem;
+  align-items: start;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 0.9rem;
+  background: white;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.assessment-question-option input {
+  margin: 0.15rem 0 0;
+}
+
+.assessment-question-option-selected {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: #dbeafe;
+}
+
+.assessment-question-option-label {
+  min-width: 0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
 .review-dialog-copy {
   margin: 0;
   color: #334155;
@@ -1573,6 +1674,10 @@ button.employee-row:focus-visible {
 
 .question-set-card[aria-disabled='true'] {
   cursor: default;
+}
+
+.question-set-card-actions {
+  justify-content: flex-start;
 }
 
 .question-set-card[aria-disabled='true']:hover,

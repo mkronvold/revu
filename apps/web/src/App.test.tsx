@@ -74,6 +74,7 @@ import {
   acceptAssessment,
   changePassword,
   checkApiHealth,
+  createQuestionSet,
   deleteEmployee,
   exportBackup,
   exportLocalUsers,
@@ -430,9 +431,9 @@ describe('questions screen', () => {
     ]);
     const initialHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
     expect(initialHelperInputs).toHaveLength(5);
-    expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'checkbox')).toBe(true);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('strongly agree');
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('strongly disagree');
+    expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly agree');
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly disagree');
 
     await act(async () => {
       setFieldValue(categorySelect!, '__new-question-category__');
@@ -474,7 +475,7 @@ describe('questions screen', () => {
     const rankingHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
     expect(rankingHelperInputs).toHaveLength(5);
     expect(rankingHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('n/a');
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain("Don't know");
 
     await act(async () => {
       setFieldValue(responseTypeField!, 'narrative');
@@ -688,6 +689,83 @@ describe('questions screen', () => {
     });
 
     expect(container.querySelector('.question-set-dialog')).toBeNull();
+  });
+
+  it('copies inactive question sets into the current review period and opens the copied draft', async () => {
+    const inactiveSnapshot = cloneQuestionSlice();
+    inactiveSnapshot.reviewPeriods[1] = {
+      ...inactiveSnapshot.reviewPeriods[1]!,
+      status: 'inactive',
+      archivedAt: null,
+      archivedByEmployeeId: null,
+    };
+    inactiveSnapshot.questionSets[2] = {
+      ...inactiveSnapshot.questionSets[2]!,
+      isReadOnly: false,
+    };
+    inactiveSnapshot.questionSets[3] = {
+      ...inactiveSnapshot.questionSets[3]!,
+      isReadOnly: false,
+    };
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(inactiveSnapshot));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(createQuestionSet).mockResolvedValue({
+      item: {
+        ...inactiveSnapshot.questionSets[2]!,
+        id: '56565656-5656-4565-8565-565656565656',
+        reviewPeriodId: inactiveSnapshot.reviewPeriods[0]!.id,
+        isReadOnly: false,
+        title: '2026 Self Questions',
+      },
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    expect(reviewPeriodSelect).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(reviewPeriodSelect!, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      await flushRender();
+    });
+
+    const copyButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Copy to current review period',
+    );
+    expect(copyButton).toBeTruthy();
+
+    await act(async () => {
+      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(createQuestionSet).mock.calls.length === 1);
+
+    expect(createQuestionSet).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
+      target: 'self',
+      title: '2026 Self Questions',
+      headerMarkdown: 'Archived self questions.',
+      footerMarkdown: 'Archive only.',
+      questions: [
+        {
+          order: 1,
+          type: 'subjective',
+          category: 'Impact',
+          prompt: 'Archived prompt',
+        },
+      ],
+    });
+    expect(container.querySelector('.question-set-dialog')?.textContent).toContain('2026 Self Questions');
   });
 });
 
@@ -1841,8 +1919,42 @@ describe('dashboard screen', () => {
   });
 
   it('keeps the queue on the dashboard and opens assessment editing in a dialog', async () => {
+    const dashboardSnapshot = cloneQuestionSlice();
+    dashboardSnapshot.questionSets[0] = {
+      ...dashboardSnapshot.questionSets[0]!,
+      questions: dashboardSnapshot.questionSets[0]!.questions.map((question, index) =>
+        index === 0 ? { ...question, category: null } : question,
+      ),
+    };
+    dashboardSnapshot.assessments = dashboardSnapshot.assessments.map((assessment) =>
+      assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        ? {
+            ...assessment,
+            reviewState: 'draft',
+            isReadOnly: false,
+            submittedAt: null,
+            acceptedAt: null,
+            acceptedByEmployeeId: null,
+            reviewedAt: null,
+            reviewedByEmployeeId: null,
+            responses: [
+              {
+                questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+                order: 1,
+                response: 'somewhat agree',
+              },
+              {
+                questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+                order: 2,
+                response: '',
+              },
+            ],
+          }
+        : assessment,
+    );
+
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
-    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1853,10 +1965,13 @@ describe('dashboard screen', () => {
     await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
 
     expect(container.textContent).toContain('Assessment Queue');
-    expect(container.textContent).not.toContain('Assessment editor');
+    expect(container.textContent).toContain('Name');
+    expect(container.textContent).toContain('Assessment type');
+    expect(container.textContent).toContain('Assessor');
+    expect(container.textContent).toContain('Status');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
 
-    const openButton = container.querySelector('.dashboard-queue-row button');
+    const openButton = container.querySelector('.dashboard-queue-item');
     expect(openButton).toBeTruthy();
 
     await act(async () => {
@@ -1866,8 +1981,12 @@ describe('dashboard screen', () => {
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
-    expect(container.textContent).toContain('Assessment editor');
+    expect(container.textContent).toContain('Self assessment form');
     expect(container.textContent).toContain('Save for later');
+    expect(Array.from(container.querySelectorAll('.assessment-editor-category h4')).map((heading) => heading.textContent)).toEqual([
+      'Growth',
+    ]);
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(5);
 
     const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
     expect(closeButton).toBeTruthy();

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added inactive-period question-set copying into the current active review cycle, reshaped the dashboard into an active-period action queue that matches the Reviews table layout, and rebuilt assessment authoring dialogs with grouped category sections plus document-style scale responses
 - Allowed deleting inactive employees even when active employee relationships still point at them, kept those manager/assessor references attached to the hidden tombstone row, and now render missing tombstone-backed names as `deleted user`
 - Stopped the sign-in screen from defaulting to the old seeded `ada.admin` username after seeded accounts are hidden, and now remember the last successfully used username in browser local storage
 - Moved workflow markdown and visibility into shared API-backed persistence so updates now survive refreshes and appear in other browsers, and included workflow settings in backup restore scopes that already replace review configuration
