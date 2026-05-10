@@ -363,6 +363,101 @@ describe("review periods, question sets, and assignments admin API", () => {
     expect(removeReferencedQuestionResponse.body).toContain("cannot be removed from a question set");
   });
 
+  it("reorders peer question sets safely after removing an unreferenced question", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+
+    const createReviewPeriodResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        key: "2027-H2",
+        label: "2027 H2",
+        startDate: "2027-07-01",
+        dueDate: "2027-12-31",
+        assessmentDueDate: "2027-12-15",
+        reviewDueDate: "2027-12-31",
+      },
+    });
+    expect(createReviewPeriodResponse.statusCode).toBe(201);
+    const createdReviewPeriod = reviewPeriodResponseSchema.parse(createReviewPeriodResponse.json()).item;
+
+    const createQuestionSetResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}/question-sets`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        target: "peer",
+        title: "2027 Peer Questions",
+        headerMarkdown: "Peer header",
+        footerMarkdown: "Peer footer",
+        questions: [
+          {
+            order: 1,
+            type: "ranking",
+            category: "Collaboration",
+            prompt: "Question 1",
+          },
+          {
+            order: 2,
+            type: "narrative",
+            category: "Examples",
+            prompt: "Question 2",
+          },
+          {
+            order: 3,
+            type: "subjective",
+            category: "Impact",
+            prompt: "Question 3",
+          },
+        ],
+      },
+    });
+    expect(createQuestionSetResponse.statusCode).toBe(201);
+    const createdQuestionSet = questionSetResponseSchema.parse(createQuestionSetResponse.json()).item;
+
+    const compactedUpdateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/question-sets/${createdQuestionSet.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        title: createdQuestionSet.title,
+        headerMarkdown: createdQuestionSet.headerMarkdown,
+        footerMarkdown: createdQuestionSet.footerMarkdown,
+        status: createdQuestionSet.status,
+        questions: [
+          {
+            id: createdQuestionSet.questions[0]!.id,
+            order: 1,
+            type: createdQuestionSet.questions[0]!.type,
+            category: createdQuestionSet.questions[0]!.category,
+            prompt: createdQuestionSet.questions[0]!.prompt,
+          },
+          {
+            id: createdQuestionSet.questions[2]!.id,
+            order: 2,
+            type: createdQuestionSet.questions[2]!.type,
+            category: createdQuestionSet.questions[2]!.category,
+            prompt: `${createdQuestionSet.questions[2]!.prompt} Updated`,
+          },
+        ],
+      },
+    });
+
+    expect(compactedUpdateResponse.statusCode).toBe(200);
+    const updatedQuestionSet = questionSetResponseSchema.parse(compactedUpdateResponse.json()).item;
+    expect(updatedQuestionSet.questions).toHaveLength(2);
+    expect(updatedQuestionSet.questions.map((question) => question.order)).toEqual([1, 2]);
+    expect(updatedQuestionSet.questions.map((question) => question.prompt)).toEqual(["Question 1", "Question 3 Updated"]);
+  });
+
   it("deletes a review period together with its question sets, assessments, and assignments", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);
