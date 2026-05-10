@@ -478,6 +478,7 @@ describe('questions screen', () => {
     expect(initialHelperInputs).toHaveLength(5);
     expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly agree');
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Neutral');
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly disagree');
 
     await act(async () => {

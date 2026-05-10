@@ -299,7 +299,8 @@ describe('assessment and review helpers', () => {
     expect(formatSubjectiveResponse('4')).toBe('4 - strongly agree');
     expect(formatSubjectiveResponse('agree')).toBe('3 - somewhat agree');
     expect(formatSubjectiveResponse('somewhat disagree')).toBe('2 - somewhat disagree');
-    expect(formatSubjectiveResponse("don't know")).toBe("0 - don't know");
-    expect(formatSubjectiveResponse('0')).toBe("0 - don't know");
+    expect(formatSubjectiveResponse("don't know")).toBe('0 - neutral');
+    expect(formatSubjectiveResponse('neutral')).toBe('0 - neutral');
+    expect(formatSubjectiveResponse('0')).toBe('0 - neutral');
   });
 });

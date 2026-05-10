@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Renamed the subjective response option from “Don’t know” to “Neutral” in the workflow/question editor and subjective assessment displays
 - Simplified workflow page and editor copy, hid sidebar-visibility details from non-editors, and tuned the workflow editor textarea to use more of the dialog height with vertical-only resizing
 - Enabled GFM table rendering in shared markdown content so workflow pages and previews render markdown tables correctly
 - Refreshed the workflow page from the latest foundation snapshot whenever it is reopened so browser-to-browser workflow edits show up without a full page reload

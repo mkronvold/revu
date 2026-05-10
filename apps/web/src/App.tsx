@@ -165,7 +165,7 @@ type BackupRestoreDialogState = {
 };
 
 const questionTypeHelperOptions = {
-  subjective: ['Strongly agree', 'Somewhat agree', "Don't know", 'Somewhat disagree', 'Strongly disagree'],
+  subjective: ['Strongly agree', 'Somewhat agree', 'Neutral', 'Somewhat disagree', 'Strongly disagree'],
   ranking: ['Strongly agree', 'Somewhat agree', "Don't know", 'Somewhat disagree', 'Strongly disagree'],
 } as const satisfies Record<Exclude<QuestionSetQuestionDraft['type'], 'narrative'>, readonly string[]>;
 
@@ -173,7 +173,7 @@ const assessmentResponseOptions = {
   subjective: [
     { value: 'strongly agree', label: 'Strongly agree' },
     { value: 'somewhat agree', label: 'Somewhat agree' },
-    { value: 'not sure', label: "Don't know" },
+    { value: 'not sure', label: 'Neutral' },
     { value: 'somewhat disagree', label: 'Somewhat disagree' },
     { value: 'strongly disagree', label: 'Strongly disagree' },
   ],
@@ -278,6 +278,7 @@ function normalizeAssessmentResponseValue(type: AssessmentEditorQuestion['type']
       case '0':
       case 'dont know':
       case "don't know":
+      case 'neutral':
       case 'not sure':
       case 'n/a':
       case 'na':

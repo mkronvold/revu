@@ -432,10 +432,11 @@ export function formatSubjectiveResponse(response: string) {
     case '0':
     case "don't know":
     case 'dont know':
+    case 'neutral':
     case 'not sure':
     case 'n/a':
     case 'na':
-      return "0 - don't know";
+      return '0 - neutral';
     case '1':
     case 'strongly disagree':
       return '1 - strongly disagree';
