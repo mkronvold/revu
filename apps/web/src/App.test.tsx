@@ -100,6 +100,7 @@ import {
   updateEmployee,
   updateOwnProfile,
   updateQuestionCategories,
+  updateReviewPeriod,
   updateWorkflowSettings,
 } from './api';
 
@@ -525,6 +526,73 @@ describe('questions screen', () => {
     expect(container.textContent).not.toContain('Due date');
   });
 
+  it('shows a make active button for inactive review periods', async () => {
+    const inactiveSnapshot = cloneQuestionSlice();
+    inactiveSnapshot.reviewPeriods[1] = {
+      ...inactiveSnapshot.reviewPeriods[1]!,
+      status: 'inactive',
+      archivedAt: null,
+      archivedByEmployeeId: null,
+    };
+    const activatedSnapshot = structuredClone(inactiveSnapshot);
+    activatedSnapshot.reviewPeriods[0] = {
+      ...activatedSnapshot.reviewPeriods[0]!,
+      status: 'inactive',
+    };
+    activatedSnapshot.reviewPeriods[1] = {
+      ...activatedSnapshot.reviewPeriods[1]!,
+      status: 'active',
+    };
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(inactiveSnapshot)
+      .mockResolvedValueOnce(activatedSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(updateReviewPeriod).mockResolvedValue({
+      item: activatedSnapshot.reviewPeriods[1]!,
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    expect(reviewPeriodSelect).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(reviewPeriodSelect!, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      await flushRender();
+    });
+
+    const makeActiveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Make active',
+    );
+    expect(makeActiveButton).toBeTruthy();
+
+    await act(async () => {
+      makeActiveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(updateReviewPeriod).toHaveBeenCalledWith('session-token', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', {
+      key: '2025',
+      label: '2025 Annual Review',
+      startDate: '2025-01-01',
+      dueDate: '2025-03-07',
+      assessmentDueDate: '2025-02-21',
+      reviewDueDate: '2025-02-28',
+      status: 'active',
+    });
+    await waitFor(() => container.textContent?.includes('Made 2025 Annual Review the active review period.') ?? false);
+  });
+
   it('edits persistent question categories from the review-period card', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
@@ -651,6 +719,59 @@ describe('questions screen', () => {
     });
 
     expect(container.querySelector('.question-set-dialog')).toBeNull();
+  });
+
+  it('resets a question set to a blank draft after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const questionSetCard = container.querySelector('.question-set-card');
+    expect(questionSetCard).toBeTruthy();
+
+    await act(async () => {
+      questionSetCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const dialog = container.querySelector('.question-set-dialog');
+    expect(dialog).toBeTruthy();
+
+    const deleteSetButton = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Delete set',
+    );
+    expect(deleteSetButton).toBeTruthy();
+
+    await act(async () => {
+      deleteSetButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('Delete this question set and reset it to a blank draft?');
+
+    const titleInput = Array.from(container.querySelectorAll('.question-set-dialog label'))
+      .find((label) => label.textContent?.includes('Title'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const statusField = Array.from(container.querySelectorAll('.question-set-dialog label'))
+      .find((label) => label.textContent?.includes('Status'))
+      ?.querySelector('select') as HTMLSelectElement | null;
+
+    expect(container.querySelector('.question-set-dialog')?.textContent).toContain('New self question set');
+    expect(titleInput?.value).toBe('');
+    expect(statusField?.value).toBe('draft');
+    expect(container.querySelectorAll('.question-set-dialog .question-set-dialog-row')).toHaveLength(0);
   });
 
   it('keeps archived question-set dialogs read-only and dismissible from the backdrop', async () => {

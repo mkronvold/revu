@@ -170,6 +170,17 @@ function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
 }
 
+function createBlankQuestionSetDraft(draft: QuestionSetDraft): QuestionSetDraft {
+  return {
+    ...draft,
+    title: '',
+    status: 'draft',
+    headerMarkdown: '',
+    footerMarkdown: '',
+    questions: [],
+  };
+}
+
 function serializeWorkflowDraft(markdown: string, visibility: WorkflowVisibility) {
   return JSON.stringify({ markdown, visibility });
 }
@@ -2885,6 +2896,35 @@ function App() {
     }
   };
 
+  const handleActivateSelectedReviewPeriod = async () => {
+    if (!selectedReviewPeriod || !sessionToken) {
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+
+    try {
+      await saveReviewPeriodToApi(sessionToken, {
+        id: selectedReviewPeriod.id,
+        key: selectedReviewPeriod.key,
+        label: selectedReviewPeriod.label,
+        startDate: selectedReviewPeriod.startDate,
+        dueDate: selectedReviewPeriod.dueDate,
+        assessmentDueDate: selectedReviewPeriod.assessmentDueDate,
+        reviewDueDate: selectedReviewPeriod.reviewDueDate,
+        status: 'active',
+      });
+      await refreshFoundationSnapshot();
+      setSelectedReviewPeriodId(selectedReviewPeriod.id);
+      setAdminNotice(`Made ${selectedReviewPeriod.label} the active review period.`);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
+  };
+
   const handleQuestionSetExport = async (format: TransferFormat) => {
     if (!selectedReviewPeriod || !sessionToken) {
       return;
@@ -2954,6 +2994,23 @@ function App() {
     } finally {
       setIsSavingReviewAdmin(false);
     }
+  };
+
+  const resetQuestionSetDraft = () => {
+    if (!questionSetDraft) {
+      return;
+    }
+
+    if (!window.confirm('Delete this question set and reset it to a blank draft?')) {
+      return;
+    }
+
+    setQuestionSetDraft(createBlankQuestionSetDraft(questionSetDraft));
+    setEditingQuestionDraftId(null);
+    setIsNewQuestionCategoryDialogOpen(false);
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
+    setAdminNotice('Question set reset to a blank draft. Save it to keep the change.');
   };
 
   const handleAssignmentExport = async (format: TransferFormat) => {
@@ -3112,24 +3169,31 @@ function App() {
         <section className="card admin-section-card review-period-card">
           <div className="section-heading">
             <h3>{selectedReviewPeriod.label}</h3>
-            <label className="inline-field review-period-picker">
-              <span className="sr-only">Review period</span>
-              <select
-                value={selectedReviewPeriod.id}
-                onChange={(event) => {
-                  if (!closeQuestionSetDialog()) {
-                    return;
-                  }
-                  setSelectedReviewPeriodId(event.target.value);
-                }}
-              >
-                {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
-                  <option key={reviewPeriod.id} value={reviewPeriod.id}>
-                    {reviewPeriod.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="dialog-header-actions">
+              {selectedReviewPeriod.status === 'inactive' ? (
+                <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleActivateSelectedReviewPeriod()}>
+                  Make active
+                </button>
+              ) : null}
+              <label className="inline-field review-period-picker">
+                <span className="sr-only">Review period</span>
+                <select
+                  value={selectedReviewPeriod.id}
+                  onChange={(event) => {
+                    if (!closeQuestionSetDialog()) {
+                      return;
+                    }
+                    setSelectedReviewPeriodId(event.target.value);
+                  }}
+                >
+                  {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
+                    <option key={reviewPeriod.id} value={reviewPeriod.id}>
+                      {reviewPeriod.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
           <dl className="detail-grid">
             <div>
@@ -3289,7 +3353,9 @@ function App() {
                 <p className="section-label">
                   {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
                 </p>
-                <h3 id="question-set-dialog-title">{questionSetDraft.title}</h3>
+                <h3 id="question-set-dialog-title">
+                  {questionSetDraft.title || `New ${questionSetDraft.target} question set`}
+                </h3>
                 <p className="muted-copy">{selectedReviewPeriod.label}</p>
               </div>
               <div className="dialog-header-actions">
@@ -3406,6 +3472,16 @@ function App() {
                       onClick={addQuestionDraft}
                     >
                       Add question
+                    </button>
+                  )}
+                  {selectedReviewPeriod.status === 'archived' || !questionSetDraft.id ? null : (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSavingReviewAdmin}
+                      onClick={resetQuestionSetDraft}
+                    >
+                      Delete set
                     </button>
                   )}
                   {(selectedReviewPeriod.status === 'inactive' || selectedReviewPeriod.status === 'archived') &&
