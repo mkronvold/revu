@@ -412,7 +412,13 @@ button {
 
 .sidebar-session-card button {
   justify-self: start;
-  margin-top: 0.25rem;
+}
+
+.sidebar-session-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
 }
 
 .sidebar-status-card {

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added API outage recovery detection that polls `/health` and shows a `New version. Refresh Now` button in the signed-in sidebar card after the API comes back
 - Realigned the Reviews queue and Employee directory columns with shared grid tracks and moved the employee table header onto the same themed header surface as Reviews
 - Allowed uppercase employee usernames while keeping login and username uniqueness checks case-insensitive, including upgrading older employee username constraints on first write
 - Auto-create the persistent `question_categories` table on first use so category editing still works on older databases before the new migration has been applied

@@ -87,6 +87,7 @@ const configuredApiBaseUrl =
     : defaultApiBaseUrl;
 
 export const apiBaseUrl = configuredApiBaseUrl.replace(/\/$/, '');
+export const apiUnavailableEventName = 'revu:api-unavailable';
 
 export class ApiClientError extends Error {
   constructor(
@@ -100,6 +101,27 @@ export class ApiClientError extends Error {
 
 type ExportFormat = 'json' | 'csv';
 
+function notifyApiUnavailable() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new Event(apiUnavailableEventName));
+}
+
+function shouldTreatResponseAsApiUnavailable(statusCode: number) {
+  return statusCode === 502 || statusCode === 503 || statusCode === 504;
+}
+
+function getHealthCheckUrl() {
+  if (typeof window === 'undefined') {
+    return '/health';
+  }
+
+  const resolvedApiBaseUrl = new URL(apiBaseUrl, window.location.origin);
+  return new URL('/health', resolvedApiBaseUrl).toString();
+}
+
 function isFormDataBody(body: RequestInit['body']) {
   return typeof FormData !== 'undefined' && body instanceof FormData;
 }
@@ -109,21 +131,47 @@ async function request<T>(
   schema: z.ZodType<T>,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...init,
-    headers: {
-      ...(init.body && !isFormDataBody(init.body) ? { 'content-type': 'application/json' } : {}),
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        ...(init.body && !isFormDataBody(init.body) ? { 'content-type': 'application/json' } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    notifyApiUnavailable();
+    throw error;
+  }
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
+    if (shouldTreatResponseAsApiUnavailable(response.status)) {
+      notifyApiUnavailable();
+    }
     const parsedError = errorResponseSchema.safeParse(payload);
     throw new ApiClientError(parsedError.success ? parsedError.data.message : 'Request failed', response.status);
   }
 
   return schema.parse(payload);
+}
+
+export async function checkApiHealth() {
+  try {
+    const response = await fetch(getHealthCheckUrl(), {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = (await response.json().catch(() => null)) as { status?: string } | null;
+    return payload?.status === 'ok';
+  } catch {
+    return false;
+  }
 }
 
 function withAuthorization(token: string, init: RequestInit = {}): RequestInit {

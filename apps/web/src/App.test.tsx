@@ -22,6 +22,8 @@ vi.mock('./api', () => {
     acceptAssessment: vi.fn(),
     activateQuestionSet: vi.fn(),
     archiveReviewPeriod: vi.fn(),
+    apiUnavailableEventName: 'revu:api-unavailable',
+    checkApiHealth: vi.fn(),
     changePassword: vi.fn(),
     createAssignment: vi.fn(),
     createAssessment: vi.fn(),
@@ -66,6 +68,7 @@ vi.mock('./api', () => {
 import App from './App';
 import {
   acceptAssessment,
+  checkApiHealth,
   exportBackup,
   exportLocalUsers,
   exportQuestionSets,
@@ -1219,6 +1222,55 @@ describe('file management screen', () => {
     expect(container.textContent).toContain('Keep latest 5 backups');
     expect(container.textContent).toContain('Disabled');
     expect(container.textContent).toContain('weekly');
+  });
+});
+
+describe('sidebar refresh detection', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/dashboard');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('shows a refresh button after the API recovers from an outage', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(checkApiHealth).mockResolvedValue(true);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Signed in as') === true);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('revu:api-unavailable'));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('New version. Refresh Now') === true);
+    expect(vi.mocked(checkApiHealth)).toHaveBeenCalled();
   });
 });
 

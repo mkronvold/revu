@@ -17,6 +17,8 @@ import { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, useEffect, useMemo, 
 
 import {
   ApiClientError,
+  apiUnavailableEventName,
+  checkApiHealth,
   changePassword,
   createEmployee,
   exportBackup,
@@ -500,6 +502,8 @@ function App() {
     archived: true,
   });
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
+  const [isRefreshAvailable, setIsRefreshAvailable] = useState(false);
+  const [apiRecoveryPollCount, setApiRecoveryPollCount] = useState(0);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -546,6 +550,21 @@ function App() {
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
+    const handleApiUnavailable = () => {
+      if (!window.sessionStorage.getItem(sessionStorageKey)) {
+        return;
+      }
+
+      setApiRecoveryPollCount((currentCount) => currentCount + 1);
+    };
+
+    window.addEventListener(apiUnavailableEventName, handleApiUnavailable);
+    return () => {
+      window.removeEventListener(apiUnavailableEventName, handleApiUnavailable);
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const existingToken = window.sessionStorage.getItem(sessionStorageKey);
 
@@ -581,6 +600,13 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!sessionToken) {
+      setIsRefreshAvailable(false);
+      setApiRecoveryPollCount(0);
+    }
+  }, [sessionToken]);
 
   const sessionUser = session?.user ?? null;
   const passwordResetRequired = session?.passwordResetRequired ?? false;
@@ -772,6 +798,40 @@ function App() {
       setPathname('/dashboard');
     }
   }, [accessibleSections, pathname, sessionUser]);
+
+  useEffect(() => {
+    if (!sessionToken || apiRecoveryPollCount === 0 || isRefreshAvailable) {
+      return;
+    }
+
+    let cancelled = false;
+    let retryTimeoutId: number | null = null;
+
+    const pollForApiRecovery = async () => {
+      const isHealthy = await checkApiHealth();
+      if (cancelled) {
+        return;
+      }
+
+      if (isHealthy) {
+        setIsRefreshAvailable(true);
+        return;
+      }
+
+      retryTimeoutId = window.setTimeout(() => {
+        void pollForApiRecovery();
+      }, 3000);
+    };
+
+    void pollForApiRecovery();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+      }
+    };
+  }, [apiRecoveryPollCount, isRefreshAvailable, sessionToken]);
 
   useEffect(() => {
     if (!sessionUser || !sessionToken) {
@@ -1373,17 +1433,19 @@ function App() {
     setSelectedAssessmentId(null);
     setAssessmentResponsesDraft({});
     setSelectedReviewAssessmentId(null);
-      setReviewNotesDraft('');
-      setWorkflowNotice('');
-      setWorkflowDraft(null);
-      setWorkflowVisibilityDraft(null);
-      setWorkflowInitialDraft(null);
-      setAreReviewQueuesExpanded(true);
-      setArchivePanelsExpanded({
-        active: true,
+    setReviewNotesDraft('');
+    setWorkflowNotice('');
+    setWorkflowDraft(null);
+    setWorkflowVisibilityDraft(null);
+    setWorkflowInitialDraft(null);
+    setAreReviewQueuesExpanded(true);
+    setArchivePanelsExpanded({
+      active: true,
       archived: true,
     });
     setPasswordDialogEmployeeId(null);
+    setIsRefreshAvailable(false);
+    setApiRecoveryPollCount(0);
   };
 
   const syncEmployeeRelationships = (employeeId: string, managerId: string | null, assessorId: string | null) => {
@@ -1466,6 +1528,10 @@ function App() {
     } finally {
       clearSession();
     }
+  };
+
+  const handleRefreshNow = () => {
+    window.location.reload();
   };
 
   const handleChangeOwnPassword = async (event: FormEvent<HTMLFormElement>) => {
@@ -4563,9 +4629,16 @@ function App() {
             <p className="sidebar-session-meta">
               {sessionUser.role} • {sessionUser.username}
             </p>
-            <button type="button" className="secondary-button" onClick={handleLogout}>
-              Sign out
-            </button>
+            <div className="sidebar-session-actions">
+              {isRefreshAvailable ? (
+                <button type="button" onClick={handleRefreshNow}>
+                  New version. Refresh Now
+                </button>
+              ) : null}
+              <button type="button" className="secondary-button" onClick={handleLogout}>
+                Sign out
+              </button>
+            </div>
           </div>
 
           {lastResponseMessage ? (
