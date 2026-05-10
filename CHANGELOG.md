@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed the web workspace scripts to rebuild `@revu/contracts` before running so the UI no longer keeps stale transfer schemas after pulling export/import changes
 - Finished the remaining File Management transfer flows so question sets and assignments now export/import real JSON/CSV files, including username-based assignment mapping and review-period upserts
 - Fixed question-set CSV/JSON export so the File Management UI now downloads real files instead of only showing a stub notice
 - Added `LCM.md`, a weekly image-refresh workflow, Dependabot-based dependency automation with safe automerge, and a cron-friendly `autoupdate.sh --once` mode so Revu can refresh CVE fixes in base images and pinned dependencies with minimal manual intervention

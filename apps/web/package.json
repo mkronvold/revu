@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run build --workspace @revu/contracts",
     "dev": "vite --host 0.0.0.0 --port 3000",
+    "prebuild": "npm run build --workspace @revu/contracts",
     "build": "tsc --project tsconfig.json && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "pretypecheck": "npm run build --workspace @revu/contracts",
     "typecheck": "tsc --project tsconfig.json --noEmit",
+    "pretest": "npm run build --workspace @revu/contracts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
