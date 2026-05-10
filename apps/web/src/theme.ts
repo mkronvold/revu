@@ -345,6 +345,7 @@ const themedMutedTextSelectors = [
   '.status-caption',
   '.brand-copy',
   '.employee-roster-header',
+  '.assessments-header',
   '.review-queue-header',
   '.stack-form label',
   '.inline-field',
@@ -360,11 +361,12 @@ const themedMutedTextSelectors = [
   '.question-order',
 ];
 
-const themedTableHeaderSelectors = ['.employee-roster-header', '.review-queue-header'];
+const themedTableHeaderSelectors = ['.employee-roster-header', '.assessments-header', '.review-queue-header'];
 
 const themedInteractiveSurfaceSelectors = [
   '.section-toggle',
   '.demo-account-card',
+  '.assessment-row',
   '.employee-row-summary',
   '.review-queue-item',
   '.local-user-export-mode-option',

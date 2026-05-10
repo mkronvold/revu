@@ -41,6 +41,11 @@ describe('theme helpers', () => {
     expect(themeStyleOverrides).toContain(".review-queue-item:hover");
   });
 
+  it('themes assessment queue headers and rows for dark palettes', () => {
+    expect(themeStyleOverrides).toContain('.assessments-header');
+    expect(themeStyleOverrides).toContain('.assessment-row');
+  });
+
   it('themes backup export mode tiles on the same surface model as other interactive cards', () => {
     expect(themeStyleOverrides).toContain('.local-user-export-mode-option');
     expect(themeStyleOverrides).toContain('.local-user-export-mode-option-selected');
