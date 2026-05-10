@@ -527,7 +527,7 @@ describe('questions screen', () => {
     expect(container.textContent).not.toContain('Due date');
   });
 
-  it('shows a make active button for inactive review periods', async () => {
+  it('keeps the make active button live and to the left of the picker for inactive review periods', async () => {
     const inactiveSnapshot = cloneQuestionSlice();
     inactiveSnapshot.reviewPeriods[1] = {
       ...inactiveSnapshot.reviewPeriods[1]!,
@@ -576,6 +576,9 @@ describe('questions screen', () => {
       (button) => button.textContent === 'Make active',
     );
     expect(makeActiveButton).toBeTruthy();
+    expect(makeActiveButton?.hasAttribute('disabled')).toBe(false);
+    expect(makeActiveButton?.parentElement?.className).toContain('review-period-picker-row');
+    expect(makeActiveButton?.nextElementSibling?.className).toContain('review-period-picker');
 
     await act(async () => {
       makeActiveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -592,6 +595,39 @@ describe('questions screen', () => {
       status: 'active',
     });
     await waitFor(() => container.textContent?.includes('Made 2025 Annual Review the active review period.') ?? false);
+  });
+
+  it('shows disabled Archived and Active status buttons for archived and active review periods', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const activeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Active');
+    expect(activeButton).toBeTruthy();
+    expect(activeButton?.disabled).toBe(true);
+    expect(activeButton?.className).toContain('review-period-status-button-active');
+
+    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    expect(reviewPeriodSelect).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(reviewPeriodSelect!, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      await flushRender();
+    });
+
+    const archivedButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Archived');
+    expect(archivedButton).toBeTruthy();
+    expect(archivedButton?.disabled).toBe(true);
   });
 
   it('edits persistent question categories from the review-period card', async () => {

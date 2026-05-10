@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Updated the Questions review-period picker control so the status button stays to the left of the pulldown when space allows, shows live `Make active` for inactive periods, shows disabled `Archived` for archived periods, and shows a disabled highlighted `Active` state for the active period
 - Removed question-set titles from the dashboard assessment forms, kept uncategorized questions headerless there, and moved the assessment editor surfaces back onto the shared theme palette instead of hard-coded light backgrounds
 - Updated `autoupdate.sh` so its wait loop polls for keyboard input and pressing `r` triggers an immediate update check instead of waiting for the full interval
 - Added `VITE_ENABLE_QUESTION_SET_STATUS` to hide question-set status by default, remove that status from the Questions UI when disabled, and auto-treat saved/copied question sets as active without deleting the underlying status code path

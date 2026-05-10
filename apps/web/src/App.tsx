@@ -3167,17 +3167,42 @@ function App() {
       );
     }
 
+    const reviewPeriodButtonProps =
+      selectedReviewPeriod.status === 'inactive'
+        ? {
+            label: 'Make active',
+            disabled: isSavingReviewAdmin,
+            className: '',
+            onClick: () => void handleActivateSelectedReviewPeriod(),
+          }
+        : selectedReviewPeriod.status === 'archived'
+          ? {
+              label: 'Archived',
+              disabled: true,
+              className: 'secondary-button review-period-status-button-static',
+              onClick: undefined,
+            }
+          : {
+              label: 'Active',
+              disabled: true,
+              className: 'review-period-status-button-active review-period-status-button-static',
+              onClick: undefined,
+            };
+
     return (
       <main className="admin-stack">
         <section className="card admin-section-card review-period-card">
           <div className="section-heading">
             <h3>{selectedReviewPeriod.label}</h3>
-            <div className="dialog-header-actions">
-              {selectedReviewPeriod.status === 'inactive' ? (
-                <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleActivateSelectedReviewPeriod()}>
-                  Make active
-                </button>
-              ) : null}
+            <div className="review-period-picker-row">
+              <button
+                type="button"
+                className={reviewPeriodButtonProps.className || undefined}
+                disabled={reviewPeriodButtonProps.disabled}
+                onClick={reviewPeriodButtonProps.onClick}
+              >
+                {reviewPeriodButtonProps.label}
+              </button>
               <label className="inline-field review-period-picker">
                 <span className="sr-only">Review period</span>
                 <select

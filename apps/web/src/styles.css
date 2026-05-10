@@ -1555,12 +1555,31 @@ button.employee-row:focus-visible {
   gap: 0.85rem;
 }
 
+.review-period-picker-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .review-period-picker {
   min-width: min(100%, 14rem);
 }
 
 .review-period-picker select {
   width: 100%;
+}
+
+.review-period-status-button-static:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.review-period-status-button-active,
+.review-period-status-button-active:disabled {
+  border-color: rgba(37, 99, 235, 0.58);
+  background: #dbeafe;
 }
 
 .review-period-card .detail-grid,

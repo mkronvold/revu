@@ -578,6 +578,13 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
     background: ${palette.activeBackground};
   }
 
+  [data-revu-theme='${theme}'] .review-period-status-button-active,
+  [data-revu-theme='${theme}'] .review-period-status-button-active:disabled {
+    color: ${palette.surfaceText};
+    border-color: ${palette.activeBorder};
+    background: ${palette.activeBackground};
+  }
+
   [data-revu-theme='${theme}'] .assessment-question-option-selected {
     border-color: ${palette.activeBorder};
     background: ${palette.activeBackground};
