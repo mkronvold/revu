@@ -1565,6 +1565,14 @@ button.employee-row:focus-visible {
   color: #334155;
 }
 
+.employee-directory-search {
+  min-width: min(100%, 20rem);
+}
+
+.employee-directory-search input {
+  width: 100%;
+}
+
 .review-period-card {
   gap: 0.85rem;
 }

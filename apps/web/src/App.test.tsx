@@ -2851,6 +2851,97 @@ describe('employees screen', () => {
     expect(resetEmployeePassword).toHaveBeenCalledWith('session-token', elliot.id);
   });
 
+  it('filters the employee directory live from the search box', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    expect(searchInput).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(searchInput!, 'pat.peer@example.com');
+      await flushRender();
+    });
+
+    const filteredRows = Array.from(container.querySelectorAll('.employee-row-card'), (row) => row.textContent ?? '');
+    expect(filteredRows.some((text) => text.includes('Pat Peer'))).toBe(true);
+    expect(filteredRows.some((text) => text.includes('Elliot Employee'))).toBe(false);
+
+    await act(async () => {
+      setFieldValue(searchInput!, '');
+      await flushRender();
+    });
+
+    expect(Array.from(container.querySelectorAll('.employee-row-card')).some((row) => row.textContent?.includes('Elliot Employee'))).toBe(
+      true,
+    );
+  });
+
+  it('marks active employees inactive from the employee detail dialog', async () => {
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+    vi.mocked(updateEmployee).mockResolvedValue({
+      item: {
+        ...createEmployeeDetail(elliot.id).item,
+        status: 'inactive',
+      },
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Employee'),
+    );
+    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+
+    await act(async () => {
+      summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
+
+    const makeInactiveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Make Inactive',
+    );
+    expect(makeInactiveButton).toBeTruthy();
+
+    await act(async () => {
+      makeInactiveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(updateEmployee).toHaveBeenCalledWith('session-token', elliot.id, {
+      status: 'inactive',
+    });
+    await waitFor(
+      () => !Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Make Inactive'),
+    );
+    expect(container.querySelector('.employee-dialog-card .employee-status-pill')?.textContent).toBe('inactive');
+  });
+
   it('lets admins tombstone-delete employees from the edit dialog', async () => {
     const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);

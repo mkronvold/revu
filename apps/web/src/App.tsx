@@ -546,6 +546,7 @@ function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [foundation, setFoundation] = useState<FoundationSnapshot | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeDetail, setSelectedEmployeeDetail] = useState<EmployeeAdmin | null>(null);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -791,15 +792,40 @@ function App() {
     [employees],
   );
   const directoryEmployees = useMemo(
-    () =>
-      [...employees].sort((left, right) => {
-        if (left.status !== right.status) {
-          return left.status === 'active' ? -1 : 1;
-        }
+    () => {
+      const normalizedQuery = employeeSearchQuery.trim().toLowerCase();
+      const employeeNamesById = new Map(
+        [...employees, ...(sessionUser ? [sessionUser] : [])].map((employee) => [employee.id, employee.fullName] as const),
+      );
 
-        return left.fullName.localeCompare(right.fullName);
-      }),
-    [employees],
+      return [...employees]
+        .filter((employee) => {
+          if (!normalizedQuery) {
+            return true;
+          }
+
+          const searchFields = [
+            employee.fullName,
+            employee.username,
+            employee.email,
+            employee.role,
+            employee.status,
+            employee.managerId ? employeeNamesById.get(employee.managerId) ?? deletedUserLabel : '',
+            employee.assessor1Id ? employeeNamesById.get(employee.assessor1Id) ?? deletedUserLabel : '',
+            employee.assessor2Id ? employeeNamesById.get(employee.assessor2Id) ?? deletedUserLabel : '',
+          ];
+
+          return searchFields.some((value) => value.toLowerCase().includes(normalizedQuery));
+        })
+        .sort((left, right) => {
+          if (left.status !== right.status) {
+            return left.status === 'active' ? -1 : 1;
+          }
+
+          return left.fullName.localeCompare(right.fullName);
+        });
+    },
+    [employeeSearchQuery, employees, sessionUser],
   );
   const managerOptions = useMemo(
     () => activeEmployees.filter((employee) => employee.role === 'admin' || employee.role === 'manager'),
@@ -1688,6 +1714,7 @@ function App() {
     setSession(null);
     setFoundation(null);
     setEmployees([]);
+    setEmployeeSearchQuery('');
     setSelectedEmployeeId(null);
     setSelectedEmployeeDetail(null);
     setEditingEmployeeId(null);
@@ -5704,7 +5731,7 @@ function App() {
                   ) : null}
                   {isAdmin && detailEmployee.status === 'active' ? (
                     <button type="button" className="secondary-button" onClick={() => void markEmployeeInactive()}>
-                      Remove
+                      Make Inactive
                     </button>
                   ) : null}
                 </div>
@@ -5842,6 +5869,18 @@ function App() {
             ) : null}
           </div>
 
+          <div className="action-row">
+            <label className="inline-field employee-directory-search">
+              <span>Search</span>
+              <input
+                type="search"
+                value={employeeSearchQuery}
+                onChange={(event) => setEmployeeSearchQuery(event.target.value)}
+                placeholder="Search employees"
+              />
+            </label>
+          </div>
+
           {isLoadingEmployees ? <p className="muted-copy">Loading employee roster...</p> : null}
 
           {directoryEmployees.length ? (
@@ -5859,7 +5898,9 @@ function App() {
               </div>
             </div>
           ) : (
-            <p className="muted-copy">No employees in the directory.</p>
+            <p className="muted-copy">
+              {employeeSearchQuery.trim() ? 'No employees match this search.' : 'No employees in the directory.'}
+            </p>
           )}
         </section>
 
