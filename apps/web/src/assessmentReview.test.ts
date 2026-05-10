@@ -123,6 +123,16 @@ describe('assessment and review helpers', () => {
     });
   });
 
+  it('renders tombstone-linked assessment names as deleted user when the employee record is missing', () => {
+    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const employees = employeesListExample.items.filter((employee) => employee.username !== 'pat.peer');
+    const rows = buildAdminAssessmentRows(snapshot, employees, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+
+    expect(rows[1]).toMatchObject({
+      assessorLabel: 'deleted user',
+    });
+  });
+
   it('shows submitted assessments to every manager who can accept them', () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
     const riley: Employee = {

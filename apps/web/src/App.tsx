@@ -128,6 +128,7 @@ const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
 const lastResponseTimeoutMs = 120000;
 const newQuestionCategoryOptionValue = '__new-question-category__';
 const backupScheduleOptions: BackupSchedule[] = ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'];
+const deletedUserLabel = 'deleted user';
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
 type BackupSettingsDraft = {
@@ -1210,7 +1211,7 @@ function App() {
       return sessionUser.fullName;
     }
 
-    return workflowEmployeesById.get(employeeId)?.fullName ?? 'Unknown employee';
+    return workflowEmployeesById.get(employeeId)?.fullName ?? deletedUserLabel;
   };
 
   const getAssessorNames = (employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>) =>

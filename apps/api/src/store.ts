@@ -186,6 +186,7 @@ type RelationshipRow = {
   id: string;
   role: Employee["role"];
   status: Employee["status"];
+  deleted_at: Date | string | null;
 };
 
 type ExistsRow = {
@@ -1092,17 +1093,18 @@ export class ApiStore {
   private async assertRelationships(
     client: DbClient,
     candidate: { id: string; managerId: string | null; assessor1Id: string | null; assessor2Id: string | null },
+    options: { allowDeletedIds?: readonly string[] } = {},
   ) {
     const relationshipIds = [candidate.managerId, candidate.assessor1Id, candidate.assessor2Id].filter(
       (value): value is string => value !== null,
     );
+    const allowDeletedIds = new Set(options.allowDeletedIds ?? []);
     const result = relationshipIds.length > 0
       ? await client.query<RelationshipRow>(
           `
-            SELECT id, role, status
+            SELECT id, role, status, deleted_at
             FROM employees
             WHERE id = ANY($1::uuid[])
-              AND deleted_at IS NULL
           `,
           [relationshipIds],
         )
@@ -1115,10 +1117,13 @@ export class ApiStore {
       if (!manager) {
         throw new ApiError(400, "Manager not found");
       }
+      if (manager.deleted_at !== null && !allowDeletedIds.has(manager.id)) {
+        throw new ApiError(400, "Manager not found");
+      }
       if (manager.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own manager");
       }
-      if (manager.role !== "manager" && manager.role !== "admin") {
+      if (manager.deleted_at === null && manager.role !== "manager" && manager.role !== "admin") {
         throw new ApiError(400, "Manager must reference a manager or admin");
       }
     }
@@ -1135,10 +1140,13 @@ export class ApiStore {
       if (!assessor) {
         throw new ApiError(400, `${label} not found`);
       }
+      if (assessor.deleted_at !== null && !allowDeletedIds.has(assessor.id)) {
+        throw new ApiError(400, `${label} not found`);
+      }
       if (assessor.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own assessor");
       }
-      if (assessor.status !== "active") {
+      if (assessor.deleted_at === null && assessor.status !== "active") {
         throw new ApiError(400, `${label} must be active`);
       }
     }
@@ -1874,6 +1882,10 @@ export class ApiStore {
           managerId: nextEmployee.managerId,
           assessor1Id: nextEmployee.assessor1Id,
           assessor2Id: nextEmployee.assessor2Id,
+        }, {
+          allowDeletedIds: [existing.managerId, existing.assessor1Id, existing.assessor2Id].filter(
+            (value): value is string => value !== null,
+          ),
         });
 
         const result = await client.query<EmployeeRow>(
@@ -1938,25 +1950,6 @@ export class ApiStore {
       return await withTransaction(async (client) => {
         await this.ensureEmployeeDeletedColumn(client);
         await this.employeeOrThrow(client, employeeId);
-
-        const relationshipReference = await client.query<ExistsRow>(
-          `
-            SELECT EXISTS(
-              SELECT 1
-              FROM employees
-              WHERE deleted_at IS NULL
-                AND (
-                  manager_employee_id = $1
-                  OR assessor1_employee_id = $1
-                  OR assessor2_employee_id = $1
-                )
-            ) AS exists
-          `,
-          [employeeId],
-        );
-        if (relationshipReference.rows[0]?.exists) {
-          throw new ApiError(409, "Employee is still referenced by another employee relationship");
-        }
 
         const assignmentReference = await client.query<ExistsRow>(
           `
@@ -4286,6 +4279,10 @@ export class ApiStore {
           managerId: nextManagerId,
           assessor1Id: employee.assessor1Id,
           assessor2Id: nextAssessorId,
+        }, {
+          allowDeletedIds: [employee.managerId, employee.assessor1Id, employee.assessor2Id].filter(
+            (value): value is string => value !== null,
+          ),
         });
         await client.query(
           `

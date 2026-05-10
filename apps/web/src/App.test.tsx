@@ -2140,6 +2140,57 @@ describe('employees screen', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('renders tombstone-linked employee relationships as deleted user', async () => {
+    const deletedManagerId = '99999999-9999-4999-8999-999999999999';
+    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const employeesWithDeletedRelationship = {
+      items: employeesListExample.items.map((employee) =>
+        employee.id === elliot.id
+          ? {
+              ...employee,
+              managerId: deletedManagerId,
+            }
+          : employee,
+      ),
+    };
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue({
+      ...structuredClone(foundationSnapshotExample),
+      employees: employeesWithDeletedRelationship.items,
+    });
+    vi.mocked(listEmployees).mockResolvedValue(employeesWithDeletedRelationship);
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => ({
+      item: {
+        ...createEmployeeDetail(employeeId).item,
+        managerId: employeeId === elliot.id ? deletedManagerId : createEmployeeDetail(employeeId).item.managerId,
+      },
+    }));
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Elliot Employee'),
+    );
+    expect(elliotRow?.textContent).toContain('deleted user');
+
+    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    await act(async () => {
+      summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
+    expect(container.textContent).toContain('Managerdeleted user');
+  });
+
   it('keeps password actions admin-only while managers can still edit non-admin employees', async () => {
     const ada = employeesListExample.items.find((employee) => employee.username === 'ada.admin')!;
     const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;

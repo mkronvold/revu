@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Allowed deleting inactive employees even when active employee relationships still point at them, kept those manager/assessor references attached to the hidden tombstone row, and now render missing tombstone-backed names as `deleted user`
 - Stopped the sign-in screen from defaulting to the old seeded `ada.admin` username after seeded accounts are hidden, and now remember the last successfully used username in browser local storage
 - Moved workflow markdown and visibility into shared API-backed persistence so updates now survive refreshes and appear in other browsers, and included workflow settings in backup restore scopes that already replace review configuration
 - Split employee reviewer assignments into manager plus assessor 1/assessor 2 across the API, UI, import/export flows, and migration backfill, added active/inactive review periods with a sync-assessments action that creates any missing self and peer assessments for the active cycle, removed the Reviews queue review-period column now that only one period can be active, and added an admin-only Assessments page that shows every assessment in the active review period

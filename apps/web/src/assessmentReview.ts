@@ -109,6 +109,8 @@ type MutationOptions = {
   actorId?: string | null;
 };
 
+const deletedUserLabel = 'deleted user';
+
 function cloneAssignment(assignment: Assignment): Assignment {
   return { ...assignment };
 }
@@ -150,7 +152,7 @@ function getEmployeeName(employeesById: Map<string, Employee>, employeeId: strin
     return 'Not assigned';
   }
 
-  return employeesById.get(employeeId)?.fullName ?? 'Unknown employee';
+  return employeesById.get(employeeId)?.fullName ?? deletedUserLabel;
 }
 
 function buildAssessmentKindLabel(assessment: Assessment) {

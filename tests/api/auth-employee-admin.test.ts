@@ -516,6 +516,76 @@ describe("auth and employee admin API", () => {
     expect((await login(app, "ada.admin", "AdminPass123!")).statusCode).toBe(200);
   });
 
+  it("allows deleting inactive employees that are still referenced and preserves those tombstone relationships", async () => {
+    const app = await createApp();
+    const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/employees",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        username: "Former.Manager",
+        fullName: "Former Manager",
+        email: "former.manager@example.com",
+        role: "manager",
+        status: "inactive",
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const deletedManager = employeeResponseSchema.parse(createResponse.json()).item;
+
+    const reassignEmployeeResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/employees/33333333-3333-4333-8333-333333333333",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        managerId: deletedManager.id,
+      },
+    });
+    expect(reassignEmployeeResponse.statusCode).toBe(200);
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/employees/${deletedManager.id}`,
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteEmployeeResponseSchema.parse(deleteResponse.json()).deleted).toBe(true);
+
+    const employeeAfterDeleteResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/employees/33333333-3333-4333-8333-333333333333",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(employeeAfterDeleteResponse.statusCode).toBe(200);
+    expect(employeeResponseSchema.parse(employeeAfterDeleteResponse.json()).item.managerId).toBe(deletedManager.id);
+
+    const updateAfterDeleteResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/employees/33333333-3333-4333-8333-333333333333",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        fullName: "Elliot Employee Updated",
+      },
+    });
+    expect(updateAfterDeleteResponse.statusCode).toBe(200);
+    expect(employeeResponseSchema.parse(updateAfterDeleteResponse.json()).item).toMatchObject({
+      fullName: "Elliot Employee Updated",
+      managerId: deletedManager.id,
+    });
+  });
+
   it("rejects imported password-hash credentials that do not use a supported stored-password format", async () => {
     const app = await createApp();
     const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
