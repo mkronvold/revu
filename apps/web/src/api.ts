@@ -309,7 +309,7 @@ export function updateOwnProfile(token: string, payload: AuthUpdateProfileReques
 }
 
 export function getFoundation(token: string) {
-  return request('/foundation', foundationSnapshotSchema, withAuthorization(token));
+  return request('/foundation', foundationSnapshotSchema, withAuthorization(token, { cache: 'no-store' }));
 }
 
 export function updateWorkflowSettings(token: string, payload: UpdateWorkflowSettingsRequest) {

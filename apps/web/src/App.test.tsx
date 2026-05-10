@@ -1378,6 +1378,57 @@ describe('workflow entry', () => {
     expect(container.textContent).not.toContain('Stale local workflow');
   });
 
+  it('refreshes workflow content when returning to the workflow page after another browser saves changes', async () => {
+    const initialSnapshot = cloneQuestionSlice();
+    initialSnapshot.workflow = {
+      markdown: '## Original workflow\n- Existing step',
+      visibility: 'all',
+    };
+
+    const refreshedSnapshot = structuredClone(initialSnapshot);
+    refreshedSnapshot.workflow = {
+      markdown: '## Updated workflow\n- Synced from another browser',
+      visibility: 'managers',
+    };
+
+    let currentFoundationSnapshot = initialSnapshot;
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundationSnapshot));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/workflow');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Original workflow') ?? false);
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: all');
+
+    currentFoundationSnapshot = refreshedSnapshot;
+
+    await act(async () => {
+      window.history.pushState(null, '', '/file-management');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
+
+    await act(async () => {
+      window.history.pushState(null, '', '/workflow');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Synced from another browser') ?? false);
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: managers');
+  });
+
   it('toggles the sidebar width without removing navigation or utility controls', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());

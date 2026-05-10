@@ -1722,6 +1722,8 @@ button.employee-row:focus-visible {
 .workflow-editor-dialog {
   width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
 }
 
 .workflow-editor-grid {

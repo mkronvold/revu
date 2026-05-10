@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Refreshed the workflow page from the latest foundation snapshot whenever it is reopened so browser-to-browser workflow edits show up without a full page reload
+- Fixed the workflow editor dialog sizing so its footer stays scrollable and the Cancel action remains reachable on shorter screens
 - Fixed question-set saves so removing or reordering peer questions no longer trips the unique display-order constraint during updates
 - Fixed the web workspace scripts to rebuild `@revu/contracts` before running so the UI no longer keeps stale transfer schemas after pulling export/import changes
 - Finished the remaining File Management transfer flows so question sets and assignments now export/import real JSON/CSV files, including username-based assignment mapping and review-period upserts

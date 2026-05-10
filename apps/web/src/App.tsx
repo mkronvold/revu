@@ -13,7 +13,7 @@ import type {
   ReviewPeriod,
 } from '@revu/contracts';
 import { backupSnapshotSchema, defaultWorkflowVisibility } from '@revu/contracts';
-import { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiClientError,
@@ -1471,15 +1471,20 @@ function App() {
     </span>
   );
 
-  const refreshFoundationSnapshot = async () => {
-    if (!sessionToken) {
-      throw new Error('Authentication required');
-    }
+  const refreshFoundationSnapshot = useCallback(
+    async (options?: { apply?: boolean }) => {
+      if (!sessionToken) {
+        throw new Error('Authentication required');
+      }
 
-    const snapshot = await getFoundation(sessionToken);
-    setFoundation(snapshot);
-    return snapshot;
-  };
+      const snapshot = await getFoundation(sessionToken);
+      if (options?.apply !== false) {
+        setFoundation(snapshot);
+      }
+      return snapshot;
+    },
+    [sessionToken],
+  );
 
   const refreshEmployeeDirectory = async () => {
     if (!sessionToken || !hasEmployeeReadAccess) {
@@ -1489,6 +1494,30 @@ function App() {
     const response = await listEmployees(sessionToken);
     setEmployees(response.items);
   };
+
+  useEffect(() => {
+    if (!sessionToken || !sessionUser || passwordResetRequired || pathname !== '/workflow') {
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      try {
+        const snapshot = await refreshFoundationSnapshot({ apply: false });
+        if (active) {
+          setFoundation(snapshot);
+        }
+      } catch (error) {
+        if (active) {
+          setAppError(getErrorMessage(error));
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [passwordResetRequired, pathname, refreshFoundationSnapshot, sessionToken, sessionUser]);
 
   const removeEmployeeFromState = (employeeId: string) => {
     setEmployees((currentEmployees) => currentEmployees.filter((employee) => employee.id !== employeeId));

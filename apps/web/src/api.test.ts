@@ -199,6 +199,7 @@ describe('web api client', () => {
       1,
       `${apiBaseUrl}/foundation`,
       expect.objectContaining({
+        cache: 'no-store',
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
         }),
