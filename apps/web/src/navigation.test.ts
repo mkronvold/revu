@@ -18,6 +18,7 @@ describe('web shell foundation', () => {
       'employees',
       'questions',
       'assessments',
+      'reviewPeriod',
       'fileManagement',
       'workflow',
     ]);
@@ -27,6 +28,7 @@ describe('web shell foundation', () => {
       '/employees',
       '/questions',
       '/assessments',
+      '/review-period',
       '/file-management',
       '/workflow',
     ]);
@@ -51,6 +53,7 @@ describe('web shell foundation', () => {
       'employees',
       'questions',
       'assessments',
+      'reviewPeriod',
       'fileManagement',
       'workflow',
     ]);
@@ -67,6 +70,7 @@ describe('web shell foundation', () => {
       'employees',
       'questions',
       'assessments',
+      'reviewPeriod',
       'fileManagement',
     ]);
   });
@@ -75,8 +79,9 @@ describe('web shell foundation', () => {
     expect(appSections.find((section) => section.id === 'employees')?.summary).toBe(
       'Manage employee records, reporting lines, assessor coverage, and local user transfer actions.',
     );
+    expect(appSections.find((section) => section.id === 'reviewPeriod')?.path).toBe('/review-period');
     expect(appSections.find((section) => section.id === 'fileManagement')?.path).toBe('/file-management');
-    expect(normalizePath('/archive')).toBe('/file-management');
+    expect(normalizePath('/archive')).toBe('/review-period');
     expect(normalizePath('/backups/')).toBe('/file-management');
     expect(workflowMarkdown).toContain('### New `Review Period` begins');
   });

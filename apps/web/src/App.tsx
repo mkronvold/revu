@@ -603,6 +603,7 @@ function App() {
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [backupFileSummary, setBackupFileSummary] = useState<BackupSnapshot | null>(null);
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
+  const [selectedReviewPeriodManagementId, setSelectedReviewPeriodManagementId] = useState<string | null>(null);
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
   const [questionSetInitialDraft, setQuestionSetInitialDraft] = useState<string | null>(null);
@@ -889,12 +890,23 @@ function App() {
     () => reviewAdmin?.reviewPeriods.find((period) => period.id === selectedReviewPeriodId) ?? null,
     [reviewAdmin, selectedReviewPeriodId],
   );
+  const selectedReviewPeriodManagement = useMemo(
+    () => reviewAdmin?.reviewPeriods.find((period) => period.id === selectedReviewPeriodManagementId) ?? null,
+    [reviewAdmin, selectedReviewPeriodManagementId],
+  );
   const selectedReviewPeriodSummary = useMemo(
     () =>
       reviewAdmin && selectedReviewPeriod
         ? getReviewPeriodSummary(reviewAdmin, selectedReviewPeriod.id)
         : null,
     [reviewAdmin, selectedReviewPeriod],
+  );
+  const selectedReviewPeriodManagementSummary = useMemo(
+    () =>
+      reviewAdmin && selectedReviewPeriodManagement
+        ? getReviewPeriodSummary(reviewAdmin, selectedReviewPeriodManagement.id)
+        : null,
+    [reviewAdmin, selectedReviewPeriodManagement],
   );
   const selectedQuestionSets = useMemo(
     () =>
@@ -1103,6 +1115,7 @@ function App() {
     if (!sessionUser || sessionUser.role !== 'admin' || !foundation) {
       setReviewAdmin(null);
       setSelectedReviewPeriodId(null);
+      setSelectedReviewPeriodManagementId(null);
       setReviewPeriodDraft(null);
       closeQuestionSetDialog({ force: true });
       setQuestionCategories([]);
@@ -1252,10 +1265,12 @@ function App() {
   useEffect(() => {
     if (!reviewAdmin) {
       setSelectedReviewPeriodId(null);
+      setSelectedReviewPeriodManagementId(null);
       return;
     }
 
     setSelectedReviewPeriodId((currentId) => getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId));
+    setSelectedReviewPeriodManagementId((currentId) => getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId));
   }, [reviewAdmin]);
 
   useEffect(() => {
@@ -2564,6 +2579,7 @@ function App() {
   };
 
   const startEditingReviewPeriod = (reviewPeriod: ReviewPeriod) => {
+    setSelectedReviewPeriodManagementId(reviewPeriod.id);
     setReviewPeriodDraft(toReviewPeriodDraft(reviewPeriod));
     setQuestionSetDraft(null);
     setEditingQuestionDraftId(null);
@@ -2608,7 +2624,7 @@ function App() {
     try {
       const { reviewPeriod, notice } = await saveReviewPeriodToApi(sessionToken, reviewPeriodDraft);
       await refreshFoundationSnapshot();
-      setSelectedReviewPeriodId(reviewPeriod.id);
+      setSelectedReviewPeriodManagementId(reviewPeriod.id);
       setReviewPeriodDraft(null);
       setAdminNotice(notice);
     } catch (error) {
@@ -2959,8 +2975,8 @@ function App() {
     }
   };
 
-  const handleActivateSelectedReviewPeriod = async () => {
-    if (!selectedReviewPeriod || !sessionToken) {
+  const handleActivateReviewPeriod = async (reviewPeriod: ReviewPeriod) => {
+    if (!sessionToken) {
       return;
     }
 
@@ -2969,18 +2985,17 @@ function App() {
 
     try {
       await saveReviewPeriodToApi(sessionToken, {
-        id: selectedReviewPeriod.id,
-        key: selectedReviewPeriod.key,
-        label: selectedReviewPeriod.label,
-        startDate: selectedReviewPeriod.startDate,
-        dueDate: selectedReviewPeriod.dueDate,
-        assessmentDueDate: selectedReviewPeriod.assessmentDueDate,
-        reviewDueDate: selectedReviewPeriod.reviewDueDate,
+        id: reviewPeriod.id,
+        key: reviewPeriod.key,
+        label: reviewPeriod.label,
+        startDate: reviewPeriod.startDate,
+        dueDate: reviewPeriod.dueDate,
+        assessmentDueDate: reviewPeriod.assessmentDueDate,
+        reviewDueDate: reviewPeriod.reviewDueDate,
         status: 'active',
       });
       await refreshFoundationSnapshot();
-      setSelectedReviewPeriodId(selectedReviewPeriod.id);
-      setAdminNotice(`Made ${selectedReviewPeriod.label} the active review period.`);
+      setAdminNotice(`Made ${reviewPeriod.label} the active review period.`);
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -3218,6 +3233,107 @@ function App() {
     );
   };
 
+  const renderReviewPeriodEditorForm = () =>
+    reviewPeriodDraft ? (
+      <form className="stack-form" onSubmit={saveReviewPeriodDraft}>
+        <label>
+          Review period key
+          <input
+            value={reviewPeriodDraft.key}
+            onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, key: event.target.value })}
+            placeholder="2026"
+          />
+        </label>
+        <label>
+          Label
+          <input
+            value={reviewPeriodDraft.label}
+            onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, label: event.target.value })}
+            placeholder="2026 Annual Review"
+          />
+        </label>
+        <div className="form-columns">
+          <label>
+            Start date
+            <input
+              type="date"
+              value={reviewPeriodDraft.startDate}
+              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })}
+            />
+          </label>
+          <label>
+            End date
+            <input
+              type="date"
+              value={reviewPeriodDraft.dueDate}
+              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Assessment Due Date
+            <input
+              type="date"
+              value={reviewPeriodDraft.assessmentDueDate}
+              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, assessmentDueDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Review Due Date
+            <input
+              type="date"
+              value={reviewPeriodDraft.reviewDueDate}
+              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, reviewDueDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Status
+            <select
+              value={reviewPeriodDraft.status}
+              onChange={(event) =>
+                setReviewPeriodDraft({
+                  ...reviewPeriodDraft,
+                  status: event.target.value as ReviewPeriodDraft['status'],
+                })
+              }
+            >
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </label>
+        </div>
+        <div className="action-row">
+          <button type="submit" disabled={isSavingReviewAdmin}>
+            Save period
+          </button>
+          <button type="button" className="secondary-button" onClick={() => setReviewPeriodDraft(null)}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    ) : null;
+
+  const getReviewPeriodStatusButtonProps = (reviewPeriod: ReviewPeriod) =>
+    reviewPeriod.status === 'inactive'
+      ? {
+          label: 'Make active',
+          disabled: isSavingReviewAdmin,
+          className: '',
+          onClick: () => void handleActivateReviewPeriod(reviewPeriod),
+        }
+      : reviewPeriod.status === 'archived'
+        ? {
+            label: 'Archived',
+            disabled: true,
+            className: 'secondary-button review-period-status-button-static',
+            onClick: undefined,
+          }
+        : {
+            label: 'Active',
+            disabled: true,
+            className: 'review-period-status-button-active review-period-status-button-static',
+            onClick: undefined,
+          };
+
   const renderQuestions = () => {
     if (!reviewAdmin || !selectedReviewPeriod || !selectedReviewPeriodSummary) {
       return (
@@ -3229,27 +3345,7 @@ function App() {
       );
     }
 
-    const reviewPeriodButtonProps =
-      selectedReviewPeriod.status === 'inactive'
-        ? {
-            label: 'Make active',
-            disabled: isSavingReviewAdmin,
-            className: '',
-            onClick: () => void handleActivateSelectedReviewPeriod(),
-          }
-        : selectedReviewPeriod.status === 'archived'
-          ? {
-              label: 'Archived',
-              disabled: true,
-              className: 'secondary-button review-period-status-button-static',
-              onClick: undefined,
-            }
-          : {
-              label: 'Active',
-              disabled: true,
-              className: 'review-period-status-button-active review-period-status-button-static',
-              onClick: undefined,
-            };
+    const reviewPeriodButtonProps = getReviewPeriodStatusButtonProps(selectedReviewPeriod);
 
     return (
       <main className="admin-stack">
@@ -3321,6 +3417,100 @@ function App() {
             <p className="toolbar-note">Inactive review periods stay editable, but only the active period can sync assessments.</p>
           ) : null}
           <div className="action-row review-period-actions">
+            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
+              Edit question categories
+            </button>
+          </div>
+        </section>
+
+        {renderQuestionSetCard('self', selectedQuestionSets.self)}
+        {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
+
+      </main>
+    );
+  };
+
+  const renderReviewPeriod = () => {
+    if (!reviewAdmin || !selectedReviewPeriodManagement || !selectedReviewPeriodManagementSummary) {
+      return (
+        <main className="admin-stack">
+          <section className="card">
+            <p className="muted-copy">Loading review period management...</p>
+          </section>
+        </main>
+      );
+    }
+
+    const reviewPeriodButtonProps = getReviewPeriodStatusButtonProps(selectedReviewPeriodManagement);
+
+    return (
+      <main className="admin-stack">
+        <section className="card admin-section-card review-period-card">
+          <div className="section-heading review-period-heading">
+            <div>
+              <p className="section-label">Review period management</p>
+              <h3>{selectedReviewPeriodManagement.label}</h3>
+            </div>
+            <div className="review-period-picker-row">
+              <button
+                type="button"
+                className={reviewPeriodButtonProps.className || undefined}
+                disabled={reviewPeriodButtonProps.disabled}
+                onClick={reviewPeriodButtonProps.onClick}
+              >
+                {reviewPeriodButtonProps.label}
+              </button>
+              <label className="inline-field review-period-picker">
+                <span className="sr-only">Review period</span>
+                <select
+                  value={selectedReviewPeriodManagement.id}
+                  onChange={(event) => setSelectedReviewPeriodManagementId(event.target.value)}
+                >
+                  {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
+                    <option key={reviewPeriod.id} value={reviewPeriod.id}>
+                      {reviewPeriod.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <dl className="detail-grid">
+            <div>
+              <dt>Window</dt>
+              <dd>
+                {selectedReviewPeriodManagement.startDate} → {selectedReviewPeriodManagement.dueDate}
+              </dd>
+            </div>
+            <div>
+              <dt>Assessment due</dt>
+              <dd>{selectedReviewPeriodManagement.assessmentDueDate}</dd>
+            </div>
+            <div>
+              <dt>Review due</dt>
+              <dd>{selectedReviewPeriodManagement.reviewDueDate}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{selectedReviewPeriodManagement.status}</dd>
+            </div>
+            <div>
+              <dt>Question sets</dt>
+              <dd>{selectedReviewPeriodManagementSummary.questionSetCount}</dd>
+            </div>
+            <div>
+              <dt>Assignments</dt>
+              <dd>{selectedReviewPeriodManagementSummary.assignmentCount}</dd>
+            </div>
+          </dl>
+          {selectedReviewPeriodManagement.status === 'archived' ? (
+            <p className="toolbar-note">
+              Archived review periods stay visible here until an admin restores them.
+            </p>
+          ) : selectedReviewPeriodManagement.status === 'inactive' ? (
+            <p className="toolbar-note">Inactive review periods stay editable until an admin makes one active.</p>
+          ) : null}
+          <div className="action-row review-period-actions">
             <div className="review-period-primary-actions">
               <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
                 Add period
@@ -3328,102 +3518,16 @@ function App() {
               <button
                 type="button"
                 className="secondary-button"
-                disabled={selectedReviewPeriod.status === 'archived'}
-                onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
+                disabled={selectedReviewPeriodManagement.status === 'archived'}
+                onClick={() => startEditingReviewPeriod(selectedReviewPeriodManagement)}
               >
                 Edit period
               </button>
             </div>
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
-              Edit question categories
-            </button>
           </div>
-          {reviewPeriodDraft ? (
-            <form className="stack-form" onSubmit={saveReviewPeriodDraft}>
-              <label>
-                Review period key
-                <input
-                  value={reviewPeriodDraft.key}
-                  onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, key: event.target.value })}
-                  placeholder="2026"
-                />
-              </label>
-              <label>
-                Label
-                <input
-                  value={reviewPeriodDraft.label}
-                  onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, label: event.target.value })}
-                  placeholder="2026 Annual Review"
-                />
-              </label>
-              <div className="form-columns">
-                <label>
-                  Start date
-                  <input
-                    type="date"
-                    value={reviewPeriodDraft.startDate}
-                    onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })}
-                  />
-                </label>
-                <label>
-                  End date
-                  <input
-                    type="date"
-                    value={reviewPeriodDraft.dueDate}
-                    onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Assessment Due Date
-                  <input
-                    type="date"
-                    value={reviewPeriodDraft.assessmentDueDate}
-                    onChange={(event) =>
-                      setReviewPeriodDraft({ ...reviewPeriodDraft, assessmentDueDate: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Review Due Date
-                  <input
-                    type="date"
-                    value={reviewPeriodDraft.reviewDueDate}
-                    onChange={(event) =>
-                      setReviewPeriodDraft({ ...reviewPeriodDraft, reviewDueDate: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Status
-                  <select
-                    value={reviewPeriodDraft.status}
-                    onChange={(event) =>
-                      setReviewPeriodDraft({
-                        ...reviewPeriodDraft,
-                        status: event.target.value as ReviewPeriodDraft['status'],
-                      })
-                    }
-                  >
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                  </select>
-                </label>
-              </div>
-              <div className="action-row">
-                <button type="submit" disabled={isSavingReviewAdmin}>
-                  Save period
-                </button>
-                <button type="button" className="secondary-button" onClick={() => setReviewPeriodDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : null}
+          {renderReviewPeriodEditorForm()}
         </section>
-
-        {renderQuestionSetCard('self', selectedQuestionSets.self)}
-        {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
-
+        {renderArchiveContent()}
       </main>
     );
   };
@@ -4069,8 +4173,6 @@ function App() {
       </section>
     );
   };
-
-  const renderArchive = () => <main className="admin-stack">{renderArchiveContent()}</main>;
 
   const renderLocalUserTransferCard = () => {
     if (!isAdmin) {
@@ -5093,7 +5195,6 @@ function App() {
         {renderLocalUserTransferCard()}
         {renderQuestionTransferCard()}
       </div>
-      {renderArchiveContent()}
       {renderBackupsContent()}
     </main>
   );
@@ -5808,12 +5909,14 @@ function App() {
             ? renderEmployees()
             : pathname === '/questions'
               ? renderQuestions()
+              : pathname === '/review-period'
+                ? renderReviewPeriod()
               : pathname === '/file-management'
                 ? renderFileManagement()
                 : pathname === '/workflow'
                   ? renderWorkflow()
                   : pathname === '/archive'
-                    ? renderArchive()
+                    ? renderReviewPeriod()
                     : pathname === '/backups'
                       ? renderBackups()
                       : renderPlaceholderSection()}

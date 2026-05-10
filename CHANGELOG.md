@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a new admin-only `Review Period` page above File Management, moved review-period lifecycle controls there, and removed add/edit period actions from Questions so that page keeps question-category work separate from review-period management
 - Combined File Management review-period lifecycle actions into one always-open card that includes archive, inactive-period management, and archived-period restore controls
 - Swapped the nested question editor footer actions so `Save question` now sits before `Cancel`
 - Expanded the Questions review-period header control so the status button gets a wider frame and stays to the left of the pulldown until narrower layouts force wrapping

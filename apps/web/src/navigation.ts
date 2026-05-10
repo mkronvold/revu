@@ -6,7 +6,7 @@ export type AppRole = 'employee' | 'manager' | 'admin';
 export type WorkflowVisibility = SharedWorkflowVisibility;
 
 export type AppSection = {
-  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assessments' | 'fileManagement' | 'workflow';
+  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assessments' | 'reviewPeriod' | 'fileManagement' | 'workflow';
   path: `/${string}`;
   group: NavGroup;
   title: string;
@@ -108,19 +108,35 @@ export const appSections: AppSection[] = [
     nextSlice: 'Add active review period assessment listing and drill-in actions for admins.',
   },
   {
+    id: 'reviewPeriod',
+    path: '/review-period',
+    group: 'Administration',
+    title: 'Review Period',
+    summary: 'Admin-only controls for review-period activation, editing, archive state, and lifecycle management.',
+    audience: ['Admin'],
+    highlights: [
+      'Keep add, edit, activate, archive, and restore controls together on one admin route.',
+      'Let review-period lifecycle actions stay separate from question-set editing and backup tools.',
+      'Preserve a dedicated selector here so review-period admin actions do not drive Questions page visibility.',
+    ],
+    placeholderTitle: 'Review period management',
+    placeholderDescription: 'This route hosts review-period summaries, editing, activation, and lifecycle operations for admins.',
+    nextSlice: 'Keep review-period lifecycle controls here as the broader admin workflow continues to expand.',
+  },
+  {
     id: 'fileManagement',
     path: '/file-management',
     group: 'Administration',
     title: 'File Management',
-    summary: 'Admin archive and backup operations live together here so review-period retention and restore work stays in one place.',
+    summary: 'Admin import, export, and backup operations live here without mixing in review-period lifecycle management.',
     audience: ['Admin'],
     highlights: [
-      'Archive actions still happen at the review-period level and stay distinct from review completion.',
+      'Employee and question-set transfer tools stay available beside backup operations.',
       'Backup downloads and replace-mode restores remain available while the broader file transfer migration lands.',
-      'Keep archive and backup controls together so administrators have one operational workspace.',
+      'Keep operational file workflows together without coupling them to review-period activation or archive state.',
     ],
-    placeholderTitle: 'Archive and backup operations',
-    placeholderDescription: 'This route now hosts the archive controls and backup tools while remaining import and export actions move here in a later slice.',
+    placeholderTitle: 'Import, export, and backup operations',
+    placeholderDescription: 'This route hosts the transfer and backup tools while review-period lifecycle actions stay on their own admin page.',
     nextSlice: 'Finish consolidating the remaining import and export workflows into the shared file management route.',
   },
   {
@@ -146,7 +162,7 @@ const fallbackSection = appSections[0]!;
 
 const appSectionByPath = new Map<string, AppSection>(appSections.map((section) => [section.path, section]));
 const legacyPathRedirects = new Map<string, AppSection['path']>([
-  ['/archive', '/file-management'],
+  ['/archive', '/review-period'],
   ['/backups', '/file-management'],
 ]);
 

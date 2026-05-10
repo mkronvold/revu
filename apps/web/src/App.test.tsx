@@ -387,6 +387,8 @@ describe('questions screen', () => {
     expect(reviewPeriodCard?.textContent).not.toContain('Export CSV');
     expect(reviewPeriodCard?.textContent).not.toContain('Import JSON');
     expect(reviewPeriodCard?.textContent).not.toContain('Import CSV');
+    expect(reviewPeriodCard?.textContent).not.toContain('Add period');
+    expect(reviewPeriodCard?.textContent).not.toContain('Edit period');
     expect(reviewPeriodCard?.textContent).toContain('Edit question categories');
 
     const questionSetCard = container.querySelector('.question-set-card');
@@ -569,7 +571,9 @@ describe('questions screen', () => {
     expect(container.querySelector('.question-set-dialog-row-button')?.textContent).toContain('Saved question prompt');
   });
 
-  it('shows end, assessment due, and review due fields when editing a review period', async () => {
+  it('shows end, assessment due, and review due fields when editing a review period from the review period page', async () => {
+    window.history.replaceState(null, '', '/review-period');
+
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
@@ -582,7 +586,7 @@ describe('questions screen', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+    await waitFor(() => container.textContent?.includes('Review period management') ?? false);
 
     const editPeriodButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit period');
     expect(editPeriodButton).toBeTruthy();
@@ -767,6 +771,67 @@ describe('questions screen', () => {
       items: ['Growth', 'Teamwork', 'Strategy'],
     });
     expect(container.querySelector('.question-categories-dialog')).toBeNull();
+  });
+
+  it('keeps review period management selection separate from the questions page', async () => {
+    const reviewSnapshot = cloneQuestionSlice();
+    const activeReviewPeriodId = reviewSnapshot.reviewPeriods[0]!.id;
+    const alternateReviewPeriodId = reviewSnapshot.reviewPeriods[1]!.id;
+
+    window.history.replaceState(null, '', '/questions');
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(reviewSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const questionReviewPeriodSelect = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    expect(questionReviewPeriodSelect).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(questionReviewPeriodSelect!, alternateReviewPeriodId);
+      await flushRender();
+    });
+
+    expect(questionReviewPeriodSelect?.value).toBe(alternateReviewPeriodId);
+
+    const reviewPeriodLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
+      (link) => link.textContent === 'Review Period',
+    ) as HTMLAnchorElement | undefined;
+    expect(reviewPeriodLink).toBeTruthy();
+
+    await act(async () => {
+      reviewPeriodLink?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/review-period');
+    expect(container.textContent).toContain('Review period lifecycle');
+
+    const reviewPeriodManagementSelect = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    expect(reviewPeriodManagementSelect?.value).toBe(activeReviewPeriodId);
+
+    const questionsLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
+      (link) => link.textContent === 'Questions',
+    ) as HTMLAnchorElement | undefined;
+    expect(questionsLink).toBeTruthy();
+
+    await act(async () => {
+      questionsLink?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/questions');
+    const questionReviewPeriodSelectAgain = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    expect(questionReviewPeriodSelectAgain?.value).toBe(alternateReviewPeriodId);
   });
 
   it('warns before closing a dirty question-set dialog without saving', async () => {
@@ -1074,11 +1139,13 @@ describe('workflow entry', () => {
     await waitFor(() => container.textContent?.includes('File Management') ?? false);
 
     const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    expect(navLinkLabels).toContain('Review Period');
     expect(navLinkLabels).toContain('File Management');
     expect(navLinkLabels).not.toContain('Archive');
     expect(navLinkLabels).not.toContain('Backups');
     expect(navLinkLabels).toContain('Workflow');
     expect(navLinkLabels.indexOf('Workflow')).toBe(navLinkLabels.indexOf('Reviews') + 1);
+    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(navLinkLabels.indexOf('File Management'));
 
     const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
       (link) => link.textContent === 'Workflow',
@@ -1250,7 +1317,9 @@ describe('workflow entry', () => {
     const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
     expect(navLinkLabels).toContain('Reviews');
     expect(navLinkLabels).toContain('Workflow');
+    expect(navLinkLabels).toContain('Review Period');
     expect(navLinkLabels).toContain('File Management');
+    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(navLinkLabels.indexOf('File Management'));
     expect(Array.from(container.querySelectorAll('.sidebar button')).some((button) => button.textContent === 'Sign out')).toBe(true);
     expect(container.querySelector('.theme-card')).toBeTruthy();
   });
@@ -1478,10 +1547,10 @@ describe('file management screen', () => {
     expect(container.textContent).not.toContain('Runtime backup configuration');
     expect(container.textContent).toContain('Employee import/export');
     expect(container.textContent).toContain('Question set import/export');
-    expect(container.textContent).toContain('Review period lifecycle');
-    expect(container.textContent).toContain('Archive review periods');
-    expect(container.textContent).toContain('Manage inactive review periods');
-    expect(container.textContent).toContain('Restore archived review periods');
+    expect(container.textContent).not.toContain('Review period lifecycle');
+    expect(container.textContent).not.toContain('Archive review periods');
+    expect(container.textContent).not.toContain('Manage inactive review periods');
+    expect(container.textContent).not.toContain('Restore archived review periods');
     expect(container.textContent).toContain('Automatic backups');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
@@ -1490,7 +1559,7 @@ describe('file management screen', () => {
     expect(container.textContent).not.toContain('Expand');
     expect(container.textContent).not.toContain('Review workflow markdown');
     expect(container.textContent).not.toContain('Sidebar visibility:');
-    expect(container.querySelectorAll('.file-management-review-period-card')).toHaveLength(1);
+    expect(container.querySelectorAll('.file-management-review-period-card')).toHaveLength(0);
 
     const editWorkflowButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Edit workflow',
