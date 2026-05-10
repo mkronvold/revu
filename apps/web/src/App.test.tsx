@@ -25,6 +25,7 @@ vi.mock('./api', () => {
     apiUnavailableEventName: 'revu:api-unavailable',
     checkApiHealth: vi.fn(),
     changePassword: vi.fn(),
+    clearReadyToStartAssessments: vi.fn(),
     createAssignment: vi.fn(),
     createAssessment: vi.fn(),
     createEmployee: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock('./api', () => {
     reviewAssessment: vi.fn(),
     saveAssessmentDraft: vi.fn(),
     setEmployeePassword: vi.fn(),
+    syncAssessmentsToAssignments: vi.fn(),
     submitAssessment: vi.fn(),
     unarchiveReviewPeriod: vi.fn(),
     updateAssignment: vi.fn(),
@@ -74,6 +76,7 @@ import {
   acceptAssessment,
   changePassword,
   checkApiHealth,
+  clearReadyToStartAssessments,
   createQuestionSet,
   deleteEmployee,
   exportBackup,
@@ -274,14 +277,15 @@ describe('questions screen', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Sign into Revu') ?? false);
+    await waitFor(() => container.textContent?.includes('Sign into') ?? false);
 
     const eyebrowLink = container.querySelector('a.eyebrow-link') as HTMLAnchorElement | null;
     const usernameInput = container.querySelector('input') as HTMLInputElement | null;
     expect(eyebrowLink).toBeTruthy();
     expect(eyebrowLink?.getAttribute('href')).toBe('https://github.com/mkronvold/revu');
     expect(usernameInput?.value).toBe('');
-    expect(container.textContent).toContain('Sign into Revu');
+    expect(container.textContent).toContain('Sign into');
+    expect(container.textContent).toContain('Revu');
     expect(container.textContent).not.toContain('Use the API-backed local username and password flow');
     expect(container.textContent).not.toContain('Seeded API accounts');
   });
@@ -305,7 +309,7 @@ describe('questions screen', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Sign into Revu') ?? false);
+    await waitFor(() => container.textContent?.includes('Sign into') ?? false);
 
     const usernameInput = container.querySelector('input[type="text"], input:not([type])') as HTMLInputElement | null;
     const passwordInput = container.querySelector('input[type="password"]') as HTMLInputElement | null;
@@ -989,12 +993,21 @@ describe('workflow entry', () => {
     expect(container.querySelector('.theme-card')).toBeTruthy();
   });
 
-  it('shows an admin-only assessments page for the active review period', async () => {
+  it('shows the assessment queue controls on the admin assessments page', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
-    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(cloneQuestionSlice())
+      .mockResolvedValueOnce({
+        ...cloneQuestionSlice(),
+        assessments: [],
+      });
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(clearReadyToStartAssessments).mockResolvedValue({
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      clearedAssessments: 2,
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
     window.history.pushState(null, '', '/assessments');
@@ -1003,16 +1016,34 @@ describe('workflow entry', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('All assessments') ?? false);
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
 
     const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
     expect(navLinkLabels).toContain('Assessments');
+    expect(container.textContent).toContain('Assessment Queue');
+    expect(container.textContent).not.toContain('All assessments');
     expect(container.textContent).toContain('2026 Annual Review');
     expect(container.textContent).toContain('Assessment status');
     expect(container.textContent).toContain('Review status');
     expect(container.textContent).toContain('Submitted');
     expect(container.textContent).toContain('In review');
+    expect(container.textContent).toContain('Clear Ready to start assessments');
+    expect(container.textContent).toContain('Sync assessments to assignments');
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const clearButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Clear Ready to start assessments',
+    ) as HTMLButtonElement | undefined;
+
+    await act(async () => {
+      clearButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('Clear all Ready to start assessments from the active review period?');
+    expect(clearReadyToStartAssessments).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    await waitFor(() => container.textContent?.includes('No assessments exist for the active review period yet.') ?? false);
   });
 });
 

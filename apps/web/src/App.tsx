@@ -93,6 +93,7 @@ import {
   buildImportNotice,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
+  clearReadyAssessmentsForReviewPeriod,
   copyQuestionSetToReviewPeriodInApi,
   buildLocalUsersImportPayloadFromFile,
   exportAssignmentsFromApi,
@@ -2552,6 +2553,31 @@ function App() {
     }
   };
 
+  const handleClearReadyAssessments = async (reviewPeriodId: string) => {
+    if (!sessionToken) {
+      return;
+    }
+
+    if (!window.confirm('Clear all Ready to start assessments from the active review period?')) {
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+
+    try {
+      const result = await clearReadyAssessmentsForReviewPeriod(sessionToken, reviewPeriodId);
+      await refreshFoundationSnapshot();
+      setAdminNotice(
+        `Cleared ${result.clearedAssessments} ready to start ${result.clearedAssessments === 1 ? 'assessment' : 'assessments'} from the active review period.`,
+      );
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
+  };
+
   const openQuestionSetEditor = (target: QuestionTarget) => {
     if (!selectedReviewPeriod) {
       return;
@@ -3131,14 +3157,6 @@ function App() {
                 onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
               >
                 Edit period
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={selectedReviewPeriod.status !== 'active' || isSavingReviewAdmin}
-                onClick={() => void handleSyncAssessments(selectedReviewPeriod.id)}
-              >
-                Sync assessments to assignments
               </button>
             </div>
             <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
@@ -4330,14 +4348,33 @@ function App() {
       <section className="card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Active review period</p>
-            <h3>All assessments</h3>
+            <p className="section-label">Assessment Queue</p>
             <p className="muted-copy">
               {activeAssessmentReviewPeriod
                 ? `${activeAssessmentReviewPeriod.label} • ${adminAssessmentRows.length} ${adminAssessmentRows.length === 1 ? 'assessment' : 'assessments'}`
                 : 'No active review period right now.'}
             </p>
           </div>
+          {activeAssessmentReviewPeriod ? (
+            <div className="review-period-primary-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSavingReviewAdmin}
+                onClick={() => void handleClearReadyAssessments(activeAssessmentReviewPeriod.id)}
+              >
+                Clear Ready to start assessments
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSavingReviewAdmin}
+                onClick={() => void handleSyncAssessments(activeAssessmentReviewPeriod.id)}
+              >
+                Sync assessments to assignments
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {activeAssessmentReviewPeriod ? (
@@ -4361,8 +4398,8 @@ function App() {
 
         {activeAssessmentReviewPeriod ? (
           adminAssessmentRows.length ? (
-            <div className="employee-roster-table-scroll" role="region" aria-label="Active review period assessments">
-              <div className="assessments-table" aria-label="Active review period assessments">
+            <div className="employee-roster-table-scroll" role="region" aria-label="Assessment Queue assessments">
+              <div className="assessments-table" aria-label="Assessment Queue assessments">
                 <div className="assessments-header">
                   <span>Name</span>
                   <span>Assessment type</span>

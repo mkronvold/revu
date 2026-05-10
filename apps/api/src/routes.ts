@@ -22,6 +22,7 @@ import {
   backupRestoreRequestSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
+  clearReadyAssessmentsResponseSchema,
   createAssessmentRequestSchema,
   createAssignmentRequestSchema,
   createEmployeeRequestSchema,
@@ -772,6 +773,17 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["reviewPeriods:update"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return syncAssessmentsResponseSchema.parse(await store.syncAssessmentsToAssignments(reviewPeriodId));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/review-periods/:id/clear-ready-assessments", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["reviewPeriods:update"]);
+      const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
+      return clearReadyAssessmentsResponseSchema.parse(await store.clearReadyToStartAssessments(reviewPeriodId));
     } catch (error) {
       return sendError(reply, error);
     }

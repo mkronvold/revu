@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 import {
+  assessmentsListResponseSchema,
   assignmentResponseSchema,
   authLoginResponseSchema,
+  clearReadyAssessmentsResponseSchema,
   employeeResponseSchema,
   exportStubResponseSchema,
   foundationSnapshotExample,
@@ -11,6 +12,7 @@ import {
   questionSetResponseSchema,
   questionSetsListResponseSchema,
   reviewPeriodResponseSchema,
+  syncAssessmentsResponseSchema,
 } from "@revu/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -289,6 +291,119 @@ describe("review periods, question sets, and assignments admin API", () => {
     expect(removeReferencedQuestionResponse.body).toContain("cannot be removed from a question set");
   });
 
+  it("clears ready-to-start assessments for the active review period", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+
+    const createdReviewPeriodResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        key: "2028",
+        label: "2028 Annual Review",
+        startDate: "2028-01-01",
+        dueDate: "2028-02-28",
+        status: "active",
+      },
+    });
+    expect(createdReviewPeriodResponse.statusCode).toBe(201);
+    const createdReviewPeriod = reviewPeriodResponseSchema.parse(createdReviewPeriodResponse.json()).item;
+
+    for (const questionSetPayload of [
+      {
+        target: "self",
+        title: "2028 Self Questions",
+        prompt: "I delivered against my commitments.",
+      },
+      {
+        target: "peer",
+        title: "2028 Peer Questions",
+        prompt: "They delivered against their commitments.",
+      },
+    ] as const) {
+      const questionSetResponse = await app.inject({
+        method: "POST",
+        url: `/api/v1/review-periods/${createdReviewPeriod.id}/question-sets`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+        payload: {
+          target: questionSetPayload.target,
+          title: questionSetPayload.title,
+          headerMarkdown: "Reflect on the review period.",
+          footerMarkdown: "Thank you.",
+          questions: [
+            {
+              order: 1,
+              type: "subjective",
+              category: "Impact",
+              prompt: questionSetPayload.prompt,
+            },
+          ],
+        },
+      });
+      expect(questionSetResponse.statusCode).toBe(201);
+      const questionSet = questionSetResponseSchema.parse(questionSetResponse.json()).item;
+
+      const activateQuestionSetResponse = await app.inject({
+        method: "POST",
+        url: `/api/v1/question-sets/${questionSet.id}/activate`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+      });
+      expect(activateQuestionSetResponse.statusCode).toBe(200);
+    }
+
+    const syncResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}/sync-assessments`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(syncResponse.statusCode).toBe(200);
+    const syncResult = syncAssessmentsResponseSchema.parse(syncResponse.json());
+    expect(syncResult.createdSelfAssessments).toBeGreaterThan(0);
+
+    const assessmentsBeforeClearResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/assessments?reviewPeriodId=${createdReviewPeriod.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(assessmentsBeforeClearResponse.statusCode).toBe(200);
+    const assessmentsBeforeClear = assessmentsListResponseSchema.parse(assessmentsBeforeClearResponse.json()).items;
+    expect(assessmentsBeforeClear.length).toBeGreaterThan(0);
+
+    const clearResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}/clear-ready-assessments`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(clearResponse.statusCode).toBe(200);
+    expect(clearReadyAssessmentsResponseSchema.parse(clearResponse.json())).toEqual({
+      reviewPeriodId: createdReviewPeriod.id,
+      clearedAssessments: assessmentsBeforeClear.length,
+    });
+
+    const assessmentsAfterClearResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/assessments?reviewPeriodId=${createdReviewPeriod.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(assessmentsAfterClearResponse.statusCode).toBe(200);
+    expect(assessmentsListResponseSchema.parse(assessmentsAfterClearResponse.json()).items).toHaveLength(0);
+  });
+
   it("archives and unarchives review periods while enforcing archive-only mutations", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);
@@ -401,7 +516,7 @@ describe("review periods, question sets, and assignments admin API", () => {
   });
 
   it("captures review-period archive sync and assignment guard rails in SQL", () => {
-    const sql = readFileSync(resolve(process.cwd(), "../../prisma/migrations/003_review_periods_assignments_api.sql"), "utf8");
+    const sql = readFileSync(new URL("../../prisma/migrations/003_review_periods_assignments_api.sql", import.meta.url), "utf8");
 
     expect(sql).toContain("ADD COLUMN archive_state assessment_archive_state");
     expect(sql).toContain("prevent_assignment_mutation_if_archived");

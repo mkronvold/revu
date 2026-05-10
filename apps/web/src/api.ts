@@ -9,6 +9,7 @@ import {
   backupExportResponseSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
+  clearReadyAssessmentsResponseSchema,
   updateBackupStatusRequestSchema,
   updateQuestionCategoriesRequestSchema,
   authChangePasswordRequestSchema,
@@ -445,6 +446,16 @@ export function syncAssessmentsToAssignments(token: string, reviewPeriodId: stri
   return request(
     `/review-periods/${reviewPeriodId}/sync-assessments`,
     syncAssessmentsResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+    }),
+  );
+}
+
+export function clearReadyToStartAssessments(token: string, reviewPeriodId: string) {
+  return request(
+    `/review-periods/${reviewPeriodId}/clear-ready-assessments`,
+    clearReadyAssessmentsResponseSchema,
     withAuthorization(token, {
       method: 'POST',
     }),

@@ -269,6 +269,11 @@ export const syncAssessmentsResponseSchema = z.object({
   createdPeerAssessments: z.number().int().nonnegative(),
 });
 
+export const clearReadyAssessmentsResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  clearedAssessments: z.number().int().nonnegative(),
+});
+
 export const createQuestionInputSchema = questionSchema.omit({ id: true }).extend({
   id: idSchema.optional(),
 });
@@ -535,6 +540,7 @@ export type ResetEmployeePasswordResponse = z.infer<typeof resetEmployeePassword
 export type CreateReviewPeriodRequest = z.infer<typeof createReviewPeriodRequestSchema>;
 export type UpdateReviewPeriodRequest = z.infer<typeof updateReviewPeriodRequestSchema>;
 export type SyncAssessmentsResponse = z.infer<typeof syncAssessmentsResponseSchema>;
+export type ClearReadyAssessmentsResponse = z.infer<typeof clearReadyAssessmentsResponseSchema>;
 export type CreateQuestionInput = z.infer<typeof createQuestionInputSchema>;
 export type CreateQuestionSetRequest = z.infer<typeof createQuestionSetRequestSchema>;
 export type UpdateQuestionSetRequest = z.infer<typeof updateQuestionSetRequestSchema>;

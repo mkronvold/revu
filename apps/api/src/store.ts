@@ -18,6 +18,7 @@ import type {
   BackupSnapshot,
   BackupStatusResponse,
   BackupReviewData,
+  ClearReadyAssessmentsResponse,
   CreateAssessmentRequest,
   CreateAssignmentRequest,
   CreateEmployeeRequest,
@@ -2431,6 +2432,45 @@ export class ApiStore {
           reviewPeriodId,
           createdSelfAssessments,
           createdPeerAssessments,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async clearReadyToStartAssessments(reviewPeriodId: string): Promise<ClearReadyAssessmentsResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const reviewPeriod = this.toReviewPeriod(await this.reviewPeriodOrThrow(client, reviewPeriodId));
+        if (reviewPeriod.status !== "active") {
+          throw new ApiError(409, "Ready to start assessments can only be cleared for the active review period");
+        }
+
+        const result = await client.query<{ id: string }>(
+          `
+            DELETE FROM assessments
+            WHERE id IN (
+              SELECT assessment.id
+              FROM assessments assessment
+              LEFT JOIN assessment_responses response ON response.assessment_id = assessment.id
+              WHERE assessment.review_period_id = $1
+                AND assessment.archive_state = 'active'
+                AND assessment.review_state = 'new'
+              GROUP BY assessment.id
+              HAVING COUNT(response.id) = 0
+            )
+            RETURNING id
+          `,
+          [reviewPeriodId],
+        );
+
+        return {
+          reviewPeriodId,
+          clearedAssessments: result.rowCount ?? result.rows.length,
         };
       });
     } catch (error) {

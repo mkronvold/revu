@@ -16,6 +16,7 @@ import { localUsersImportRequestSchema, localUserTransferItemSchema } from '@rev
 import {
   activateQuestionSet,
   archiveReviewPeriod,
+  clearReadyToStartAssessments,
   createAssignment,
   createQuestionSet,
   createReviewPeriod,
@@ -425,6 +426,10 @@ export async function toggleReviewPeriodArchiveInApi(
 
 export async function syncAssessmentsForReviewPeriod(token: string, reviewPeriodId: string) {
   return syncAssessmentsToAssignments(token, reviewPeriodId);
+}
+
+export async function clearReadyAssessmentsForReviewPeriod(token: string, reviewPeriodId: string) {
+  return clearReadyToStartAssessments(token, reviewPeriodId);
 }
 
 export async function exportQuestionSetsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
