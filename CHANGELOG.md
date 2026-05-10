@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Widened the question-set edit dialog to use the full shared modal width budget while leaving other modal sizing unchanged
 - Added a sidebar collapse toggle that preserves navigation controls and shifted the main web dialogs to percentage-based widths that widen further when the sidebar is collapsed
 - Replaced the sidebar workflow markdown card with a main Workflow nav item, added persisted workflow visibility controls in File Management, and renamed the backup status section to Automatic backups
 - Polished Questions, Reviews, and Employees together by moving question-set editing into modal dialogs with nested question editing, tightening the review and employee directories into denser single-table layouts, and shifting review/password actions fully into the corresponding dialogs

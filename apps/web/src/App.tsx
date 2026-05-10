@@ -3256,10 +3256,10 @@ function App() {
 
   const renderReviewDialog = () =>
     selectedReviewPanel ? (
-      <div className="modal-backdrop" role="presentation" onClick={closeReviewDialog}>
+      <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeReviewDialog}>
         <section
           aria-modal="true"
-          className="card modal-card review-dialog-card"
+          className="card modal-card review-dialog-card assessment-review-dialog-card"
           role="dialog"
           aria-labelledby="review-dialog-title"
           onClick={(event) => event.stopPropagation()}

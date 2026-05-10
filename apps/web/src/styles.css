@@ -1177,10 +1177,18 @@ button.employee-row:focus-visible {
 }
 
 .review-dialog-card {
-  width: min(96%, var(--modal-available-width));
-  max-width: var(--modal-available-width);
+  --modal-card-width: 96%;
   max-height: calc(100vh - 4rem);
   overflow: auto;
+}
+
+.assessment-review-dialog-backdrop {
+  padding: 2rem 0.5rem;
+}
+
+.assessment-review-dialog-card {
+  --modal-card-width: calc(96% + 10vw);
+  --modal-card-max-width: calc(100vw - 1rem);
 }
 
 .review-dialog-section {
@@ -1621,8 +1629,8 @@ button.employee-row:focus-visible {
 }
 
 .modal-card {
-  width: min(72%, var(--modal-available-width));
-  max-width: var(--modal-available-width);
+  width: min(var(--modal-card-width, 72%), var(--modal-card-max-width, var(--modal-available-width)));
+  max-width: var(--modal-card-max-width, var(--modal-available-width));
   display: grid;
   gap: 1rem;
   background: #ffffff;
@@ -1659,6 +1667,10 @@ button.employee-row:focus-visible {
 
   .modal-backdrop {
     padding: 1rem;
+  }
+
+  .assessment-review-dialog-backdrop {
+    padding: 1rem 0.5rem;
   }
 
   .content-grid {
