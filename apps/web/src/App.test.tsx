@@ -130,7 +130,8 @@ function createBackupExample() {
           role: adminEmployeeExample.item.role,
           status: adminEmployeeExample.item.status,
           managerUsername: null,
-          assessorUsername: null,
+          assessor1Username: null,
+          assessor2Username: null,
           password: '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
           credentialKind: 'password-hash' as const,
           passwordResetRequired: false,
@@ -890,7 +891,8 @@ describe('file management screen', () => {
           role: adminEmployeeExample.item.role,
           status: adminEmployeeExample.item.status,
           managerUsername: null,
-          assessorUsername: null,
+          assessor1Username: null,
+          assessor2Username: null,
           password: '',
           credentialKind: 'password',
           passwordResetRequired: false,
@@ -903,7 +905,8 @@ describe('file management screen', () => {
           role: elliot.role,
           status: elliot.status,
           managerUsername: 'manny.manager',
-          assessorUsername: 'pat.peer',
+          assessor1Username: 'manny.manager',
+          assessor2Username: 'pat.peer',
           password: '',
           credentialKind: 'password',
           passwordResetRequired: false,
@@ -1080,7 +1083,8 @@ describe('file management screen', () => {
               role: elliot.role,
               status: elliot.status,
               managerUsername: 'manny.manager',
-              assessorUsername: 'pat.peer',
+              assessor1Username: 'manny.manager',
+              assessor2Username: 'pat.peer',
               password: 'EmployeePass123!',
             },
           ],
@@ -1484,7 +1488,6 @@ describe('reviews screen', () => {
     expect(container.textContent).toContain('Name');
     expect(container.textContent).toContain('Review type');
     expect(container.textContent).toContain('Assessor');
-    expect(container.textContent).toContain('Review period');
     expect(container.textContent).toContain('Next step');
     expect(container.textContent).not.toContain('Submitted and waiting for acceptance');
 
@@ -1763,7 +1766,7 @@ describe('employees screen', () => {
     const updatedEmployee = {
       ...createEmployeeDetail(elliot.id).item,
       fullName: 'Elliot Updated',
-      assessorId: pat.id,
+      assessor2Id: pat.id,
     };
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
@@ -1826,7 +1829,7 @@ describe('employees screen', () => {
       .find((label) => label.textContent?.includes('Manager'))
       ?.querySelector('select') as HTMLSelectElement | null;
     const assessorSelect = Array.from(container.querySelectorAll('label'))
-      .find((label) => label.textContent?.includes('Assessor'))
+      .find((label) => label.textContent?.includes('Assessor 2'))
       ?.querySelector('select') as HTMLSelectElement | null;
     const fullNameInput = Array.from(container.querySelectorAll('label'))
       .find((label) => label.textContent?.includes('Full name'))
@@ -1869,7 +1872,8 @@ describe('employees screen', () => {
       role: 'employee',
       status: 'active',
       managerId: mannyManager.id,
-      assessorId: pat.id,
+      assessor1Id: createEmployeeDetail(elliot.id).item.assessor1Id,
+      assessor2Id: pat.id,
     });
 
     const updatedDetailCloseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');

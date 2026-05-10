@@ -11,7 +11,7 @@ export const usernameSchema = z
 
 export const appRoleSchema = z.enum(["employee", "manager", "admin"]);
 export const employeeStatusSchema = z.enum(["active", "inactive"]);
-export const reviewPeriodStatusSchema = z.enum(["active", "archived"]);
+export const reviewPeriodStatusSchema = z.enum(["active", "inactive", "archived"]);
 export const questionTargetSchema = z.enum(["self", "peer"]);
 export const questionTypeSchema = z.enum(["subjective", "ranking", "narrative"]);
 export const questionSetStatusSchema = z.enum(["draft", "active"]);
@@ -37,7 +37,8 @@ export const employeeSchema = z.object({
   role: appRoleSchema,
   status: employeeStatusSchema,
   managerId: idSchema.nullable(),
-  assessorId: idSchema.nullable(),
+  assessor1Id: idSchema.nullable(),
+  assessor2Id: idSchema.nullable(),
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,
 });
@@ -60,7 +61,8 @@ export const localUserTransferItemSchema = z.object({
   role: appRoleSchema,
   status: employeeStatusSchema,
   managerUsername: usernameSchema.nullable(),
-  assessorUsername: usernameSchema.nullable(),
+  assessor1Username: usernameSchema.nullable(),
+  assessor2Username: usernameSchema.nullable(),
   password: z.string(),
   credentialKind: localUserCredentialKindSchema.optional(),
   passwordResetRequired: z.boolean().default(false),
@@ -95,6 +97,18 @@ export const localUserTransferItemSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["password"],
       message: "Password hash must use a supported stored-password format",
+    });
+  }
+
+  if (
+    value.assessor1Username !== null &&
+    value.assessor2Username !== null &&
+    value.assessor1Username.toLowerCase() === value.assessor2Username.toLowerCase()
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assessor2Username"],
+      message: "Assessor 1 and assessor 2 must be different users",
     });
   }
 });

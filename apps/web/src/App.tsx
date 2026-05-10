@@ -99,6 +99,7 @@ import {
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
+  syncAssessmentsForReviewPeriod,
   triggerDownload,
   saveReviewPeriodToApi,
   toggleReviewPeriodArchiveInApi,
@@ -186,7 +187,8 @@ type EmployeeDraft = {
   role: AppRole;
   status: 'active' | 'inactive';
   managerId: string;
-  assessorId: string;
+  assessor1Id: string;
+  assessor2Id: string;
   initialPassword: string;
 };
 
@@ -394,7 +396,8 @@ function toDraft(employee: Employee | EmployeeAdmin): EmployeeDraft {
     role: employee.role,
     status: employee.status,
     managerId: employee.managerId ?? '',
-    assessorId: employee.assessorId ?? '',
+    assessor1Id: employee.assessor1Id ?? '',
+    assessor2Id: employee.assessor2Id ?? '',
     initialPassword: '',
   };
 }
@@ -517,6 +520,7 @@ function App() {
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
     active: true,
+    inactive: true,
     archived: true,
   });
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
@@ -1205,6 +1209,25 @@ function App() {
     return workflowEmployeesById.get(employeeId)?.fullName ?? 'Unknown employee';
   };
 
+  const getAssessorNames = (employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>) =>
+    [
+      { label: 'Assessor 1', id: employee.assessor1Id },
+      { label: 'Assessor 2', id: employee.assessor2Id },
+    ].map((entry) => ({
+      ...entry,
+      name: getEmployeeName(entry.id),
+    }));
+
+  const renderAssessorList = (employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>) => (
+    <span className="stacked-relationship-list">
+      {getAssessorNames(employee).map((assessor) => (
+        <span key={assessor.label}>
+          <strong>{assessor.label}:</strong> {assessor.name}
+        </span>
+      ))}
+    </span>
+  );
+
   const refreshFoundationSnapshot = async () => {
     if (!sessionToken) {
       throw new Error('Authentication required');
@@ -1502,6 +1525,7 @@ function App() {
     setAreReviewQueuesExpanded(true);
     setArchivePanelsExpanded({
       active: true,
+      inactive: true,
       archived: true,
     });
     setPasswordDialogEmployeeId(null);
@@ -1509,14 +1533,18 @@ function App() {
     setApiRecoveryPollCount(0);
   };
 
-  const syncEmployeeRelationships = (employeeId: string, managerId: string | null, assessorId: string | null) => {
+  const syncEmployeeRelationships = (
+    employeeId: string,
+    managerId: string | null,
+    assessor2Id: string | null,
+  ) => {
     setEmployees((currentEmployees) =>
       currentEmployees.map((employee) =>
         employee.id === employeeId
           ? {
               ...employee,
               managerId,
-              assessorId,
+              assessor2Id,
             }
           : employee,
       ),
@@ -1527,7 +1555,7 @@ function App() {
         ? {
             ...currentDetail,
             managerId,
-            assessorId,
+            assessor2Id,
           }
         : currentDetail,
     );
@@ -1539,7 +1567,7 @@ function App() {
             user: {
               ...currentSession.user,
               managerId,
-              assessorId,
+              assessor2Id,
             },
           }
         : currentSession,
@@ -2012,7 +2040,8 @@ function App() {
       role: 'employee',
       status: 'active',
       managerId: sessionUser?.id ?? '',
-      assessorId: '',
+      assessor1Id: sessionUser?.id ?? '',
+      assessor2Id: '',
       initialPassword: '',
     });
     setFormError('');
@@ -2069,7 +2098,8 @@ function App() {
         role: draftEmployee.role,
         status: draftEmployee.status,
         managerId: draftEmployee.managerId || null,
-        assessorId: draftEmployee.assessorId || null,
+        assessor1Id: draftEmployee.assessor1Id || null,
+        assessor2Id: draftEmployee.assessor2Id || null,
       } as const;
 
       const response = draftEmployee.id
@@ -2328,7 +2358,8 @@ function App() {
   };
 
   const startAddingReviewPeriod = () => {
-    setReviewPeriodDraft(toReviewPeriodDraft());
+    const hasActiveReviewPeriod = reviewAdmin?.reviewPeriods.some((reviewPeriod) => reviewPeriod.status === 'active') ?? false;
+    setReviewPeriodDraft(toReviewPeriodDraft(undefined, hasActiveReviewPeriod ? 'inactive' : 'active'));
     setQuestionSetDraft(null);
     setEditingQuestionDraftId(null);
     setAdminNotice('');
@@ -2372,6 +2403,27 @@ function App() {
       setSelectedReviewPeriodId(reviewPeriod.id);
       setReviewPeriodDraft(null);
       setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
+  };
+
+  const handleSyncAssessments = async (reviewPeriodId: string) => {
+    if (!sessionToken) {
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+
+    try {
+      const result = await syncAssessmentsForReviewPeriod(sessionToken, reviewPeriodId);
+      await refreshFoundationSnapshot();
+      setAdminNotice(
+        `Synced assessments for the active review period. Created ${result.createdSelfAssessments} self assessments and ${result.createdPeerAssessments} peer assessments.`,
+      );
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -2886,6 +2938,8 @@ function App() {
             <p className="toolbar-note">
               Archived review periods stay visible here but question sets become read-only until an admin unarchives the cycle.
             </p>
+          ) : selectedReviewPeriod.status === 'inactive' ? (
+            <p className="toolbar-note">Inactive review periods stay editable, but only the active period can sync assessments.</p>
           ) : null}
           <div className="action-row review-period-actions">
             <div className="review-period-primary-actions">
@@ -2899,6 +2953,14 @@ function App() {
                 onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
               >
                 Edit period
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={selectedReviewPeriod.status !== 'active' || isSavingReviewAdmin}
+                onClick={() => void handleSyncAssessments(selectedReviewPeriod.id)}
+              >
+                Sync assessments to assignments
               </button>
             </div>
             <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
@@ -2939,6 +3001,21 @@ function App() {
                     value={reviewPeriodDraft.dueDate}
                     onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
                   />
+                </label>
+                <label>
+                  Status
+                  <select
+                    value={reviewPeriodDraft.status}
+                    onChange={(event) =>
+                      setReviewPeriodDraft({
+                        ...reviewPeriodDraft,
+                        status: event.target.value as ReviewPeriodDraft['status'],
+                      })
+                    }
+                  >
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                  </select>
                 </label>
               </div>
               <div className="action-row">
@@ -3442,6 +3519,7 @@ function App() {
     }
 
     const activeReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'active');
+    const inactiveReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'inactive');
     const archivedReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'archived');
 
     return (
@@ -3487,6 +3565,52 @@ function App() {
                 })
               ) : (
                 <p className="muted-copy">No active review periods right now.</p>
+              )}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="card">
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Inactive review periods</p>
+              <h3>Manage inactive review periods</h3>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                setArchivePanelsExpanded((currentState) => ({
+                  ...currentState,
+                  inactive: !currentState.inactive,
+                }))
+              }
+            >
+              {archivePanelsExpanded.inactive ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+          {archivePanelsExpanded.inactive ? (
+            <div className="archive-list">
+              {inactiveReviewPeriods.length ? (
+                inactiveReviewPeriods.map((reviewPeriod) => {
+                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                  return (
+                    <article className="archive-row" key={reviewPeriod.id}>
+                      <div>
+                        <strong>{reviewPeriod.label}</strong>
+                        <p className="muted-copy">
+                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • {summary.questionSetCount} question sets •{' '}
+                          {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
+                        </p>
+                      </div>
+                      <button type="button" disabled={isSavingReviewAdmin} onClick={() => startEditingReviewPeriod(reviewPeriod)}>
+                        Edit
+                      </button>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="muted-copy">No inactive review periods right now.</p>
               )}
             </div>
           ) : null}
@@ -3741,8 +3865,8 @@ function App() {
             <span className="dashboard-identity-value">{getEmployeeName(sessionUser?.managerId ?? null)}</span>
           </div>
           <div className="dashboard-identity-field">
-            <span className="dashboard-identity-label">Assessor</span>
-            <span className="dashboard-identity-value">{getEmployeeName(sessionUser?.assessorId ?? null)}</span>
+            <span className="dashboard-identity-label">Assessors</span>
+            <span className="dashboard-identity-value">{sessionUser ? renderAssessorList(sessionUser) : '—'}</span>
           </div>
         </div>
       </section>
@@ -3919,7 +4043,6 @@ function App() {
                   <span>Name</span>
                   <span>Review type</span>
                   <span>Assessor</span>
-                  <span>Review period</span>
                   <span>Next step</span>
                 </div>
                 {reviewQueues.map((item) => (
@@ -3935,7 +4058,6 @@ function App() {
                       </span>
                       <span className="employee-row-cell">{item.targetLabel}</span>
                       <span className="employee-row-cell">{item.assessorLabel}</span>
-                      <span className="employee-row-cell">{item.reviewPeriodLabel}</span>
                       <span className="employee-row-cell review-queue-step-cell">
                         <span className="pill">{item.nextStepLabel}</span>
                       </span>
@@ -4419,8 +4541,11 @@ function App() {
       const selectedManagerId = managerOptions.some((employee) => employee.id === draftEmployee.managerId)
         ? draftEmployee.managerId
         : '';
-      const selectedAssessorId = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessorId)
-        ? draftEmployee.assessorId
+      const selectedAssessor1Id = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessor1Id)
+        ? draftEmployee.assessor1Id
+        : '';
+      const selectedAssessor2Id = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessor2Id)
+        ? draftEmployee.assessor2Id
         : '';
 
       return (
@@ -4479,10 +4604,24 @@ function App() {
                 </select>
               </label>
               <label>
-                Assessor
+                Assessor 1
                 <select
-                  value={selectedAssessorId}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessorId: event.target.value })}
+                  value={selectedAssessor1Id}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor1Id: event.target.value })}
+                >
+                  <option value="">Not assigned</option>
+                  {employeeAssessorOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Assessor 2
+                <select
+                  value={selectedAssessor2Id}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor2Id: event.target.value })}
                 >
                   <option value="">Not assigned</option>
                   {employeeAssessorOptions.map((employee) => (
@@ -4602,8 +4741,8 @@ function App() {
                   <dd>{getEmployeeName(detailEmployee.managerId)}</dd>
                 </div>
                 <div>
-                  <dt>Assessor</dt>
-                  <dd>{getEmployeeName(detailEmployee.assessorId)}</dd>
+                  <dt>Assessors</dt>
+                  <dd>{renderAssessorList(detailEmployee)}</dd>
                 </div>
                 <div>
                   <dt>Role</dt>
@@ -4759,7 +4898,7 @@ function App() {
             <span className="employee-row-cell">{employee.role}</span>
             <span className="employee-row-cell">{employee.email}</span>
             <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
-            <span className="employee-row-cell">{getEmployeeName(employee.assessorId)}</span>
+            <span className="employee-row-cell">{renderAssessorList(employee)}</span>
             <span className="employee-row-cell">
               <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
             </span>
@@ -4795,7 +4934,7 @@ function App() {
                   <span>Role</span>
                   <span>Email</span>
                   <span>Manager</span>
-                  <span>Assessor</span>
+                  <span>Assessors</span>
                   <span>Status</span>
                 </div>
                 {directoryEmployees.map(renderEmployeeRosterRow)}

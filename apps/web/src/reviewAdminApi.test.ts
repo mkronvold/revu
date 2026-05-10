@@ -124,7 +124,7 @@ describe('review admin API orchestration', () => {
     vi.mocked(updateEmployee).mockResolvedValue({
       item: {
         ...employeesListExample.items.find((employee) => employee.id === existingAssignment.employeeId)!,
-        assessorId: null,
+        assessor2Id: null,
         auth: {
           passwordConfigured: true,
           passwordResetRequired: false,
@@ -146,7 +146,7 @@ describe('review admin API orchestration', () => {
     expect(deleteAssignment).toHaveBeenCalledWith('session-token', existingAssignment.id);
     expect(updateEmployee).toHaveBeenCalledWith('session-token', existingAssignment.employeeId, {
       managerId: existingAssignment.managerId,
-      assessorId: null,
+      assessor2Id: null,
     });
     expect(result.relationships).toEqual({
       managerId: existingAssignment.managerId,
@@ -206,7 +206,8 @@ describe('review admin API orchestration', () => {
           role: 'employee' as const,
           status: 'active' as const,
           managerUsername: 'manny.manager',
-          assessorUsername: 'pat.peer',
+          assessor1Username: 'manny.manager',
+          assessor2Username: 'pat.peer',
           password: 'tmp-passcode-123',
           credentialKind: 'password' as const,
           passwordResetRequired: true,
@@ -239,7 +240,8 @@ describe('review admin API orchestration', () => {
       role: 'employee' as const,
       status: 'active' as const,
       managerUsername: 'manny.manager',
-      assessorUsername: 'pat.peer',
+      assessor1Username: 'manny.manager',
+      assessor2Username: 'pat.peer',
       password: 'tmp-passcode-123',
       credentialKind: 'password' as const,
       passwordResetRequired: true,

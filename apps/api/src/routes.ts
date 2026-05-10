@@ -56,6 +56,7 @@ import {
   saveAssessmentDraftRequestSchema,
   setEmployeePasswordRequestSchema,
   setEmployeePasswordResponseSchema,
+  syncAssessmentsResponseSchema,
   submitAssessmentRequestSchema,
   updateBackupStatusRequestSchema,
   updateAssignmentRequestSchema,
@@ -105,7 +106,8 @@ function normalizeLocalUserTransferItem(item: {
   role: "employee" | "manager" | "admin";
   status: "active" | "inactive";
   managerUsername: string | null;
-  assessorUsername: string | null;
+  assessor1Username: string | null;
+  assessor2Username: string | null;
   id?: string;
   credentialKind?: "password" | "password-hash" | "unset";
   passwordResetRequired?: boolean;
@@ -604,7 +606,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       const body = parseWithSchema(createReviewPeriodRequestSchema, request.body);
       reply.code(201);
       return reviewPeriodResponseSchema.parse({
-        item: await store.createReviewPeriod(body),
+        item: await store.createReviewPeriod({
+          ...body,
+          status: body.status ?? "inactive",
+        }),
       });
     } catch (error) {
       return sendError(reply, error);
@@ -741,6 +746,17 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       parseWithSchema(importStubRequestSchema, request.body ?? {});
       return importStubResponseSchema.parse(await store.importQuestionSetsStub(reviewPeriodId));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/review-periods/:id/sync-assessments", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["reviewPeriods:update"]);
+      const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
+      return syncAssessmentsResponseSchema.parse(await store.syncAssessmentsToAssignments(reviewPeriodId));
     } catch (error) {
       return sendError(reply, error);
     }

@@ -26,6 +26,7 @@ import {
   importLocalUsers,
   importAssignments,
   importQuestionSets,
+  syncAssessmentsToAssignments,
   unarchiveReviewPeriod,
   updateAssignment,
   updateEmployee,
@@ -47,7 +48,8 @@ const localUserTransferRequiredHeaders = [
   'role',
   'status',
   'managerUsername',
-  'assessorUsername',
+  'assessor1Username',
+  'assessor2Username',
   'password',
 ] as const;
 const localUserTransferHeaders = [...localUserTransferRequiredHeaders, 'credentialKind', 'passwordResetRequired'] as const;
@@ -75,7 +77,8 @@ function serializeLocalUsersAsCsv(items: LocalUserTransferDraft[]) {
         item.role,
         item.status,
         item.managerUsername ?? '',
-        item.assessorUsername ?? '',
+        item.assessor1Username ?? '',
+        item.assessor2Username ?? '',
         item.password,
         item.credentialKind ?? 'password',
         String(item.passwordResetRequired),
@@ -172,7 +175,8 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
       role: row[headers.get('role') ?? -1]?.trim(),
       status: row[headers.get('status') ?? -1]?.trim(),
       managerUsername: row[headers.get('managerUsername') ?? -1]?.trim() || null,
-      assessorUsername: row[headers.get('assessorUsername') ?? -1]?.trim() || null,
+      assessor1Username: row[headers.get('assessor1Username') ?? -1]?.trim() || null,
+      assessor2Username: row[headers.get('assessor2Username') ?? -1]?.trim() || null,
       password: row[headers.get('password') ?? -1] ?? '',
       credentialKind: row[headers.get('credentialKind') ?? -1]?.trim() || undefined,
       passwordResetRequired: parseBooleanCell(row[headers.get('passwordResetRequired') ?? -1] ?? ''),
@@ -247,6 +251,7 @@ export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDr
     label: draft.label.trim(),
     startDate: draft.startDate,
     dueDate: draft.dueDate,
+    status: draft.status,
   };
 
   const response = draft.id
@@ -317,7 +322,7 @@ export async function saveAssignmentToApi(options: {
     if (existingAssignment) {
       await updateAssignment(token, existingAssignment.id, { managerId, assessorId });
       return {
-        notice: 'Saved assignment changes and kept the employee assessor aligned with the peer reviewer.',
+        notice: 'Saved assignment changes and kept the employee assessor 2 aligned with the peer reviewer.',
         relationships: { managerId, assessorId },
       };
     }
@@ -329,7 +334,7 @@ export async function saveAssignmentToApi(options: {
     });
 
     return {
-      notice: 'Created the assignment and synced the employee assessor to the peer reviewer.',
+      notice: 'Created the assignment and synced employee assessor 2 to the peer reviewer.',
       relationships: { managerId, assessorId },
     };
   }
@@ -338,10 +343,10 @@ export async function saveAssignmentToApi(options: {
     await deleteAssignment(token, existingAssignment.id);
   }
 
-  if (employee.managerId !== managerId || employee.assessorId !== null) {
+  if (employee.managerId !== managerId || employee.assessor2Id !== null) {
     await updateEmployee(token, employeeId, {
       managerId,
-      assessorId: null,
+      assessor2Id: null,
     });
   }
 
@@ -369,8 +374,12 @@ export async function toggleReviewPeriodArchiveInApi(
     reviewPeriod: response.item,
     notice: archived
       ? 'Archived the review period in the API. Related question sets and assessments are now read-only.'
-      : 'Unarchived the review period in the API and returned it to the active workspace.',
+      : 'Unarchived the review period in the API and returned it to the inactive workspace.',
   };
+}
+
+export async function syncAssessmentsForReviewPeriod(token: string, reviewPeriodId: string) {
+  return syncAssessmentsToAssignments(token, reviewPeriodId);
 }
 
 export async function exportQuestionSetsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {

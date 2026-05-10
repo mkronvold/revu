@@ -28,7 +28,8 @@ const adaAdminEmployee = {
   role: "admin",
   status: "active",
   managerId: null,
-  assessorId: null,
+  assessor1Id: null,
+  assessor2Id: null,
   createdAt: timestamps.created,
   updatedAt: timestamps.updated,
 } as const;
@@ -41,7 +42,8 @@ const mannyManagerEmployee = {
   role: "manager",
   status: "active",
   managerId: "11111111-1111-4111-8111-111111111111",
-  assessorId: "44444444-4444-4444-8444-444444444444",
+  assessor1Id: "11111111-1111-4111-8111-111111111111",
+  assessor2Id: "44444444-4444-4444-8444-444444444444",
   createdAt: timestamps.created,
   updatedAt: timestamps.updated,
 } as const;
@@ -54,7 +56,8 @@ const elliotEmployee = {
   role: "employee",
   status: "active",
   managerId: "22222222-2222-4222-8222-222222222222",
-  assessorId: "44444444-4444-4444-8444-444444444444",
+  assessor1Id: "22222222-2222-4222-8222-222222222222",
+  assessor2Id: "44444444-4444-4444-8444-444444444444",
   createdAt: timestamps.created,
   updatedAt: timestamps.updated,
 } as const;
@@ -67,7 +70,8 @@ const patPeerEmployee = {
   role: "employee",
   status: "active",
   managerId: "22222222-2222-4222-8222-222222222222",
-  assessorId: null,
+  assessor1Id: "22222222-2222-4222-8222-222222222222",
+  assessor2Id: "11111111-1111-4111-8111-111111111111",
   createdAt: timestamps.created,
   updatedAt: timestamps.updated,
 } as const;

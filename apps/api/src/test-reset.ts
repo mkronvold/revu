@@ -45,13 +45,14 @@ async function insertEmployees(client: PoolClient) {
           role,
           status,
           manager_employee_id,
-          assessor_employee_id,
+          assessor1_employee_id,
+          assessor2_employee_id,
           password_hash,
           password_reset_required,
           password_changed_at,
           created_at,
           updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10::timestamptz,$11::timestamptz,$12::timestamptz)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11::timestamptz,$12::timestamptz,$13::timestamptz)
       `,
       [
         employee.id,
@@ -61,7 +62,8 @@ async function insertEmployees(client: PoolClient) {
         employee.role,
         employee.status,
         employee.managerId,
-        employee.assessorId,
+        employee.assessor1Id,
+        employee.assessor2Id,
         hashPassword(seedPasswordFor(employee.username)),
         employee.updatedAt,
         employee.createdAt,

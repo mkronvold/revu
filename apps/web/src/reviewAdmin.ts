@@ -22,6 +22,7 @@ export type ReviewPeriodDraft = {
   label: string;
   startDate: string;
   dueDate: string;
+  status: Exclude<ReviewPeriod["status"], "archived">;
 };
 
 export type QuestionDraft = {
@@ -122,7 +123,7 @@ export function getPreferredReviewPeriodId(reviewPeriods: ReviewPeriod[], curren
   return reviewPeriods.find((period) => period.status === 'active')?.id ?? reviewPeriods[0]?.id ?? null;
 }
 
-export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod): ReviewPeriodDraft {
+export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod, defaultStatus: ReviewPeriodDraft['status'] = 'inactive'): ReviewPeriodDraft {
   return reviewPeriod
     ? {
         id: reviewPeriod.id,
@@ -130,6 +131,7 @@ export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod): ReviewPeriodDr
         label: reviewPeriod.label,
         startDate: reviewPeriod.startDate,
         dueDate: reviewPeriod.dueDate,
+        status: reviewPeriod.status === "archived" ? "inactive" : reviewPeriod.status,
       }
     : {
         id: null,
@@ -137,6 +139,7 @@ export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod): ReviewPeriodDr
         label: '',
         startDate: '',
         dueDate: '',
+        status: defaultStatus,
       };
 }
 
@@ -194,20 +197,34 @@ export function upsertReviewPeriod(
     label: draft.label.trim(),
     startDate: draft.startDate,
     dueDate: draft.dueDate,
-    status: existing?.status ?? 'active',
-    archivedAt: existing?.archivedAt ?? null,
-    archivedByEmployeeId: existing?.archivedByEmployeeId ?? null,
+    status: draft.status,
+    archivedAt: null,
+    archivedByEmployeeId: null,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
+
+  const nextReviewPeriods = existing
+    ? snapshot.reviewPeriods.map((period) => (period.id === reviewPeriodId ? nextReviewPeriod : cloneReviewPeriod(period)))
+    : [...snapshot.reviewPeriods.map(cloneReviewPeriod), nextReviewPeriod];
 
   return {
     reviewPeriodId,
     snapshot: {
       ...snapshot,
-      reviewPeriods: existing
-        ? snapshot.reviewPeriods.map((period) => (period.id === reviewPeriodId ? nextReviewPeriod : cloneReviewPeriod(period)))
-        : [...snapshot.reviewPeriods.map(cloneReviewPeriod), nextReviewPeriod].sort((left, right) => right.key.localeCompare(left.key)),
+      reviewPeriods: nextReviewPeriods
+        .map((period) =>
+          nextReviewPeriod.status === 'active' && period.id !== reviewPeriodId && period.status === 'active'
+            ? {
+                ...period,
+                status: 'inactive',
+                archivedAt: null,
+                archivedByEmployeeId: null,
+                updatedAt: timestamp,
+              }
+            : period,
+        )
+        .sort((left, right) => right.key.localeCompare(left.key)),
     },
   };
 }
@@ -321,7 +338,7 @@ export function setReviewPeriodArchived(
       period.id === reviewPeriodId
         ? {
             ...period,
-            status: archived ? 'archived' : 'active',
+            status: archived ? 'archived' : 'inactive',
             archivedAt: archived ? timestamp : null,
             archivedByEmployeeId: archived ? options.actorId ?? null : null,
             updatedAt: timestamp,
@@ -367,7 +384,7 @@ export function buildAssignmentRows(
         employeeId: employee.id,
         employeeName: employee.fullName,
         managerId: assignment?.managerId ?? employee.managerId,
-        assessorId: assignment?.assessorId ?? employee.assessorId,
+        assessorId: assignment?.assessorId ?? employee.assessor2Id,
       };
     })
     .sort((left, right) => left.employeeName.localeCompare(right.employeeName));

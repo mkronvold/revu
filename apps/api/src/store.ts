@@ -41,6 +41,7 @@ import type {
   ReviewPeriod,
   SaveAssessmentDraftRequest,
   SetEmployeePasswordResponse,
+  SyncAssessmentsResponse,
   SubmitAssessmentRequest,
   UpdateAssignmentRequest,
   UpdateBackupStatusRequest,
@@ -76,7 +77,8 @@ type EmployeeRow = {
   role: Employee["role"];
   status: Employee["status"];
   manager_employee_id: string | null;
-  assessor_employee_id: string | null;
+  assessor1_employee_id: string | null;
+  assessor2_employee_id: string | null;
   password_hash: string | null;
   password_reset_required: boolean;
   password_changed_at: Date | string | null;
@@ -374,9 +376,20 @@ function mapDatabaseError(error: unknown) {
         return new ApiError(400, "Employee not found");
       case "review_period_assignments_manager_employee_id_fkey":
         return new ApiError(400, "Manager not found");
+      case "employees_assessor1_employee_id_fkey":
+      case "employees_assessor2_employee_id_fkey":
       case "review_period_assignments_assessor_employee_id_fkey":
       case "assessments_assessor_employee_id_fkey":
         return new ApiError(400, "Assessor not found");
+      default:
+        return null;
+    }
+  }
+
+  if (error.code === "23514") {
+    switch (error.constraint) {
+      case "employees_distinct_assessors":
+        return new ApiError(400, "Assessor 1 and assessor 2 must be different users");
       default:
         return null;
     }
@@ -408,7 +421,8 @@ export class ApiStore {
       role: row.role,
       status: row.status,
       managerId: row.manager_employee_id,
-      assessorId: row.assessor_employee_id,
+      assessor1Id: row.assessor1_employee_id,
+      assessor2Id: row.assessor2_employee_id,
       createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
       updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
     };
@@ -572,7 +586,8 @@ export class ApiStore {
           role,
           status,
           manager_employee_id,
-          assessor_employee_id,
+          assessor1_employee_id,
+          assessor2_employee_id,
           password_hash,
           password_reset_required,
           password_changed_at,
@@ -1065,8 +1080,13 @@ export class ApiStore {
     }
   }
 
-  private async assertRelationships(client: DbClient, candidate: { id: string; managerId: string | null; assessorId: string | null }) {
-    const relationshipIds = [candidate.managerId, candidate.assessorId].filter((value): value is string => value !== null);
+  private async assertRelationships(
+    client: DbClient,
+    candidate: { id: string; managerId: string | null; assessor1Id: string | null; assessor2Id: string | null },
+  ) {
+    const relationshipIds = [candidate.managerId, candidate.assessor1Id, candidate.assessor2Id].filter(
+      (value): value is string => value !== null,
+    );
     const result = relationshipIds.length > 0
       ? await client.query<RelationshipRow>(
           `
@@ -1094,21 +1114,35 @@ export class ApiStore {
       }
     }
 
-    if (candidate.assessorId) {
-      const assessor = employeeById.get(candidate.assessorId);
+    for (const [label, assessorId] of [
+      ["Assessor 1", candidate.assessor1Id],
+      ["Assessor 2", candidate.assessor2Id],
+    ] as const) {
+      if (!assessorId) {
+        continue;
+      }
+
+      const assessor = employeeById.get(assessorId);
       if (!assessor) {
-        throw new ApiError(400, "Assessor not found");
+        throw new ApiError(400, `${label} not found`);
       }
       if (assessor.id === candidate.id) {
         throw new ApiError(400, "Employee cannot be their own assessor");
       }
       if (assessor.status !== "active") {
-        throw new ApiError(400, "Assessor must be active");
+        throw new ApiError(400, `${label} must be active`);
       }
+    }
+
+    if (candidate.assessor1Id && candidate.assessor2Id && candidate.assessor1Id === candidate.assessor2Id) {
+      throw new ApiError(400, "Assessor 1 and assessor 2 must be different users");
     }
   }
 
-  private async assertReviewPeriodFields(client: DbClient, candidate: { id?: string; key: string; startDate: string; dueDate: string }) {
+  private async assertReviewPeriodFields(
+    client: DbClient,
+    candidate: { id?: string; key: string; startDate: string; dueDate: string; status: ReviewPeriod["status"] },
+  ) {
     const result = await client.query<UniqueReviewPeriodKeyRow>(
       `
         SELECT EXISTS(
@@ -1128,6 +1162,24 @@ export class ApiStore {
     if (candidate.startDate > candidate.dueDate) {
       throw new ApiError(400, "Review period start date must be on or before due date");
     }
+
+    if (candidate.status === "archived") {
+      throw new ApiError(400, "Archived status must be managed through archive controls");
+    }
+  }
+
+  private async deactivateOtherReviewPeriods(client: DbClient, reviewPeriodId: string) {
+    await client.query(
+      `
+        UPDATE review_periods
+        SET status = 'inactive',
+            archived_at = NULL,
+            archived_by_employee_id = NULL
+        WHERE id <> $1
+          AND status = 'active'
+      `,
+      [reviewPeriodId],
+    );
   }
 
   private assertQuestionInputs(questions: CreateQuestionInput[]) {
@@ -1365,7 +1417,8 @@ export class ApiStore {
       role: employee.role,
       status: employee.status,
       managerUsername: this.usernameForEmployee(employee.managerId, employeesById),
-      assessorUsername: this.usernameForEmployee(employee.assessorId, employeesById),
+      assessor1Username: this.usernameForEmployee(employee.assessor1Id, employeesById),
+      assessor2Username: this.usernameForEmployee(employee.assessor2Id, employeesById),
       password: this.passwordForTransfer(auth, credentialKind, password),
       credentialKind,
       passwordResetRequired: auth.passwordResetRequired,
@@ -1505,7 +1558,8 @@ export class ApiStore {
     await this.assertRelationships(client, {
       id: candidate.employeeId,
       managerId: candidate.managerId,
-      assessorId: candidate.assessorId,
+      assessor1Id: null,
+      assessor2Id: candidate.assessorId,
     });
 
     const result = await client.query<ExistsRow>(
@@ -1666,7 +1720,8 @@ export class ApiStore {
               role,
               status,
               manager_employee_id,
-              assessor_employee_id,
+              assessor1_employee_id,
+              assessor2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -1702,7 +1757,8 @@ export class ApiStore {
         await this.assertRelationships(client, {
           id,
           managerId: input.managerId ?? null,
-          assessorId: input.assessorId ?? null,
+          assessor1Id: input.assessor1Id ?? null,
+          assessor2Id: input.assessor2Id ?? null,
         });
 
         const timestamp = nowIso();
@@ -1716,7 +1772,8 @@ export class ApiStore {
               role,
               status,
               manager_employee_id,
-              assessor_employee_id,
+              assessor1_employee_id,
+              assessor2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -1732,10 +1789,11 @@ export class ApiStore {
               $7,
               $8,
               $9,
-              FALSE,
               $10,
-              $11::timestamptz,
-              $11::timestamptz
+              FALSE,
+              $11,
+              $12::timestamptz,
+              $12::timestamptz
             )
             RETURNING
               id,
@@ -1745,7 +1803,8 @@ export class ApiStore {
               role,
               status,
               manager_employee_id,
-              assessor_employee_id,
+              assessor1_employee_id,
+              assessor2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -1761,7 +1820,8 @@ export class ApiStore {
             input.role,
             input.status ?? "active",
             input.managerId ?? null,
-            input.assessorId ?? null,
+            input.assessor1Id ?? null,
+            input.assessor2Id ?? null,
             input.password ? hashPassword(input.password) : null,
             input.password ? timestamp : null,
             timestamp,
@@ -1803,7 +1863,8 @@ export class ApiStore {
         await this.assertRelationships(client, {
           id: nextEmployee.id,
           managerId: nextEmployee.managerId,
-          assessorId: nextEmployee.assessorId,
+          assessor1Id: nextEmployee.assessor1Id,
+          assessor2Id: nextEmployee.assessor2Id,
         });
 
         const result = await client.query<EmployeeRow>(
@@ -1815,7 +1876,8 @@ export class ApiStore {
                 role = $5,
                 status = $6,
                 manager_employee_id = $7,
-                assessor_employee_id = $8
+                assessor1_employee_id = $8,
+                assessor2_employee_id = $9
             WHERE id = $1
             RETURNING
               id,
@@ -1825,7 +1887,8 @@ export class ApiStore {
               role,
               status,
               manager_employee_id,
-              assessor_employee_id,
+              assessor1_employee_id,
+              assessor2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -1841,7 +1904,8 @@ export class ApiStore {
             nextEmployee.role,
             nextEmployee.status,
             nextEmployee.managerId,
-            nextEmployee.assessorId,
+            nextEmployee.assessor1Id,
+            nextEmployee.assessor2Id,
           ],
         );
 
@@ -1874,7 +1938,8 @@ export class ApiStore {
               WHERE deleted_at IS NULL
                 AND (
                   manager_employee_id = $1
-                  OR assessor_employee_id = $1
+                  OR assessor1_employee_id = $1
+                  OR assessor2_employee_id = $1
                 )
             ) AS exists
           `,
@@ -2049,6 +2114,10 @@ export class ApiStore {
         await this.assertReviewPeriodFields(client, input);
 
         const timestamp = nowIso();
+        const reviewPeriodId = randomUUID();
+        if (input.status === "active") {
+          await this.deactivateOtherReviewPeriods(client, reviewPeriodId);
+        }
         const result = await client.query<ReviewPeriodRow>(
           `
             INSERT INTO review_periods (
@@ -2068,11 +2137,11 @@ export class ApiStore {
               $3,
               $4::date,
               $5::date,
-              'active',
+              $6,
               NULL,
               NULL,
-              $6::timestamptz,
-              $6::timestamptz
+              $7::timestamptz,
+              $7::timestamptz
             )
             RETURNING
               id,
@@ -2086,7 +2155,7 @@ export class ApiStore {
               created_at,
               updated_at
           `,
-          [randomUUID(), input.key, input.label, input.startDate, input.dueDate, timestamp],
+          [reviewPeriodId, input.key, input.label, input.startDate, input.dueDate, input.status, timestamp],
         );
 
         const reviewPeriod = result.rows[0];
@@ -2114,13 +2183,18 @@ export class ApiStore {
         };
         await this.assertReviewPeriodFields(client, nextReviewPeriod);
 
+        if (nextReviewPeriod.status === "active") {
+          await this.deactivateOtherReviewPeriods(client, reviewPeriodId);
+        }
+
         const result = await client.query<ReviewPeriodRow>(
           `
             UPDATE review_periods
             SET key = $2,
                 label = $3,
                 start_date = $4::date,
-                due_date = $5::date
+                due_date = $5::date,
+                status = $6
             WHERE id = $1
             RETURNING
               id,
@@ -2134,7 +2208,14 @@ export class ApiStore {
               created_at,
               updated_at
           `,
-          [reviewPeriodId, nextReviewPeriod.key, nextReviewPeriod.label, nextReviewPeriod.startDate, nextReviewPeriod.dueDate],
+          [
+            reviewPeriodId,
+            nextReviewPeriod.key,
+            nextReviewPeriod.label,
+            nextReviewPeriod.startDate,
+            nextReviewPeriod.dueDate,
+            nextReviewPeriod.status,
+          ],
         );
 
         const updatedReviewPeriod = result.rows[0];
@@ -2203,14 +2284,14 @@ export class ApiStore {
     try {
       return await withTransaction(async (client) => {
         const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
-        if (reviewPeriod.status === "active") {
-          throw new ApiError(409, "Review period is already active");
+        if (reviewPeriod.status === "inactive") {
+          throw new ApiError(409, "Review period is already available in the workspace");
         }
 
         const result = await client.query<ReviewPeriodRow>(
           `
             UPDATE review_periods
-            SET status = 'active',
+            SET status = 'inactive',
                 archived_at = NULL,
                 archived_by_employee_id = NULL
             WHERE id = $1
@@ -2235,6 +2316,153 @@ export class ApiStore {
         }
 
         return this.toReviewPeriod(unarchivedReviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async syncAssessmentsToAssignments(reviewPeriodId: string): Promise<SyncAssessmentsResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const reviewPeriod = this.toReviewPeriod(await this.reviewPeriodOrThrow(client, reviewPeriodId));
+        if (reviewPeriod.status !== "active") {
+          throw new ApiError(409, "Assessments can only be synced for the active review period");
+        }
+
+        const selfQuestionSet = await this.activeQuestionSetOrThrow(reviewPeriodId, "self", client);
+        const employeeRows = await this.loadEmployeeRows(client);
+        const employees = employeeRows.map((row) => this.toEmployee(row)).filter((employee) => employee.status === "active");
+        const activeEmployeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+        const assignments = await this.loadAssignments(client, { reviewPeriodId });
+        const assignmentByKey = new Map(assignments.map((assignment) => [`${assignment.employeeId}:${assignment.assessorId}`, assignment] as const));
+        const existingAssessments = await this.loadAssessmentRecords(client, { reviewPeriodId });
+        const existingAssessmentKeys = new Set(
+          existingAssessments.map((assessment) => `${assessment.assessment.employeeId}:${assessment.assessment.assessorId}`),
+        );
+
+        let peerQuestionSet: QuestionSet | null = null;
+        let createdSelfAssessments = 0;
+        let createdPeerAssessments = 0;
+        const createdAt = nowIso();
+
+        for (const employee of employees) {
+          const selfKey = `${employee.id}:${employee.id}`;
+          if (!existingAssessmentKeys.has(selfKey)) {
+            await client.query(
+              `
+                INSERT INTO assessments (
+                  id,
+                  review_period_id,
+                  question_set_id,
+                  assignment_id,
+                  target,
+                  employee_id,
+                  assessor_employee_id,
+                  review_state,
+                  archive_state,
+                  submitted_at,
+                  accepted_at,
+                  accepted_by_employee_id,
+                  reviewed_at,
+                  reviewed_by_employee_id,
+                  manager_notes,
+                  created_at,
+                  updated_at
+                ) VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  NULL,
+                  'self',
+                  $4,
+                  $4,
+                  'new',
+                  'active',
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  $5::timestamptz,
+                  $5::timestamptz
+                )
+              `,
+              [randomUUID(), reviewPeriodId, selfQuestionSet.id, employee.id, createdAt],
+            );
+            existingAssessmentKeys.add(selfKey);
+            createdSelfAssessments += 1;
+          }
+
+          const peerAssessors = Array.from(
+            new Set([employee.assessor1Id, employee.assessor2Id].filter((value): value is string => value !== null)),
+          ).filter((assessorId) => assessorId !== employee.id && activeEmployeesById.has(assessorId));
+
+          for (const assessorId of peerAssessors) {
+            const assessmentKey = `${employee.id}:${assessorId}`;
+            if (existingAssessmentKeys.has(assessmentKey)) {
+              continue;
+            }
+
+            peerQuestionSet ??= await this.activeQuestionSetOrThrow(reviewPeriodId, "peer", client);
+            const assignment = assignmentByKey.get(`${employee.id}:${assessorId}`) ?? null;
+
+            await client.query(
+              `
+                INSERT INTO assessments (
+                  id,
+                  review_period_id,
+                  question_set_id,
+                  assignment_id,
+                  target,
+                  employee_id,
+                  assessor_employee_id,
+                  review_state,
+                  archive_state,
+                  submitted_at,
+                  accepted_at,
+                  accepted_by_employee_id,
+                  reviewed_at,
+                  reviewed_by_employee_id,
+                  manager_notes,
+                  created_at,
+                  updated_at
+                ) VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  $4,
+                  'peer',
+                  $5,
+                  $6,
+                  'new',
+                  'active',
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  NULL,
+                  $7::timestamptz,
+                  $7::timestamptz
+                )
+              `,
+              [randomUUID(), reviewPeriodId, peerQuestionSet.id, assignment?.id ?? null, employee.id, assessorId, createdAt],
+            );
+            existingAssessmentKeys.add(assessmentKey);
+            createdPeerAssessments += 1;
+          }
+        }
+
+        return {
+          reviewPeriodId,
+          createdSelfAssessments,
+          createdPeerAssessments,
+        };
       });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -2631,7 +2859,8 @@ export class ApiStore {
                 role,
                 status,
                 manager_employee_id,
-                assessor_employee_id,
+                assessor1_employee_id,
+                assessor2_employee_id,
                 created_at,
                 updated_at
               ) VALUES (
@@ -2641,6 +2870,7 @@ export class ApiStore {
                 $4,
                 $5,
                 $6,
+                NULL,
                 NULL,
                 NULL,
                 $7::timestamptz,
@@ -2653,7 +2883,9 @@ export class ApiStore {
 
         const referencedUsernames = Array.from(
           new Set(
-            items.flatMap((item) => [item.username, item.managerUsername, item.assessorUsername]).filter((value): value is string => value !== null),
+            items
+              .flatMap((item) => [item.username, item.managerUsername, item.assessor1Username, item.assessor2Username])
+              .filter((value): value is string => value !== null),
           ),
         );
         const finalRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
@@ -2672,30 +2904,45 @@ export class ApiStore {
             : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
                 throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
               })();
-          const assessorId = item.assessorUsername === null
+          const assessor1Id = item.assessor1Username === null
             ? null
-            : finalByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
-                throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+            : finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ?? (() => {
+                throw new ApiError(400, `Assessor 1 username not found: ${item.assessor1Username}`);
+              })();
+          const assessor2Id = item.assessor2Username === null
+            ? null
+            : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
+                throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
               })();
 
           await this.assertRelationships(client, {
             id: employee.id,
             managerId,
-            assessorId,
+            assessor1Id,
+            assessor2Id,
           });
 
           await client.query(
             `
               UPDATE employees
               SET manager_employee_id = $2,
-                  assessor_employee_id = $3,
-                  password_hash = $4,
-                  password_reset_required = $5,
-                  password_changed_at = $6::timestamptz,
+                  assessor1_employee_id = $3,
+                  assessor2_employee_id = $4,
+                  password_hash = $5,
+                  password_reset_required = $6,
+                  password_changed_at = $7::timestamptz,
                   password_changed_by_employee_id = NULL
               WHERE id = $1
             `,
-            [employee.id, managerId, assessorId, this.passwordHashForTransferItem(item), item.passwordResetRequired, importedAt],
+            [
+              employee.id,
+              managerId,
+              assessor1Id,
+              assessor2Id,
+              this.passwordHashForTransferItem(item),
+              item.passwordResetRequired,
+              importedAt,
+            ],
           );
         }
 
@@ -3374,7 +3621,8 @@ export class ApiStore {
             role,
             status,
             manager_employee_id,
-            assessor_employee_id,
+            assessor1_employee_id,
+            assessor2_employee_id,
             password_hash,
             password_reset_required,
             password_changed_at,
@@ -3387,6 +3635,7 @@ export class ApiStore {
             $4,
             $5,
             $6,
+            NULL,
             NULL,
             NULL,
             $7,
@@ -3425,26 +3674,33 @@ export class ApiStore {
         : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
             throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
           })();
-      const assessorId = item.assessorUsername === null
+      const assessor1Id = item.assessor1Username === null
         ? null
-        : finalByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
-            throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+        : finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ?? (() => {
+            throw new ApiError(400, `Assessor 1 username not found: ${item.assessor1Username}`);
+          })();
+      const assessor2Id = item.assessor2Username === null
+        ? null
+        : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
+            throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
           })();
 
       await this.assertRelationships(client, {
         id: employee.id,
         managerId,
-        assessorId,
+        assessor1Id,
+        assessor2Id,
       });
 
       await client.query(
         `
           UPDATE employees
           SET manager_employee_id = $2,
-              assessor_employee_id = $3
+              assessor1_employee_id = $3,
+              assessor2_employee_id = $4
           WHERE id = $1
         `,
-        [employee.id, managerId, assessorId],
+        [employee.id, managerId, assessor1Id, assessor2Id],
       );
     }
   }
@@ -3466,6 +3722,18 @@ export class ApiStore {
           SELECT archived_by_employee_id AS employee_id
           FROM review_periods
           WHERE archived_by_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT manager_employee_id
+          FROM employees
+          WHERE manager_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT assessor1_employee_id
+          FROM employees
+          WHERE assessor1_employee_id = ANY($1::uuid[])
+          UNION ALL
+          SELECT assessor2_employee_id
+          FROM employees
+          WHERE assessor2_employee_id = ANY($1::uuid[])
           UNION ALL
           SELECT employee_id
           FROM review_period_assignments
@@ -3894,7 +4162,7 @@ export class ApiStore {
 
         const employee = this.toEmployee(await this.employeeOrThrow(client, assessment.assessment.employeeId));
         const nextManagerId = input.managerId !== undefined ? input.managerId : employee.managerId;
-        const nextAssessorId = input.assessorId !== undefined ? input.assessorId : employee.assessorId;
+        const nextAssessorId = input.assessorId !== undefined ? input.assessorId : employee.assessor2Id;
 
         if (assessment.assessment.assignmentId) {
           const assignment = await this.assignmentOrThrow(client, assessment.assessment.assignmentId);
@@ -3934,13 +4202,14 @@ export class ApiStore {
         await this.assertRelationships(client, {
           id: employee.id,
           managerId: nextManagerId,
-          assessorId: nextAssessorId,
+          assessor1Id: employee.assessor1Id,
+          assessor2Id: nextAssessorId,
         });
         await client.query(
           `
             UPDATE employees
             SET manager_employee_id = $2,
-                assessor_employee_id = $3
+                assessor2_employee_id = $3
             WHERE id = $1
           `,
           [employee.id, nextManagerId, nextAssessorId],

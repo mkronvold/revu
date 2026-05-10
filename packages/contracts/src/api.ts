@@ -188,7 +188,8 @@ export const createEmployeeRequestSchema = z.object({
   role: appRoleSchema,
   status: employeeStatusSchema.default("active"),
   managerId: idSchema.nullable().optional(),
-  assessorId: idSchema.nullable().optional(),
+  assessor1Id: idSchema.nullable().optional(),
+  assessor2Id: idSchema.nullable().optional(),
   password: z.string().min(8).optional(),
 });
 
@@ -200,12 +201,15 @@ export const updateEmployeeRequestSchema = z
     role: appRoleSchema,
     status: employeeStatusSchema,
     managerId: idSchema.nullable(),
-    assessorId: idSchema.nullable(),
+    assessor1Id: idSchema.nullable(),
+    assessor2Id: idSchema.nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided",
   });
+
+const editableReviewPeriodStatusSchema = z.enum(["active", "inactive"]);
 
 export const deleteEmployeeResponseSchema = z.object({
   employeeId: idSchema,
@@ -238,6 +242,7 @@ export const createReviewPeriodRequestSchema = z.object({
   label: z.string().min(1),
   startDate: z.string().date(),
   dueDate: z.string().date(),
+  status: editableReviewPeriodStatusSchema.default("inactive"),
 });
 
 export const updateReviewPeriodRequestSchema = z
@@ -246,11 +251,18 @@ export const updateReviewPeriodRequestSchema = z
     label: z.string().min(1),
     startDate: z.string().date(),
     dueDate: z.string().date(),
+    status: editableReviewPeriodStatusSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided",
   });
+
+export const syncAssessmentsResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  createdSelfAssessments: z.number().int().nonnegative(),
+  createdPeerAssessments: z.number().int().nonnegative(),
+});
 
 export const createQuestionInputSchema = questionSchema.omit({ id: true }).extend({
   id: idSchema.optional(),
@@ -507,6 +519,7 @@ export type ResetEmployeePasswordRequest = z.infer<typeof resetEmployeePasswordR
 export type ResetEmployeePasswordResponse = z.infer<typeof resetEmployeePasswordResponseSchema>;
 export type CreateReviewPeriodRequest = z.infer<typeof createReviewPeriodRequestSchema>;
 export type UpdateReviewPeriodRequest = z.infer<typeof updateReviewPeriodRequestSchema>;
+export type SyncAssessmentsResponse = z.infer<typeof syncAssessmentsResponseSchema>;
 export type CreateQuestionInput = z.infer<typeof createQuestionInputSchema>;
 export type CreateQuestionSetRequest = z.infer<typeof createQuestionSetRequestSchema>;
 export type UpdateQuestionSetRequest = z.infer<typeof updateQuestionSetRequestSchema>;

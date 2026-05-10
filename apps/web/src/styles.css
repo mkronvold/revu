@@ -913,6 +913,10 @@ button.employee-row:focus-visible {
   white-space: nowrap;
 }
 
+.employee-row-cell .stacked-relationship-list {
+  white-space: normal;
+}
+
 .employee-row-name strong {
   color: inherit;
 }
@@ -1113,6 +1117,17 @@ button.employee-row:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.stacked-relationship-list {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.stacked-relationship-list span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .temporary-password,
 .form-error {
   padding: 0.85rem 1rem;
@@ -1170,7 +1185,7 @@ button.employee-row:focus-visible {
 }
 
 .review-queue-table {
-  --review-queue-columns: minmax(0, 1.7fr) fit-content(9rem) fit-content(11rem) minmax(0, 1fr) fit-content(10rem);
+  --review-queue-columns: minmax(0, 1.8fr) fit-content(9rem) minmax(0, 1fr) fit-content(10rem);
   width: 100%;
   min-width: 0;
   display: grid;

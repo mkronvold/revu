@@ -46,6 +46,7 @@ import {
   reviewAssessmentRequestSchema,
   saveAssessmentDraftRequestSchema,
   submitAssessmentRequestSchema,
+  syncAssessmentsResponseSchema,
   updateAssignmentRequestSchema,
   updateEmployeeRequestSchema,
   updateQuestionSetRequestSchema,
@@ -420,6 +421,16 @@ export function unarchiveReviewPeriod(token: string, reviewPeriodId: string) {
   return request(
     `/review-periods/${reviewPeriodId}/unarchive`,
     reviewPeriodResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+    }),
+  );
+}
+
+export function syncAssessmentsToAssignments(token: string, reviewPeriodId: string) {
+  return request(
+    `/review-periods/${reviewPeriodId}/sync-assessments`,
+    syncAssessmentsResponseSchema,
     withAuthorization(token, {
       method: 'POST',
     }),
