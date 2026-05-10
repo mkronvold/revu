@@ -299,6 +299,36 @@ restart_stack() {
   bash ./up.sh
 }
 
+ensure_stack_running() {
+  local -a expected_services=()
+  local -a running_services=()
+  local -a missing_services=()
+  local -A running_lookup=()
+  local service=""
+
+  mapfile -t expected_services < <(docker compose config --services)
+  mapfile -t running_services < <(docker compose ps --services --filter status=running)
+
+  for service in "${running_services[@]}"; do
+    running_lookup["$service"]=1
+  done
+
+  for service in "${expected_services[@]}"; do
+    [[ -n "$service" ]] || continue
+    if [[ -z "${running_lookup[$service]:-}" ]]; then
+      missing_services+=("$service")
+    fi
+  done
+
+  if (( ${#missing_services[@]} == 0 )); then
+    log 'Deployment stack is already running.'
+    return 0
+  fi
+
+  log "Starting deployment stack before monitoring because these services are not running: ${missing_services[*]}"
+  bash ./up.sh
+}
+
 wait_for_next_check() {
   local remaining_seconds="$sleep_seconds"
   local key=""
@@ -321,6 +351,8 @@ wait_for_next_check() {
 
   return 1
 }
+
+ensure_stack_running
 
 log "Watching GHCR deployment images every ${interval_minutes} minute(s). Press r to refresh immediately."
 

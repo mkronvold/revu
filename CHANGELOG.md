@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Updated `autoupdate.sh` to verify the full Compose stack is already running on launch and start it through `up.sh` before entering the update loop when needed
 - Renamed the admin Assessments page from **Assessment Queue** to **Assessment List** and added a live search box to filter the list
 - Added self and peer assessment summary totals above the admin Assessment List so admins can see not started, incomplete, submitted waiting review, and reviewed counts at a glance
 - Added a live employee-directory search box and renamed the employee detail action to **Make Inactive** so it matches the existing inactive-status behavior
