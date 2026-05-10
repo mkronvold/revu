@@ -76,7 +76,9 @@ describe("API/domain foundation", () => {
         }),
       ]);
 
-    expect(apiIndexResponseSchema.parse(indexResponse.json()).resources.length).toBeGreaterThan(0);
+    const apiIndex = apiIndexResponseSchema.parse(indexResponse.json());
+    expect(apiIndex.resources.length).toBeGreaterThan(0);
+    expect(apiIndex.seededAccountsAvailable).toBe(true);
     expect(domainRulesResponseSchema.parse(rulesResponse.json()).acceptedAssessmentsAreImmutable).toBe(true);
     expect(employeesListResponseSchema.parse(employeesResponse.json()).items.length).toBeGreaterThan(0);
     expect(reviewPeriodsListResponseSchema.parse(periodsResponse.json()).items.length).toBe(2);

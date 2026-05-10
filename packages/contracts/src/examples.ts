@@ -326,6 +326,7 @@ export const assessmentsListExample: AssessmentsListResponse = {
 export const apiIndexExample: ApiIndexResponse = {
   name: "revu-api",
   version: "0.1.0",
+  seededAccountsAvailable: true,
   resources: [
     {
       name: "health",

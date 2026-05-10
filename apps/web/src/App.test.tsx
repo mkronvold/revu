@@ -36,6 +36,7 @@ vi.mock('./api', () => {
     exportAssignments: vi.fn(),
     exportLocalUsers: vi.fn(),
     exportQuestionSets: vi.fn(),
+    getApiIndex: vi.fn(),
     getEmployee: vi.fn(),
     getBackupStatus: vi.fn(),
     getFoundation: vi.fn(),
@@ -74,6 +75,7 @@ import {
   exportBackup,
   exportLocalUsers,
   exportQuestionSets,
+  getApiIndex,
   getBackupStatus,
   getEmployee,
   getFoundation,
@@ -236,6 +238,12 @@ describe('questions screen', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/questions');
+    vi.mocked(getApiIndex).mockResolvedValue({
+      name: 'revu-api',
+      version: '0.1.0',
+      seededAccountsAvailable: true,
+      resources: [],
+    });
   });
 
   afterEach(async () => {
@@ -244,6 +252,28 @@ describe('questions screen', () => {
     });
     vi.restoreAllMocks();
     document.body.innerHTML = '';
+  });
+
+  it('links the Revu title to GitHub, uses the new sign-in heading, and hides seeded accounts when unavailable', async () => {
+    vi.mocked(getApiIndex).mockResolvedValue({
+      name: 'revu-api',
+      version: '0.1.0',
+      seededAccountsAvailable: false,
+      resources: [],
+    });
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Sign into Revu') ?? false);
+
+    const eyebrowLink = container.querySelector('a.eyebrow-link') as HTMLAnchorElement | null;
+    expect(eyebrowLink).toBeTruthy();
+    expect(eyebrowLink?.getAttribute('href')).toBe('https://github.com/mkronvold/revu');
+    expect(container.textContent).toContain('Sign into Revu');
+    expect(container.textContent).not.toContain('Use the API-backed local username and password flow');
+    expect(container.textContent).not.toContain('Seeded API accounts');
   });
 
   it('renders markdown, opens the question-set dialog from the card, and edits questions in a nested dialog', async () => {

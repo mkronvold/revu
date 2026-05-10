@@ -167,6 +167,16 @@ button {
   text-transform: uppercase;
 }
 
+.eyebrow-link {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.eyebrow-link:hover,
+.eyebrow-link:focus-visible {
+  text-decoration: underline;
+}
+
 .brand-copy,
 .sidebar-note p,
 .hero p,

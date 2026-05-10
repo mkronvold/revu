@@ -1,5 +1,6 @@
 import {
   acceptAssessmentRequestSchema,
+  apiIndexResponseSchema,
   assessmentItemResponseSchema,
   assessmentReassignmentResponseSchema,
   assessmentsListQuerySchema,
@@ -207,6 +208,10 @@ export function login(payload: AuthLoginRequest) {
       body: JSON.stringify(payload),
     },
   );
+}
+
+export function getApiIndex() {
+  return request('', apiIndexResponseSchema);
 }
 
 export function me(token: string) {

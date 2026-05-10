@@ -30,6 +30,7 @@ export const apiResourceSchema = z.object({
 export const apiIndexResponseSchema = z.object({
   name: z.literal("revu-api"),
   version: z.literal("0.1.0"),
+  seededAccountsAvailable: z.boolean(),
   resources: z.array(apiResourceSchema),
 });
 

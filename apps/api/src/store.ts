@@ -1536,6 +1536,12 @@ export class ApiStore {
     return clone(this.toEmployeeAdmin(employee));
   }
 
+  async areSeededAccountsAvailable() {
+    const usernames = Object.keys(seedPasswordsByUsername);
+    const employees = await this.loadEmployeeRows(this.pool, { usernames });
+    return employees.length === usernames.length && employees.every((employee) => employee.status === "active");
+  }
+
   async authenticate(username: string, password: string) {
     const [employee] = await this.loadEmployeeRows(this.pool, { usernames: [username] });
     if (!employee || employee.status !== "active") {

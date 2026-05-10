@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import {
   acceptAssessmentRequestSchema,
+  apiIndexResponseSchema,
   apiIndexExample,
   assessmentItemResponseSchema,
   assessmentReassignmentResponseSchema,
@@ -333,7 +334,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   };
 
-  app.get("/", async () => apiIndexExample);
+  app.get("/", async () =>
+    apiIndexResponseSchema.parse({
+      ...apiIndexExample,
+      seededAccountsAvailable: await store.areSeededAccountsAvailable(),
+    }),
+  );
   app.get("/domain-rules", async () => domainRulesExample);
   app.get("/review-periods", async () => reviewPeriodsListResponseSchema.parse({ items: await store.listReviewPeriods() }));
   app.get("/review-periods/:id", async (request, reply) => {

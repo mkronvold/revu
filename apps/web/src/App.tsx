@@ -23,6 +23,7 @@ import {
   createEmployee,
   deleteEmployee,
   exportBackup,
+  getApiIndex,
   getEmployee,
   getBackupStatus,
   getFoundation,
@@ -114,6 +115,7 @@ import {
 
 const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
+const revuRepositoryUrl = 'https://github.com/mkronvold/revu';
 const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
 const themeStorageKey = 'revu-theme-preference';
@@ -467,6 +469,7 @@ function App() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSavingReviewAdmin, setIsSavingReviewAdmin] = useState(false);
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
+  const [showSeededApiAccounts, setShowSeededApiAccounts] = useState(false);
   const [reviewAdmin, setReviewAdmin] = useState<ReviewAdminSnapshot | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
   const [backupSettingsDraft, setBackupSettingsDraft] = useState<BackupSettingsDraft | null>(null);
@@ -612,6 +615,31 @@ function App() {
 
   const sessionUser = session?.user ?? null;
   const passwordResetRequired = session?.passwordResetRequired ?? false;
+  useEffect(() => {
+    if (sessionUser) {
+      setShowSeededApiAccounts(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await getApiIndex();
+        if (!cancelled) {
+          setShowSeededApiAccounts(response.seededAccountsAvailable);
+        }
+      } catch {
+        if (!cancelled) {
+          setShowSeededApiAccounts(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUser]);
+
   const currentSection = useMemo(() => getSection(pathname), [pathname]);
   const accessibleSections = useMemo(
     () => (sessionUser ? getSectionsForRole(sessionUser.role) : []),
@@ -4548,12 +4576,10 @@ function App() {
         <style>{themeStyleOverrides}</style>
         <div className="login-shell" data-revu-theme={themePreference}>
           <section className="login-card">
-            <p className="eyebrow">Revu</p>
-            <h1>Sign in to the assessment workspace</h1>
-            <p className="login-copy">
-              Use the API-backed local username and password flow to reach the integrated dashboard and employee
-              administration screens.
-            </p>
+            <a className="eyebrow eyebrow-link" href={revuRepositoryUrl} target="_blank" rel="noreferrer">
+              Revu
+            </a>
+            <h1>{companyName ? `Sign into ${companyName} Revu` : 'Sign into Revu'}</h1>
             {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
 
             <form className="stack-form" onSubmit={handleLogin}>
@@ -4575,27 +4601,29 @@ function App() {
               </button>
             </form>
 
-            <div className="demo-accounts">
-              <p className="section-label">Seeded API accounts</p>
-              <div className="demo-account-grid">
-                {demoAccounts.map((account) => (
-                  <button
-                    className="demo-account-card"
-                    key={account.username}
-                    type="button"
-                    onClick={() => {
-                      setLoginUsername(account.username);
-                      setLoginPassword(account.password);
-                      setLoginError('');
-                    }}
-                  >
-                    <strong>{account.fullName}</strong>
-                    <span>{account.role}</span>
-                    <small>{account.username}</small>
-                  </button>
-                ))}
+            {showSeededApiAccounts ? (
+              <div className="demo-accounts">
+                <p className="section-label">Seeded API accounts</p>
+                <div className="demo-account-grid">
+                  {demoAccounts.map((account) => (
+                    <button
+                      className="demo-account-card"
+                      key={account.username}
+                      type="button"
+                      onClick={() => {
+                        setLoginUsername(account.username);
+                        setLoginPassword(account.password);
+                        setLoginError('');
+                      }}
+                    >
+                      <strong>{account.fullName}</strong>
+                      <span>{account.role}</span>
+                      <small>{account.username}</small>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
           </section>
         </div>
       </>

@@ -8,6 +8,7 @@ import {
   changePassword,
   exportBackup,
   exportLocalUsers,
+  getApiIndex,
   getEmployee,
   getBackupStatus,
   getFoundation,
@@ -46,6 +47,25 @@ describe('web api client', () => {
         method: 'POST',
       }),
     );
+  });
+
+  it('reads the public API index without auth', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: 'revu-api',
+          version: '0.1.0',
+          seededAccountsAvailable: true,
+          resources: [],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const response = await getApiIndex();
+
+    expect(response.seededAccountsAvailable).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(`${apiBaseUrl}`, expect.any(Object));
   });
 
   it('sends bearer auth for employee directory requests', async () => {
