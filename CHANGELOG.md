@@ -3,6 +3,7 @@
 ## Unreleased
 - Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard and review queues
 - Tightened assessment syncing so inactive employees and inactive assessors no longer get new assessments, stale not-started pairings are removed during sync, employee deactivation clears active not-started assessments immediately, and the Assessments action now says `Clear not started assessments`
+- Deleting an employee now removes assessments where they were the review subject while preserving completed peer feedback they authored for other employees, which remains linked to the tombstone and renders as `deleted user`
 - Removed the `Assessor 1:` and `Assessor 2:` prefixes from the dashboard hero assessor summary
 - Moved assessment-sync controls onto the Assessments page, renamed that view to `Assessment Queue`, and added a confirmed clear action that removes ready-to-start assessments from the active review period
 - Updated `autoupdate.sh` to restart through `up.sh`, so automatic refreshes apply the same migration and bootstrap path as manual startups

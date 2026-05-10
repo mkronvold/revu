@@ -1065,6 +1065,27 @@ export class ApiStore {
     return result.rowCount ?? result.rows.length;
   }
 
+  private async removeDeletedEmployeeAssessments(client: DbClient, employeeId: string) {
+    const result = await client.query<{ id: string }>(
+      `
+        DELETE FROM assessments
+        WHERE employee_id = $1
+           OR (
+             assessor_employee_id = $1
+             AND (
+               target <> 'peer'
+               OR employee_id = $1
+               OR review_state IN ('new', 'draft')
+             )
+           )
+        RETURNING id
+      `,
+      [employeeId],
+    );
+
+    return result.rowCount ?? result.rows.length;
+  }
+
   private async assessmentOrThrow(client: DbClient, assessmentId: string) {
     const [assessment] = await this.loadAssessmentRecords(client, { assessmentId });
     if (!assessment) {
@@ -2058,6 +2079,7 @@ export class ApiStore {
 
         const tombstonedAt = nowIso();
         await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
+        await this.removeDeletedEmployeeAssessments(client, employeeId);
         const deleteResult = await client.query(
           `
             UPDATE employees

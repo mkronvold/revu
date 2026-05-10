@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  assessmentItemResponseSchema,
+  assignmentResponseSchema,
   authChangePasswordResponseSchema,
   authLoginResponseSchema,
   authMeResponseSchema,
@@ -516,7 +518,7 @@ describe("auth and employee admin API", () => {
     expect((await login(app, "ada.admin", "AdminPass123!")).statusCode).toBe(200);
   });
 
-  it("allows deleting inactive employees that are still referenced by relationships, assignments, and assessments", async () => {
+  it("removes deleted employees' subject assessments while keeping completed peer assessments on the tombstone", async () => {
     const app = await createApp();
     const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
 
@@ -574,6 +576,139 @@ describe("auth and employee admin API", () => {
       },
     });
     expect(acceptResponse.statusCode).toBe(200);
+
+    const selfAssessmentResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments`,
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        employeeId: deletedManager.id,
+        target: "self",
+      },
+    });
+    expect(selfAssessmentResponse.statusCode).toBe(201);
+    const selfAssessment = assessmentItemResponseSchema.parse(selfAssessmentResponse.json()).item;
+
+    const completedAssignmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assignments",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        employeeId: "44444444-4444-4444-8444-444444444444",
+        managerId: "22222222-2222-4222-8222-222222222222",
+        assessorId: deletedManager.id,
+      },
+    });
+    expect(completedAssignmentResponse.statusCode).toBe(201);
+    const completedAssignment = assignmentResponseSchema.parse(completedAssignmentResponse.json()).item;
+
+    const completedPeerAssessmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        employeeId: "44444444-4444-4444-8444-444444444444",
+        target: "peer",
+        assignmentId: completedAssignment.id,
+      },
+    });
+    expect(completedPeerAssessmentResponse.statusCode).toBe(201);
+    const completedPeerAssessment = assessmentItemResponseSchema.parse(completedPeerAssessmentResponse.json()).item;
+
+    const submitCompletedPeerResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${completedPeerAssessment.id}/submit`,
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa",
+            order: 1,
+            response: "4",
+          },
+          {
+            questionId: "aaaaaaaa-3222-4222-8222-aaaaaaaaaaaa",
+            order: 2,
+            response: "Completed peer feedback that should survive deletion.",
+          },
+        ],
+      },
+    });
+    expect(submitCompletedPeerResponse.statusCode).toBe(200);
+
+    const draftSubjectResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/employees",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        username: "draft.subject",
+        fullName: "Draft Subject",
+        email: "draft.subject@example.com",
+        role: "employee",
+        status: "active",
+        managerId: "22222222-2222-4222-8222-222222222222",
+      },
+    });
+    expect(draftSubjectResponse.statusCode).toBe(201);
+    const draftSubject = employeeResponseSchema.parse(draftSubjectResponse.json()).item;
+
+    const draftAssignmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assignments",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        employeeId: draftSubject.id,
+        managerId: "22222222-2222-4222-8222-222222222222",
+        assessorId: deletedManager.id,
+      },
+    });
+    expect(draftAssignmentResponse.statusCode).toBe(201);
+    const draftAssignment = assignmentResponseSchema.parse(draftAssignmentResponse.json()).item;
+
+    const draftPeerAssessmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        employeeId: draftSubject.id,
+        target: "peer",
+        assignmentId: draftAssignment.id,
+      },
+    });
+    expect(draftPeerAssessmentResponse.statusCode).toBe(201);
+    const draftPeerAssessment = assessmentItemResponseSchema.parse(draftPeerAssessmentResponse.json()).item;
+
+    const saveDraftPeerResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${draftPeerAssessment.id}/save`,
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa",
+            order: 1,
+            response: "3",
+          },
+        ],
+      },
+    });
+    expect(saveDraftPeerResponse.statusCode).toBe(200);
 
     const deactivateEmployeeResponse = await app.inject({
       method: "PATCH",
@@ -639,6 +774,13 @@ describe("auth and employee admin API", () => {
     expect(
       foundation.assessments.find((assessment) => assessment.id === "dddddddd-dddd-4ddd-8ddd-dddddddddddd")?.acceptedByEmployeeId,
     ).toBe(deletedManager.id);
+    expect(foundation.assessments.some((assessment) => assessment.id === selfAssessment.id)).toBe(false);
+    expect(foundation.assessments.some((assessment) => assessment.id === draftPeerAssessment.id)).toBe(false);
+    expect(foundation.assessments.find((assessment) => assessment.id === completedPeerAssessment.id)).toMatchObject({
+      employeeId: "44444444-4444-4444-8444-444444444444",
+      assessorId: deletedManager.id,
+      reviewState: "submitted",
+    });
   });
 
   it("rejects imported password-hash credentials that do not use a supported stored-password format", async () => {
