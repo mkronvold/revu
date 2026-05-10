@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Removed the deployment web port from `docker-compose.yml` and documented that direct host bindings should only come from a separate override when the stack is not staying behind the reverse proxy
 - Updated `autoupdate.sh` to verify the full Compose stack is already running on launch and start it through `up.sh` before entering the update loop when needed
 - Renamed the admin Assessments page from **Assessment Queue** to **Assessment List** and added a live search box to filter the list
 - Added self and peer assessment summary totals above the admin Assessment List so admins can see not started, incomplete, submitted waiting review, and reviewed counts at a glance

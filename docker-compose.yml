@@ -111,8 +111,9 @@ services:
     environment:
       VITE_COMPANY_NAME: ${VITE_COMPANY_NAME:-Your Company}
       VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    # Deployment intentionally keeps web internal to Docker networks.
+    # Decision point: keep it this way behind a reverse proxy on proxy-net, or
+    # publish a host port from a separate override only when direct access is required.
     healthcheck:
       test:
         - CMD-SHELL
