@@ -3013,8 +3013,7 @@ function App() {
       <section className="card admin-section-card file-management-transfer-card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Employees</p>
-            <h3>Local user transfer files</h3>
+            <p className="section-label">Employee import/export</p>
           </div>
         </div>
         <p className="muted-copy">
@@ -3075,23 +3074,21 @@ function App() {
 
   const renderQuestionTransferCard = () => {
     if (!reviewAdmin || !selectedReviewPeriod || !selectedReviewPeriodSummary) {
-      return (
-        <section className="card admin-section-card file-management-transfer-card">
-          <p className="section-label">Questions</p>
-          <h3>Question set transfer files</h3>
-          <p className="muted-copy">Loading review period transfer tools...</p>
-        </section>
-      );
+        return (
+          <section className="card admin-section-card file-management-transfer-card">
+            <p className="section-label">Question set import/export</p>
+            <p className="muted-copy">Loading review period transfer tools...</p>
+          </section>
+        );
     }
 
-    return (
-      <section className="card admin-section-card file-management-transfer-card">
-        <div className="section-heading">
-          <div>
-            <p className="section-label">Questions</p>
-            <h3>Question set transfer files</h3>
-          </div>
-          <label className="inline-field review-period-picker">
+      return (
+        <section className="card admin-section-card file-management-transfer-card">
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Question set import/export</p>
+            </div>
+            <label className="inline-field review-period-picker">
             <span className="sr-only">Review period</span>
             <select
               value={selectedReviewPeriod.id}

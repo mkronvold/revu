@@ -785,8 +785,8 @@ describe('file management screen', () => {
     expect(container.textContent).not.toContain('Review period lifecycle');
     expect(container.textContent).not.toContain('Backup and restore');
     expect(container.textContent).not.toContain('Runtime backup configuration');
-    expect(container.textContent).toContain('Local user transfer files');
-    expect(container.textContent).toContain('Question set transfer files');
+    expect(container.textContent).toContain('Employee import/export');
+    expect(container.textContent).toContain('Question set import/export');
     expect(container.textContent).toContain('Archive review periods');
     expect(container.textContent).toContain('Automatic backups');
     expect(container.textContent).toContain('Refresh status');
@@ -871,8 +871,8 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
 
     const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
-    const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Local user transfer files'));
-    const questionTransferCard = transferCards.find((card) => card.textContent?.includes('Question set transfer files'));
+    const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Employee import/export'));
+    const questionTransferCard = transferCards.find((card) => card.textContent?.includes('Question set import/export'));
     expect(localUserTransferCard).toBeTruthy();
     expect(questionTransferCard).toBeTruthy();
 
