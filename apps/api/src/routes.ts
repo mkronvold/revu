@@ -19,6 +19,12 @@ import {
   authUpdateProfileResponseSchema,
   backupExportQuerySchema,
   backupExportResponseSchema,
+  backupStoredFileDeleteResponseSchema,
+  backupStoredFileDownloadQuerySchema,
+  backupStoredFileNameSchema,
+  backupStoredFileResponseSchema,
+  backupStoredFilesResponseSchema,
+  backupStoredFileRestoreRequestSchema,
   backupRestoreRequestSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
@@ -85,6 +91,9 @@ const exportFormatQuerySchema = z.object({
 
 const localUsersExportQuerySchema = exportFormatQuerySchema.extend({
   mode: localUsersExportModeSchema.default("rotate-passcodes"),
+});
+const storedBackupParamsSchema = z.object({
+  fileName: backupStoredFileNameSchema,
 });
 
 const adminBackupRestoreBodyLimit = 50 * 1024 * 1024;
@@ -245,6 +254,23 @@ function parseBackupRestoreRequestFromMultipart(request: FastifyRequest): Backup
   }
 }
 
+function parseStoredBackupUploadRequestFromMultipart(request: FastifyRequest) {
+  if (!Buffer.isBuffer(request.body)) {
+    throw new ApiError(400, "Stored backup uploads must use multipart form data");
+  }
+
+  const parts = parseMultipartFormData(request.body, request.headers["content-type"]);
+  const filePart = parts.get("file");
+  if (!filePart) {
+    throw new ApiError(400, "Stored backup upload file is required");
+  }
+
+  return {
+    fileName: filePart.filename?.trim() || "backup.json",
+    content: filePart.value,
+  };
+}
+
 function sendError(reply: FastifyReply, error: unknown) {
   if (error instanceof ApiError) {
     return reply.code(error.statusCode).send({ message: error.message });
@@ -336,6 +362,80 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["backups:create"]);
       const body = parseWithSchema(updateBackupStatusRequestSchema, request.body);
       return backupStatusResponseSchema.parse(await store.updateBackupStatus(body));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupsList = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:read"]);
+      return backupStoredFilesResponseSchema.parse({
+        items: await store.listStoredBackups(),
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupCreate = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:create"]);
+      return backupStoredFileResponseSchema.parse({
+        item: await store.createStoredBackup(),
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupUpload = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:create"]);
+      const upload = parseStoredBackupUploadRequestFromMultipart(request);
+      return backupStoredFileResponseSchema.parse(await store.uploadStoredBackup(upload.fileName, upload.content));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupDownload = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:read"]);
+      const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
+      const query = parseWithSchema(backupStoredFileDownloadQuerySchema, request.query);
+      const download = await store.downloadStoredBackup(fileName, query.mode);
+      reply.header("cache-control", "no-store");
+      reply.header("content-disposition", `attachment; filename="${download.fileName}"`);
+      reply.type("application/json; charset=utf-8");
+      return reply.send(download.content);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupRestore = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:restore"]);
+      const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
+      const { target } = backupStoredFileRestoreRequestSchema.parse(request.body);
+      return backupRestoreResponseSchema.parse(await store.restoreStoredBackup(fileName, target));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  };
+
+  const handleStoredBackupDelete = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["backups:create"]);
+      const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
+      return backupStoredFileDeleteResponseSchema.parse(await store.deleteStoredBackup(fileName));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -858,6 +958,12 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   app.patch("/admin/backups/status", handleBackupStatusUpdate);
   app.get("/admin/backups/export", handleBackupExport);
   app.post("/admin/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, handleBackupRestore);
+  app.get("/admin/backups/files", handleStoredBackupsList);
+  app.post("/admin/backups/files/create", handleStoredBackupCreate);
+  app.post("/admin/backups/files/upload", { bodyLimit: adminBackupRestoreBodyLimit }, handleStoredBackupUpload);
+  app.get("/admin/backups/files/:fileName/download", handleStoredBackupDownload);
+  app.post("/admin/backups/files/:fileName/restore", handleStoredBackupRestore);
+  app.delete("/admin/backups/files/:fileName", handleStoredBackupDelete);
 
   app.post("/review-periods/:id/assessments", async (request, reply) => {
     try {

@@ -29,10 +29,13 @@ vi.mock('./api', () => {
     createAssignment: vi.fn(),
     createAssessment: vi.fn(),
     createEmployee: vi.fn(),
+    createStoredBackup: vi.fn(),
     createQuestionSet: vi.fn(),
     createReviewPeriod: vi.fn(),
     deleteAssignment: vi.fn(),
     deleteEmployee: vi.fn(),
+    deleteStoredBackup: vi.fn(),
+    downloadStoredBackup: vi.fn(),
     exportBackup: vi.fn(),
     exportAssignments: vi.fn(),
     exportLocalUsers: vi.fn(),
@@ -47,6 +50,7 @@ vi.mock('./api', () => {
     listAssessments: vi.fn(),
     listEmployees: vi.fn(),
     listQuestionCategories: vi.fn(),
+    listStoredBackups: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     me: vi.fn(),
@@ -54,6 +58,7 @@ vi.mock('./api', () => {
     rejectAssessmentToDraft: vi.fn(),
     resetEmployeePassword: vi.fn(),
     restoreBackup: vi.fn(),
+    restoreStoredBackup: vi.fn(),
     reviewAssessment: vi.fn(),
     saveAssessmentDraft: vi.fn(),
     setEmployeePassword: vi.fn(),
@@ -67,6 +72,7 @@ vi.mock('./api', () => {
     updateQuestionCategories: vi.fn(),
     updateQuestionSet: vi.fn(),
     updateReviewPeriod: vi.fn(),
+    uploadStoredBackup: vi.fn(),
     updateWorkflowSettings: vi.fn(),
   };
 });
@@ -78,9 +84,11 @@ import {
   changePassword,
   checkApiHealth,
   clearReadyToStartAssessments,
+  createStoredBackup,
   createQuestionSet,
   deleteEmployee,
-  exportBackup,
+  deleteStoredBackup,
+  downloadStoredBackup,
   exportLocalUsers,
   exportQuestionSets,
   getApiIndex,
@@ -91,10 +99,11 @@ import {
   importQuestionSets,
   listEmployees,
   listQuestionCategories,
+  listStoredBackups,
   login,
   me,
   resetEmployeePassword,
-  restoreBackup,
+  restoreStoredBackup,
   saveAssessmentDraft,
   submitAssessment,
   updateBackupStatus,
@@ -102,6 +111,7 @@ import {
   updateOwnProfile,
   updateQuestionCategories,
   updateReviewPeriod,
+  uploadStoredBackup,
   updateWorkflowSettings,
 } from './api';
 
@@ -167,6 +177,15 @@ function createBackupStatusExample(overrides: Partial<BackupStatusResponse> = {}
     supportedRestoreModes: ['replace'] as const,
     supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'] as const,
     supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'] as const,
+    ...overrides,
+  };
+}
+
+function createStoredBackupFileExample(overrides: Partial<{ name: string; storedAt: string; sizeBytes: number }> = {}) {
+  return {
+    name: 'revu-backup-20260602T153000Z.json',
+    storedAt: '2026-06-02T15:30:00.000Z',
+    sizeBytes: 4096,
     ...overrides,
   };
 }
@@ -1411,10 +1430,12 @@ describe('file management screen', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders consolidated transfer cards, a single review-period lifecycle card, and backup restore tools', async () => {
+  it('renders transfer cards and manages stored backups from the automatic backups dialog', async () => {
     const backup = createBackupExample();
     const questionSnapshot = cloneQuestionSlice();
     let currentFoundationSnapshot = structuredClone(questionSnapshot);
+    let currentBackupStatus = createBackupStatusExample();
+    let currentStoredBackups = [createStoredBackupFileExample()];
     const selectedReviewPeriod = questionSnapshot.reviewPeriods[0]!;
     const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const session: AuthSession = {
@@ -1435,7 +1456,8 @@ describe('file management screen', () => {
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
-    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(getBackupStatus).mockImplementation(async () => structuredClone(currentBackupStatus));
+    vi.mocked(listStoredBackups).mockImplementation(async () => ({ items: structuredClone(currentStoredBackups) }));
     vi.mocked(exportLocalUsers).mockResolvedValue({
       format: 'json',
       mode: 'preserve-passwords',
@@ -1495,8 +1517,44 @@ describe('file management screen', () => {
       status: 'not_implemented',
       supportedFormats: ['json', 'csv'],
     });
-    vi.mocked(exportBackup).mockResolvedValue(backup);
-    vi.mocked(restoreBackup).mockImplementation(async () => {
+    vi.mocked(downloadStoredBackup).mockResolvedValue({
+      filename: currentStoredBackups[0]!.name,
+      content: JSON.stringify(backup, null, 2),
+    });
+    vi.mocked(uploadStoredBackup).mockImplementation(async (_token, file) => {
+      const uploaded = createStoredBackupFileExample({
+        name: 'backup-file-2.json',
+        storedAt: '2026-06-03T08:10:00.000Z',
+        sizeBytes: file.size,
+      });
+      currentStoredBackups = [uploaded, ...currentStoredBackups];
+      return {
+        item: uploaded,
+        renamedFrom: file.name,
+      };
+    });
+    vi.mocked(createStoredBackup).mockImplementation(async () => {
+      const created = createStoredBackupFileExample({
+        name: 'revu-backup-20260603T081500Z.json',
+        storedAt: '2026-06-03T08:15:00.000Z',
+        sizeBytes: 6144,
+      });
+      currentStoredBackups = [created, ...currentStoredBackups];
+      currentBackupStatus = createBackupStatusExample({
+        lastBackupAt: created.storedAt,
+      });
+      return {
+        item: created,
+      };
+    });
+    vi.mocked(deleteStoredBackup).mockImplementation(async (_token, fileName) => {
+      currentStoredBackups = currentStoredBackups.filter((item) => item.name !== fileName);
+      return {
+        name: fileName,
+        deleted: true as const,
+      };
+    });
+    vi.mocked(restoreStoredBackup).mockImplementation(async () => {
       currentFoundationSnapshot = {
         ...currentFoundationSnapshot,
         reviewPeriods: structuredClone(backup.reviewData.reviewPeriods),
@@ -1505,11 +1563,16 @@ describe('file management screen', () => {
         assessments: structuredClone(backup.reviewData.assessments),
         workflow: structuredClone(backup.reviewData.workflow),
       };
+      currentBackupStatus = createBackupStatusExample({
+        ...currentBackupStatus,
+        lastRestoreAt: '2026-06-03T08:15:00.000Z',
+      });
 
       return {
         mode: 'replace',
         target: 'questions',
         restoredAt: '2026-06-03T08:15:00.000Z',
+        userMode: 'preserve-passwords',
         counts: {
           users: backup.users.itemCount,
           reviewPeriods: backup.reviewData.reviewPeriods.length,
@@ -1552,9 +1615,11 @@ describe('file management screen', () => {
     expect(container.textContent).not.toContain('Manage inactive review periods');
     expect(container.textContent).not.toContain('Restore archived review periods');
     expect(container.textContent).toContain('Automatic backups');
+    expect(container.textContent).toContain('Show backups');
     expect(container.textContent).toContain('Refresh status');
-    expect(container.textContent).toContain('Restore all');
-    expect(container.textContent).toContain('Restore questions');
+    expect(container.textContent).not.toContain('Backup now / download');
+    expect(container.textContent).not.toContain('Restore all');
+    expect(container.textContent).not.toContain('Restore questions');
     expect(container.textContent).not.toContain('Collapse');
     expect(container.textContent).not.toContain('Expand');
     expect(container.textContent).not.toContain('Review workflow markdown');
@@ -1724,21 +1789,45 @@ describe('file management screen', () => {
     expect(exportQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, 'json');
     expect(importQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, { format: 'csv' });
 
-    const downloadButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Backup now / download',
-    );
-    expect(downloadButton).toBeTruthy();
+    const showBackupsButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Show backups');
+    expect(showBackupsButton).toBeTruthy();
 
     await act(async () => {
-      downloadButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      showBackupsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
-    expect(exportBackup).toHaveBeenCalledWith('session-token', 'preserve-passwords');
+    await waitFor(() => container.textContent?.includes('Backup list') ?? false);
+    expect(listStoredBackups).toHaveBeenCalledWith('session-token');
+    expect(container.textContent).toContain('revu-backup-20260602T153000Z.json');
+    expect(container.textContent).toContain('Upload backup');
+    expect(container.textContent).toContain('Backup now');
 
-    const backupInput = container.querySelector('input[type="file"][accept=".json,application/json,text/plain"]') as
-      | HTMLInputElement
-      | null;
+    const openDownloadDialogButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
+      (button) => button.textContent === 'Download',
+    );
+    expect(openDownloadDialogButton).toBeTruthy();
+
+    await act(async () => {
+      openDownloadDialogButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Download backup') ?? false);
+
+    const confirmDownloadButton = Array.from(container.querySelectorAll('.backup-download-dialog button')).find(
+      (button) => button.textContent === 'Download',
+    );
+    expect(confirmDownloadButton).toBeTruthy();
+
+    await act(async () => {
+      confirmDownloadButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(downloadStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260602T153000Z.json', 'preserve-passwords');
+
+    const backupInput = container.querySelector('input[type="file"][accept=".json,application/json,text/plain"]') as HTMLInputElement | null;
     expect(backupInput).toBeTruthy();
 
     const backupFile = new File([JSON.stringify(backup, null, 2)], 'backup-file.json', { type: 'application/json' });
@@ -1752,9 +1841,33 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('backup-file.json') ?? false);
+    await waitFor(() => container.textContent?.includes('backup-file-2.json') ?? false);
+    expect(uploadStoredBackup).toHaveBeenCalledWith('session-token', backupFile);
 
-    const restoreQuestionsButton = Array.from(container.querySelectorAll('button')).find(
+    const createBackupNowButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
+      (button) => button.textContent === 'Backup now',
+    );
+    expect(createBackupNowButton).toBeTruthy();
+
+    await act(async () => {
+      createBackupNowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('revu-backup-20260603T081500Z.json') ?? false);
+    expect(createStoredBackup).toHaveBeenCalledWith('session-token');
+
+    const openRestoreDialogButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
+      (button) => button.textContent === 'Restore',
+    );
+    expect(openRestoreDialogButton).toBeTruthy();
+
+    await act(async () => {
+      openRestoreDialogButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const restoreQuestionsButton = Array.from(container.querySelectorAll('.backup-restore-dialog button')).find(
       (button) => button.textContent?.includes('Restore questions'),
     );
     expect(restoreQuestionsButton).toBeTruthy();
@@ -1764,13 +1877,24 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Restored questions from backup-file.json') ?? false);
-
-    expect(restoreBackup).toHaveBeenCalledWith('session-token', {
-      file: backupFile,
+    await waitFor(() => container.textContent?.includes('Restored questions from revu-backup-20260603T081500Z.json') ?? false);
+    expect(restoreStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260603T081500Z.json', {
       target: 'questions',
       mode: 'replace',
     });
+
+    const deleteButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
+      (button) => button.textContent === 'Delete',
+    );
+    expect(deleteButton).toBeTruthy();
+
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Deleted revu-backup-20260603T081500Z.json.') ?? false);
+    expect(deleteStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260603T081500Z.json');
 
     const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
       (link) => link.textContent === 'Workflow',

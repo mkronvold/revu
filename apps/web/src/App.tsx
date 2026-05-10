@@ -2,7 +2,7 @@ import type {
   AuthSession,
   BackupSchedule,
   BackupRestoreScope,
-  BackupSnapshot,
+  BackupStoredFile,
   BackupStatusResponse,
   Employee,
   EmployeeAdmin,
@@ -21,20 +21,24 @@ import {
   checkApiHealth,
   changePassword,
   createEmployee,
+  createStoredBackup,
   deleteEmployee,
-  exportBackup,
+  deleteStoredBackup,
+  downloadStoredBackup,
   getApiIndex,
   getEmployee,
   getBackupStatus,
   getFoundation,
   listQuestionCategories,
+  listStoredBackups,
   listEmployees,
   login,
   logout,
   me,
   resetEmployeePassword,
-  restoreBackup,
+  restoreStoredBackup,
   setEmployeePassword,
+  uploadStoredBackup,
   updateOwnProfile,
   updateBackupStatus,
   updateEmployee,
@@ -139,6 +143,14 @@ type BackupSettingsDraft = {
   automaticBackupsEnabled: boolean;
   schedule: BackupSchedule;
   retentionCount: string;
+};
+
+type BackupDownloadDialogState = {
+  fileName: string;
+};
+
+type BackupRestoreDialogState = {
+  file: BackupStoredFile;
 };
 
 const questionTypeHelperOptions = {
@@ -422,34 +434,8 @@ const backupRestoreActions: BackupRestoreAction[] = [
   },
 ];
 
-function buildBackupFilename(exportedAt: string) {
-  return `revu-backup-${exportedAt.replace(/[:.]/g, '-')}.json`;
-}
-
-function buildBackupExportConfirmation(mode: LocalUsersExportMode) {
-  return mode === 'rotate-passcodes'
-    ? 'Downloading a backup in rotate-passcodes mode will rotate every local password into a generated one-time passcode, sign everyone out, and include those one-time passcodes in the downloaded backup. Continue?'
-    : 'Download a full JSON backup now? This snapshot can later be uploaded for a replace-mode restore.';
-}
-
-function readBackupFileSummary(raw: string): BackupSnapshot {
-  try {
-    return backupSnapshotSchema.parse(JSON.parse(raw));
-  } catch {
-    throw new Error('Backup file must be a valid Revu JSON backup export.');
-  }
-}
-
-function describeBackupSummary(backup: {
-  users: { itemCount: number };
-  reviewData: {
-    reviewPeriods: unknown[];
-    questionSets: unknown[];
-    assignments: unknown[];
-    assessments: unknown[];
-  };
-}) {
-  return `${backup.users.itemCount} users • ${backup.reviewData.reviewPeriods.length} review periods • ${backup.reviewData.questionSets.length} question sets • ${backup.reviewData.assignments.length} assignments • ${backup.reviewData.assessments.length} assessments`;
+function formatBackupSize(sizeBytes: number) {
+  return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
 }
 
 function buildBackupRestoreConfirmation(action: BackupRestoreAction, fileName: string) {
@@ -592,7 +578,7 @@ function App() {
   const [localUserExportMode, setLocalUserExportMode] = useState<LocalUsersExportMode>('rotate-passcodes');
   const [backupExportMode, setBackupExportMode] = useState<LocalUsersExportMode>('preserve-passwords');
   const [isSyncingBackups, setIsSyncingBackups] = useState(false);
-  const [isReadingBackupFile, setIsReadingBackupFile] = useState(false);
+  const [isLoadingStoredBackups, setIsLoadingStoredBackups] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSavingReviewAdmin, setIsSavingReviewAdmin] = useState(false);
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
@@ -600,8 +586,10 @@ function App() {
   const [reviewAdmin, setReviewAdmin] = useState<ReviewAdminSnapshot | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
   const [backupSettingsDraft, setBackupSettingsDraft] = useState<BackupSettingsDraft | null>(null);
-  const [backupFile, setBackupFile] = useState<File | null>(null);
-  const [backupFileSummary, setBackupFileSummary] = useState<BackupSnapshot | null>(null);
+  const [storedBackups, setStoredBackups] = useState<BackupStoredFile[]>([]);
+  const [isStoredBackupsDialogOpen, setIsStoredBackupsDialogOpen] = useState(false);
+  const [backupDownloadDialog, setBackupDownloadDialog] = useState<BackupDownloadDialogState | null>(null);
+  const [backupRestoreDialog, setBackupRestoreDialog] = useState<BackupRestoreDialogState | null>(null);
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
   const [selectedReviewPeriodManagementId, setSelectedReviewPeriodManagementId] = useState<string | null>(null);
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
@@ -1171,10 +1159,13 @@ function App() {
     if (!sessionToken || !isAdmin || passwordResetRequired) {
       setBackupStatus(null);
       setBackupSettingsDraft(null);
-      setBackupFile(null);
-      setBackupFileSummary(null);
+      setStoredBackups([]);
+      setIsStoredBackupsDialogOpen(false);
+      setBackupDownloadDialog(null);
+      setBackupRestoreDialog(null);
       setIsLoadingBackupStatus(false);
       setIsSavingBackupSettings(false);
+      setIsLoadingStoredBackups(false);
       return;
     }
 
@@ -1714,12 +1705,14 @@ function App() {
     setQuestionCategories([]);
     setBackupStatus(null);
     setBackupSettingsDraft(null);
-    setBackupFile(null);
-    setBackupFileSummary(null);
+    setStoredBackups([]);
+    setIsStoredBackupsDialogOpen(false);
+    setBackupDownloadDialog(null);
+    setBackupRestoreDialog(null);
     setIsLoadingBackupStatus(false);
+    setIsLoadingStoredBackups(false);
     setIsSyncingBackups(false);
     setIsSavingBackupSettings(false);
-    setIsReadingBackupFile(false);
     setLoginPassword('');
     setPasswordDraft('');
     setPasswordStatus('');
@@ -2105,13 +2098,51 @@ function App() {
     }
   };
 
-  const handleBackupDownload = async () => {
-    if (!sessionToken || !sessionUser) {
+  const refreshStoredBackups = async () => {
+    if (!sessionToken || !isAdmin) {
+      setStoredBackups([]);
+      return [];
+    }
+
+    const response = await listStoredBackups(sessionToken);
+    setStoredBackups(response.items);
+    return response.items;
+  };
+
+  const openStoredBackupsDialog = async () => {
+    if (!sessionToken) {
       return;
     }
 
-    const confirmed = window.confirm(buildBackupExportConfirmation(backupExportMode));
-    if (!confirmed) {
+    setIsStoredBackupsDialogOpen(true);
+    setIsLoadingStoredBackups(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      await refreshStoredBackups();
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsLoadingStoredBackups(false);
+    }
+  };
+
+  const closeStoredBackupsDialog = () => {
+    setIsStoredBackupsDialogOpen(false);
+    setBackupDownloadDialog(null);
+    setBackupRestoreDialog(null);
+  };
+
+  const handleStoredBackupUploadClick = () => {
+    backupImportInputRef.current?.click();
+  };
+
+  const handleStoredBackupFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!sessionToken || !file) {
       return;
     }
 
@@ -2120,31 +2151,13 @@ function App() {
     setAppError('');
 
     try {
-      const response = await exportBackup(sessionToken, backupExportMode);
-      triggerDownload(buildBackupFilename(response.exportedAt), JSON.stringify(response, null, 2), 'application/json');
-      setBackupStatus((currentStatus) =>
-        currentStatus
-          ? {
-              ...currentStatus,
-              lastBackupAt: response.exportedAt,
-            }
-          : currentStatus,
+      const response = await uploadStoredBackup(sessionToken, file);
+      await refreshStoredBackups();
+      setAdminNotice(
+        response.renamedFrom && response.renamedFrom !== response.item.name
+          ? `Uploaded ${response.renamedFrom} as ${response.item.name}.`
+          : `Uploaded ${response.item.name} to stored backups.`,
       );
-
-      const notice =
-        response.users.mode === 'rotate-passcodes'
-          ? `Downloaded a backup with rotated one-time passcodes for ${response.users.itemCount} users. Everyone was signed out.`
-          : `Downloaded a JSON backup with ${describeBackupSummary(response)}.`;
-
-      if (response.users.mode === 'rotate-passcodes') {
-        setLoginUsername(sessionUser.username);
-        clearSession({
-          authNotice: `${notice} Sign in again with your exported one-time passcode before continuing.`,
-        });
-        return;
-      }
-
-      setAdminNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -2152,42 +2165,64 @@ function App() {
     }
   };
 
-  const handleBackupUpload = () => {
-    backupImportInputRef.current?.click();
-  };
-
-  const handleBackupFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-
-    if (!file) {
+  const handleCreateStoredBackup = async () => {
+    if (!sessionToken) {
       return;
     }
 
-    setIsReadingBackupFile(true);
+    setIsSyncingBackups(true);
     setAdminNotice('');
     setAppError('');
 
     try {
-      const summary = readBackupFileSummary(await file.text());
-      setBackupFile(file);
-      setBackupFileSummary(summary);
-      setAdminNotice(`Loaded ${file.name}. Review the restore target carefully before continuing.`);
+      const response = await createStoredBackup(sessionToken);
+      await Promise.all([refreshStoredBackups(), refreshBackupStatus()]);
+      setAdminNotice(`Created ${response.item.name}.`);
     } catch (error) {
-      setBackupFile(null);
-      setBackupFileSummary(null);
       setAppError(getErrorMessage(error));
     } finally {
-      setIsReadingBackupFile(false);
+      setIsSyncingBackups(false);
     }
   };
 
-  const handleBackupRestore = async (action: BackupRestoreAction) => {
-    if (!sessionToken || !backupFile || !backupFileSummary) {
+  const handleStoredBackupDownload = async () => {
+    if (!sessionToken || !sessionUser || !backupDownloadDialog) {
       return;
     }
 
-    const confirmed = window.confirm(buildBackupRestoreConfirmation(action, backupFile.name));
+    setIsSyncingBackups(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const response = await downloadStoredBackup(sessionToken, backupDownloadDialog.fileName, backupExportMode);
+      const downloadName = response.filename ?? backupDownloadDialog.fileName;
+      triggerDownload(downloadName, response.content, 'application/json');
+      setBackupDownloadDialog(null);
+
+      if (backupExportMode === 'rotate-passcodes') {
+        const backup = backupSnapshotSchema.parse(JSON.parse(response.content));
+        setLoginUsername(sessionUser.username);
+        clearSession({
+          authNotice: `Downloaded a backup with rotated one-time passcodes for ${backup.users.itemCount} users. Everyone was signed out. Sign in again with your exported one-time passcode before continuing.`,
+        });
+        return;
+      }
+
+      setAdminNotice(`Downloaded ${downloadName}.`);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingBackups(false);
+    }
+  };
+
+  const handleStoredBackupDelete = async (file: BackupStoredFile) => {
+    if (!sessionToken) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete stored backup ${file.name}?`);
     if (!confirmed) {
       return;
     }
@@ -2197,8 +2232,38 @@ function App() {
     setAppError('');
 
     try {
-      const response = await restoreBackup(sessionToken, {
-        file: backupFile,
+      await deleteStoredBackup(sessionToken, file.name);
+      await refreshStoredBackups();
+      if (backupDownloadDialog?.fileName === file.name) {
+        setBackupDownloadDialog(null);
+      }
+      if (backupRestoreDialog?.file.name === file.name) {
+        setBackupRestoreDialog(null);
+      }
+      setAdminNotice(`Deleted ${file.name}.`);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSyncingBackups(false);
+    }
+  };
+
+  const handleStoredBackupRestore = async (action: BackupRestoreAction) => {
+    if (!sessionToken || !backupRestoreDialog || !sessionUser) {
+      return;
+    }
+
+    const confirmed = window.confirm(buildBackupRestoreConfirmation(action, backupRestoreDialog.file.name));
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSyncingBackups(true);
+    setAdminNotice('');
+    setAppError('');
+
+    try {
+      const response = await restoreStoredBackup(sessionToken, backupRestoreDialog.file.name, {
         target: action.target,
         mode: 'replace',
       });
@@ -2212,16 +2277,17 @@ function App() {
           : currentStatus,
       );
 
-      const notice = buildBackupRestoreNotice(response.target, backupFile.name, response.counts);
+      const notice = buildBackupRestoreNotice(response.target, backupRestoreDialog.file.name, response.counts);
       if (response.target === 'all' || response.target === 'users') {
-        setLoginUsername(sessionUser?.username ?? '');
+        setLoginUsername(sessionUser.username);
         clearSession({
-          authNotice: `${notice} ${buildBackupSessionNotice(response.target, backupFileSummary.users.mode)}`,
+          authNotice: `${notice} ${buildBackupSessionNotice(response.target, response.userMode)}`,
         });
         return;
       }
 
       await refreshFoundationSnapshot();
+      setBackupRestoreDialog(null);
       setAdminNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -4929,14 +4995,24 @@ function App() {
           <div>
             <p className="section-label">Automatic backups</p>
           </div>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
-            onClick={() => void handleBackupStatusRefresh()}
-          >
-            {isLoadingBackupStatus ? 'Refreshing…' : 'Refresh status'}
-          </button>
+          <div className="dialog-header-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups || isLoadingStoredBackups}
+              onClick={() => void openStoredBackupsDialog()}
+            >
+              Show backups
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
+              onClick={() => void handleBackupStatusRefresh()}
+            >
+              {isLoadingBackupStatus ? 'Refreshing…' : 'Refresh status'}
+            </button>
+          </div>
         </div>
         {isLoadingBackupStatus && !backupStatus ? (
           <p className="muted-copy">Loading backup status...</p>
@@ -5053,139 +5129,217 @@ function App() {
             </dl>
             <div className="toolbar-note">
               <p>
-                <strong>Restore rule:</strong> Uploaded restores always use {backupStatus.replaceStrategy} semantics.
+                <strong>Restore rule:</strong> Stored backup restores always use {backupStatus.replaceStrategy} semantics.
               </p>
               <p>
                 Supported restore scopes: {backupStatus.supportedRestoreScopes.join(', ')}. Supported restore modes:{' '}
                 {backupStatus.supportedRestoreModes.join(', ')}.
               </p>
+              <p>Open Show backups to create, upload, download, restore, or delete stored snapshot files.</p>
             </div>
           </>
         ) : (
           <p className="muted-copy">Backup status is unavailable right now.</p>
         )}
-      </section>
-
-      <section className="card">
-        <div className="section-heading">
-          <div>
-            <p className="section-label">Backup now</p>
-            <h3>Download a full backup</h3>
-          </div>
-        </div>
-        <p className="muted-copy">
-          The export endpoint returns a full JSON backup that includes users plus review data. Choose how local user
-          credentials should be represented in the download.
-        </p>
-        <div className="local-user-export-mode-grid" role="radiogroup" aria-label="Backup user export mode">
-          {availableBackupExportModes.map((option) => (
-            <label
-              key={option.value}
-              className={`local-user-export-mode-option${backupExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
-            >
-              <input
-                type="radio"
-                name="backup-export-mode"
-                value={option.value}
-                checked={backupExportMode === option.value}
-                onChange={(event) => setBackupExportMode(event.target.value as LocalUsersExportMode)}
-              />
-              <span className="local-user-export-mode-copy">
-                <strong>{option.label}</strong>
-                <span className="muted-copy">{option.description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        {backupExportMode === 'rotate-passcodes' ? (
-          <div className="warning-banner">
-            <strong>Warning</strong>
-            <p>Rotate-passcodes backup downloads sign every user out, including the current admin session.</p>
-          </div>
-        ) : null}
-        <div className="action-row">
-          <button type="button" disabled={isSyncingBackups || isReadingBackupFile} onClick={() => void handleBackupDownload()}>
-            {isSyncingBackups ? 'Preparing backup…' : 'Backup now / download'}
-          </button>
-        </div>
-      </section>
-
-      <section className="card">
-        <div className="section-heading">
-          <div>
-            <p className="section-label">Restore backup</p>
-            <h3>Upload a backup file</h3>
-          </div>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={isSyncingBackups || isReadingBackupFile}
-            onClick={handleBackupUpload}
-          >
-            {backupFile ? 'Replace file' : 'Choose backup file'}
-          </button>
-        </div>
-        <p className="muted-copy">
-          Upload a JSON backup file, then choose exactly which replace-mode restore to run. Nothing restores silently.
-        </p>
         <input
           ref={backupImportInputRef}
           type="file"
           accept=".json,application/json,text/plain"
           style={{ display: 'none' }}
-          onChange={(event) => void handleBackupFileChange(event)}
+          onChange={(event) => void handleStoredBackupFileChange(event)}
         />
-        {isReadingBackupFile ? (
-          <p className="muted-copy">Reading backup file...</p>
-        ) : backupFile && backupFileSummary ? (
-          <div className="subcard backup-file-card">
-            <div className="section-heading">
-              <div>
-                <p className="section-label">Selected file</p>
-                <h3>{backupFile.name}</h3>
-              </div>
-              <span className="pill">{Math.max(1, Math.round(backupFile.size / 1024))} KB</span>
-            </div>
-            <dl className="detail-grid compact-detail-grid">
-              <div>
-                <dt>Exported at</dt>
-                <dd>{formatLocalizedDateTime(backupFileSummary.exportedAt)}</dd>
-              </div>
-              <div>
-                <dt>User mode</dt>
-                <dd>{backupFileSummary.users.mode}</dd>
-              </div>
-              <div>
-                <dt>Version</dt>
-                <dd>{backupFileSummary.version}</dd>
-              </div>
-            </dl>
-            <p className="muted-copy">{describeBackupSummary(backupFileSummary)}</p>
-          </div>
-        ) : (
-          <p className="muted-copy">Choose a backup JSON file before you try a restore.</p>
-        )}
-        <div className="warning-banner">
-          <strong>Restore warning</strong>
-          <p>Every restore action is destructive for its target. Review the selected file and the target button before continuing.</p>
-        </div>
-        <div className="backup-action-grid">
-          {availableBackupRestoreActions.map((action) => (
-            <button
-              key={action.target}
-              type="button"
-              className="admin-list-item backup-action-card"
-              disabled={!backupFile || !backupFileSummary || isSyncingBackups || isReadingBackupFile}
-              onClick={() => void handleBackupRestore(action)}
-            >
-              <strong>{action.title}</strong>
-              <span className="muted-copy">{action.description}</span>
-            </button>
-          ))}
-        </div>
       </section>
     </>
   );
+
+  const renderStoredBackupsDialog = () =>
+    isStoredBackupsDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeStoredBackupsDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card backup-list-dialog"
+          role="dialog"
+          aria-labelledby="backup-list-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Stored backups</p>
+              <h3 id="backup-list-dialog-title">Backup list</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <button type="button" className="secondary-button" onClick={closeStoredBackupsDialog}>
+                Close
+              </button>
+            </div>
+          </div>
+          {isLoadingStoredBackups ? (
+            <p className="muted-copy">Loading stored backups...</p>
+          ) : storedBackups.length ? (
+            <div className="archive-list">
+              {storedBackups.map((file) => (
+                <article className="archive-row backup-list-row" key={file.name}>
+                  <div>
+                    <strong>{file.name}</strong>
+                    <p className="muted-copy">
+                      {formatLocalizedDateTime(file.storedAt)} • {formatBackupSize(file.sizeBytes)}
+                    </p>
+                  </div>
+                  <div className="backup-list-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSyncingBackups}
+                      onClick={() => setBackupDownloadDialog({ fileName: file.name })}
+                    >
+                      Download
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSyncingBackups}
+                      onClick={() => setBackupRestoreDialog({ file })}
+                    >
+                      Restore
+                    </button>
+                    <button type="button" disabled={isSyncingBackups} onClick={() => void handleStoredBackupDelete(file)}>
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted-copy">No stored backups yet.</p>
+          )}
+          <div className="dialog-footer">
+            <div className="dialog-footer-start">
+              <button type="button" className="secondary-button" disabled={isSyncingBackups} onClick={handleStoredBackupUploadClick}>
+                Upload backup
+              </button>
+              <button type="button" disabled={isSyncingBackups} onClick={() => void handleCreateStoredBackup()}>
+                {isSyncingBackups ? 'Creating…' : 'Backup now'}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    ) : null;
+
+  const renderBackupDownloadDialog = () =>
+    backupDownloadDialog ? (
+      <div className="modal-backdrop" role="presentation" onClick={() => setBackupDownloadDialog(null)}>
+        <section
+          aria-modal="true"
+          className="card modal-card backup-download-dialog"
+          role="dialog"
+          aria-labelledby="backup-download-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Download backup</p>
+              <h3 id="backup-download-dialog-title">{backupDownloadDialog.fileName}</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <button type="button" className="secondary-button" onClick={() => setBackupDownloadDialog(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+          <p className="muted-copy">
+            Choose whether to download the stored file as-is or generate a fresh backup with rotated one-time passcodes.
+          </p>
+          <div className="local-user-export-mode-grid" role="radiogroup" aria-label="Backup user export mode">
+            {availableBackupExportModes.map((option) => (
+              <label
+                key={option.value}
+                className={`local-user-export-mode-option${backupExportMode === option.value ? ' local-user-export-mode-option-selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="stored-backup-export-mode"
+                  value={option.value}
+                  checked={backupExportMode === option.value}
+                  onChange={(event) => setBackupExportMode(event.target.value as LocalUsersExportMode)}
+                />
+                <span className="local-user-export-mode-copy">
+                  <strong>{option.label}</strong>
+                  <span className="muted-copy">{option.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {backupExportMode === 'rotate-passcodes' ? (
+            <div className="warning-banner">
+              <strong>Warning</strong>
+              <p>Rotate-passcodes backup downloads sign every user out, including the current admin session.</p>
+            </div>
+          ) : null}
+          <div className="dialog-footer dialog-footer-split">
+            <div className="dialog-footer-start">
+              <button type="button" disabled={isSyncingBackups} onClick={() => void handleStoredBackupDownload()}>
+                {isSyncingBackups ? 'Downloading…' : 'Download'}
+              </button>
+            </div>
+            <div className="dialog-footer-end">
+              <button type="button" className="secondary-button" onClick={() => setBackupDownloadDialog(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    ) : null;
+
+  const renderBackupRestoreDialog = () =>
+    backupRestoreDialog ? (
+      <div className="modal-backdrop" role="presentation" onClick={() => setBackupRestoreDialog(null)}>
+        <section
+          aria-modal="true"
+          className="card modal-card backup-restore-dialog"
+          role="dialog"
+          aria-labelledby="backup-restore-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Restore backup</p>
+              <h3 id="backup-restore-dialog-title">{backupRestoreDialog.file.name}</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <button type="button" className="secondary-button" onClick={() => setBackupRestoreDialog(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+          <p className="muted-copy">
+            Choose exactly which replace-mode restore to run for this stored backup. Nothing restores silently.
+          </p>
+          <p className="muted-copy">
+            Stored {formatLocalizedDateTime(backupRestoreDialog.file.storedAt)} • {formatBackupSize(backupRestoreDialog.file.sizeBytes)}
+          </p>
+          <div className="warning-banner">
+            <strong>Restore warning</strong>
+            <p>Every restore action is destructive for its target. Review the selected file and the target button before continuing.</p>
+          </div>
+          <div className="backup-action-grid">
+            {availableBackupRestoreActions.map((action) => (
+              <button
+                key={action.target}
+                type="button"
+                className="admin-list-item backup-action-card"
+                disabled={isSyncingBackups}
+                onClick={() => void handleStoredBackupRestore(action)}
+              >
+                <strong>{action.title}</strong>
+                <span className="muted-copy">{action.description}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    ) : null;
 
   const renderBackups = () => <main className="admin-stack">{renderBackupsContent()}</main>;
 
@@ -5932,6 +6086,12 @@ function App() {
         {renderQuestionCategoriesDialog()}
 
         {renderNewQuestionCategoryDialog()}
+
+        {renderStoredBackupsDialog()}
+
+        {renderBackupDownloadDialog()}
+
+        {renderBackupRestoreDialog()}
 
         {renderEmployeeDialog()}
 

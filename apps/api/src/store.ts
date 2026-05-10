@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join } from "node:path";
 
 import type {
   Assessment,
@@ -35,6 +35,7 @@ import type {
   LocalUsersExportMode,
   LocalUsersExportResponse,
   LocalUsersImportResponse,
+  BackupStoredFile,
   QuestionSet,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
@@ -53,7 +54,7 @@ import type {
   UpdateWorkflowSettingsRequest,
   WorkflowSettings,
 } from "@revu/contracts";
-import { defaultWorkflowMarkdown, defaultWorkflowVisibility } from "@revu/contracts";
+import { backupSnapshotSchema, defaultWorkflowMarkdown, defaultWorkflowVisibility } from "@revu/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import { getPool, withTransaction } from "./db.js";
@@ -1681,6 +1682,97 @@ export class ApiStore {
 
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${JSON.stringify(nextStatus, null, 2)}\n`, "utf8");
+  }
+
+  private getBackupArchiveDir() {
+    return process.env.BACKUP_ARCHIVE_DIR ?? "/var/lib/revu/backups/archive";
+  }
+
+  private getBackupFilePrefix() {
+    return process.env.BACKUP_FILE_PREFIX?.trim() || "revu-backup";
+  }
+
+  private getBackupFileExtension() {
+    return process.env.BACKUP_FILE_EXTENSION?.trim().replace(/^\.+/u, "") || "json";
+  }
+
+  private ensureBackupArchiveDir() {
+    const archiveDir = this.getBackupArchiveDir();
+    mkdirSync(archiveDir, { recursive: true });
+    return archiveDir;
+  }
+
+  private buildStoredBackupFilename(exportedAt: string) {
+    const compactTimestamp = exportedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/u, "Z");
+    return `${this.getBackupFilePrefix()}-${compactTimestamp}.${this.getBackupFileExtension()}`;
+  }
+
+  private sanitizeUploadedBackupFilename(fileName: string) {
+    const fallbackExtension = this.getBackupFileExtension();
+    const trimmedName = basename(fileName).trim();
+    const originalExtension = extname(trimmedName).replace(/^\.+/u, "").toLowerCase();
+    const extension = (originalExtension || fallbackExtension).replace(/[^a-z0-9]+/giu, "") || fallbackExtension;
+    const rawBaseName = trimmedName.slice(0, trimmedName.length - extname(trimmedName).length) || "uploaded-backup";
+    const normalizedBaseName = rawBaseName.replace(/[^A-Za-z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "") || "uploaded-backup";
+    return `${normalizedBaseName}.${extension}`;
+  }
+
+  private buildUniqueStoredBackupFilename(fileName: string) {
+    const archiveDir = this.ensureBackupArchiveDir();
+    const extension = extname(fileName);
+    const baseName = fileName.slice(0, fileName.length - extension.length) || fileName;
+    let candidate = fileName;
+    let suffix = 2;
+
+    while (existsSync(join(archiveDir, candidate))) {
+      candidate = `${baseName}-${suffix}${extension}`;
+      suffix += 1;
+    }
+
+    return candidate;
+  }
+
+  private getStoredBackupFilePath(fileName: string) {
+    const safeName = basename(fileName).trim();
+    if (!safeName || safeName !== fileName) {
+      throw new ApiError(400, "Stored backup name is invalid");
+    }
+
+    const filePath = join(this.ensureBackupArchiveDir(), safeName);
+    if (!existsSync(filePath)) {
+      throw new ApiError(404, `Stored backup ${fileName} was not found`);
+    }
+
+    const fileStats = statSync(filePath);
+    if (!fileStats.isFile()) {
+      throw new ApiError(404, `Stored backup ${fileName} was not found`);
+    }
+
+    return filePath;
+  }
+
+  private toStoredBackupFile(fileName: string): BackupStoredFile {
+    const filePath = this.getStoredBackupFilePath(fileName);
+    const fileStats = statSync(filePath);
+    return {
+      name: fileName,
+      storedAt: new Date(fileStats.mtimeMs).toISOString(),
+      sizeBytes: fileStats.size,
+    };
+  }
+
+  private readStoredBackupSnapshot(fileName: string) {
+    const filePath = this.getStoredBackupFilePath(fileName);
+    const raw = readFileSync(filePath, "utf8");
+
+    try {
+      return {
+        raw,
+        backup: backupSnapshotSchema.parse(JSON.parse(raw)),
+      };
+    } catch {
+      throw new ApiError(500, `Stored backup ${fileName} is not valid JSON backup data`);
+    }
   }
 
   private canManagerEdit(target: Employee, updates: UpdateEmployeeRequest) {
@@ -3484,6 +3576,82 @@ export class ApiStore {
     return backup;
   }
 
+  async listStoredBackups(): Promise<BackupStoredFile[]> {
+    const archiveDir = this.ensureBackupArchiveDir();
+    const files = readdirSync(archiveDir)
+      .map((fileName) => {
+        const filePath = join(archiveDir, fileName);
+        if (!statSync(filePath).isFile()) {
+          return null;
+        }
+
+        const storedAtMs = statSync(filePath).mtimeMs;
+        return {
+          fileName,
+          storedAtMs,
+        };
+      })
+      .filter((item): item is { fileName: string; storedAtMs: number } => item !== null)
+      .sort((left, right) => right.storedAtMs - left.storedAtMs);
+
+    return files.map(({ fileName }) => this.toStoredBackupFile(fileName));
+  }
+
+  async createStoredBackup(): Promise<BackupStoredFile> {
+    const backup = await this.createBackup("preserve-passwords");
+    const archiveDir = this.ensureBackupArchiveDir();
+    const fileName = this.buildUniqueStoredBackupFilename(this.buildStoredBackupFilename(backup.exportedAt));
+    writeFileSync(join(archiveDir, fileName), `${JSON.stringify(backup, null, 2)}\n`, "utf8");
+    return this.toStoredBackupFile(fileName);
+  }
+
+  async uploadStoredBackup(fileName: string, rawBackup: string): Promise<{ item: BackupStoredFile; renamedFrom?: string }> {
+    try {
+      backupSnapshotSchema.parse(JSON.parse(rawBackup));
+    } catch {
+      throw new ApiError(400, "Uploaded backup must contain valid Revu JSON backup data");
+    }
+
+    const sanitizedName = this.sanitizeUploadedBackupFilename(fileName);
+    const uniqueName = this.buildUniqueStoredBackupFilename(sanitizedName);
+    const archiveDir = this.ensureBackupArchiveDir();
+    writeFileSync(join(archiveDir, uniqueName), rawBackup, "utf8");
+    return {
+      item: this.toStoredBackupFile(uniqueName),
+      renamedFrom: uniqueName === fileName ? undefined : fileName,
+    };
+  }
+
+  async downloadStoredBackup(fileName: string, mode: LocalUsersExportMode = "preserve-passwords") {
+    if (mode === "rotate-passcodes") {
+      const backup = await this.createBackup("rotate-passcodes");
+      return {
+        fileName: this.buildStoredBackupFilename(backup.exportedAt),
+        content: `${JSON.stringify(backup, null, 2)}\n`,
+      };
+    }
+
+    const filePath = this.getStoredBackupFilePath(fileName);
+    return {
+      fileName,
+      content: readFileSync(filePath, "utf8"),
+    };
+  }
+
+  async deleteStoredBackup(fileName: string) {
+    const filePath = this.getStoredBackupFilePath(fileName);
+    rmSync(filePath);
+    return {
+      name: fileName,
+      deleted: true as const,
+    };
+  }
+
+  async restoreStoredBackup(fileName: string, scope: BackupRestoreScope) {
+    const { backup } = this.readStoredBackupSnapshot(fileName);
+    return this.restoreBackup(scope, backup);
+  }
+
   private async assertReviewDataEmployeesExist(client: DbClient, reviewData: BackupReviewData) {
     const employeeIds = Array.from(
       new Set(
@@ -4132,6 +4300,7 @@ export class ApiStore {
           mode: "replace" as const,
           target: scope,
           restoredAt,
+          userMode: backup.users.mode,
           counts: {
             users: backup.users.itemCount,
             reviewPeriods: backup.reviewData.reviewPeriods.length,

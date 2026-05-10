@@ -461,6 +461,7 @@ export const backupSnapshotSchema = z.object({
 export const backupRestoreScopeSchema = z.enum(["all", "users", "questions", "reviews"]);
 export const backupRestoreModeSchema = z.literal("replace");
 export const backupScheduleSchema = z.enum(["1hr", "3hr", "6hr", "12hr", "daily", "weekly"]);
+export const backupStoredFileNameSchema = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
 export const backupRestoreTargetSchema = z
   .union([backupRestoreScopeSchema, z.literal("full")])
   .transform((value) => (value === "full" ? "all" : value));
@@ -489,6 +490,35 @@ export const updateBackupStatusRequestSchema = z.object({
   retentionCount: z.number().int().positive(),
 });
 
+export const backupStoredFileSchema = z.object({
+  name: backupStoredFileNameSchema,
+  storedAt: isoTimestampSchema,
+  sizeBytes: z.number().int().nonnegative(),
+});
+
+export const backupStoredFilesResponseSchema = z.object({
+  items: z.array(backupStoredFileSchema),
+});
+
+export const backupStoredFileResponseSchema = z.object({
+  item: backupStoredFileSchema,
+  renamedFrom: z.string().min(1).optional(),
+});
+
+export const backupStoredFileDeleteResponseSchema = z.object({
+  name: backupStoredFileNameSchema,
+  deleted: z.literal(true),
+});
+
+export const backupStoredFileDownloadQuerySchema = z.object({
+  mode: localUsersExportModeSchema.default("preserve-passwords"),
+});
+
+export const backupStoredFileRestoreRequestSchema = z.object({
+  mode: backupRestoreModeSchema.default("replace"),
+  target: backupRestoreTargetSchema.default("all"),
+});
+
 export const backupExportResponseSchema = backupSnapshotSchema;
 
 export const backupRestoreRequestSchema = z.object({
@@ -501,6 +531,7 @@ export const backupRestoreResponseSchema = z.object({
   mode: backupRestoreModeSchema,
   target: backupRestoreScopeSchema,
   restoredAt: isoTimestampSchema,
+  userMode: localUsersExportModeSchema,
   counts: z.object({
     users: z.number().int().nonnegative(),
     reviewPeriods: z.number().int().nonnegative(),
@@ -575,6 +606,13 @@ export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
 export type BackupExportQuery = z.infer<typeof backupExportQuerySchema>;
 export type BackupExportResponse = z.infer<typeof backupExportResponseSchema>;
 export type BackupSchedule = z.infer<typeof backupScheduleSchema>;
+export type BackupStoredFileName = z.infer<typeof backupStoredFileNameSchema>;
+export type BackupStoredFile = z.infer<typeof backupStoredFileSchema>;
+export type BackupStoredFilesResponse = z.infer<typeof backupStoredFilesResponseSchema>;
+export type BackupStoredFileResponse = z.infer<typeof backupStoredFileResponseSchema>;
+export type BackupStoredFileDeleteResponse = z.infer<typeof backupStoredFileDeleteResponseSchema>;
+export type BackupStoredFileDownloadQuery = z.infer<typeof backupStoredFileDownloadQuerySchema>;
+export type BackupStoredFileRestoreRequest = z.infer<typeof backupStoredFileRestoreRequestSchema>;
 export type BackupRestoreMode = z.infer<typeof backupRestoreModeSchema>;
 export type BackupRestoreScope = z.infer<typeof backupRestoreScopeSchema>;
 export type BackupRestoreTarget = z.infer<typeof backupRestoreTargetSchema>;

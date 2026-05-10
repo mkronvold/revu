@@ -6,6 +6,9 @@ import {
   acceptAssessment,
   apiBaseUrl,
   changePassword,
+  createStoredBackup,
+  deleteStoredBackup,
+  downloadStoredBackup,
   exportBackup,
   exportLocalUsers,
   getApiIndex,
@@ -14,14 +17,17 @@ import {
   getFoundation,
   importLocalUsers,
   listQuestionCategories,
+  listStoredBackups,
   listAssessments,
   listEmployees,
   login,
   reassignAssessment,
   restoreBackup,
+  restoreStoredBackup,
   reviewAssessment,
   submitAssessment,
   updateBackupStatus,
+  uploadStoredBackup,
   updateOwnProfile,
   updateQuestionCategories,
   updateWorkflowSettings,
@@ -384,7 +390,7 @@ describe('web api client', () => {
     );
   });
 
-  it('uses backup status, export, and multipart restore endpoints', async () => {
+  it('uses backup status, stored-backup, export, and restore endpoints', async () => {
     const { employees: _employees, ...reviewData } = foundationSnapshotExample;
     const backupStatusResponse = {
       automaticBackupsEnabled: true,
@@ -429,6 +435,7 @@ describe('web api client', () => {
       mode: 'replace' as const,
       target: 'reviews' as const,
       restoredAt: '2026-06-03T08:15:00.000Z',
+      userMode: 'preserve-passwords' as const,
       counts: {
         users: backupExportResponse.users.itemCount,
         reviewPeriods: reviewData.reviewPeriods.length,
@@ -436,6 +443,11 @@ describe('web api client', () => {
         assignments: reviewData.assignments.length,
         assessments: reviewData.assessments.length,
       },
+    };
+    const storedBackup = {
+      name: 'revu-backup-20260602T153000Z.json',
+      storedAt: '2026-06-02T15:30:00.000Z',
+      sizeBytes: 4096,
     };
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
@@ -451,6 +463,19 @@ describe('web api client', () => {
           { status: 200 },
         ),
       )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [storedBackup] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ item: storedBackup }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ item: storedBackup, renamedFrom: 'backup.json' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(backupExportResponse), {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="revu-backup-20260602T153000Z.json"',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ name: storedBackup.name, deleted: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(backupExportResponse), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }));
 
@@ -460,6 +485,15 @@ describe('web api client', () => {
       schedule: 'weekly',
       retentionCount: 6,
     });
+    await listStoredBackups('session-token');
+    await createStoredBackup('session-token');
+    await uploadStoredBackup('session-token', new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }));
+    await downloadStoredBackup('session-token', storedBackup.name);
+    await restoreStoredBackup('session-token', storedBackup.name, {
+      target: 'reviews',
+      mode: 'replace',
+    });
+    await deleteStoredBackup('session-token', storedBackup.name);
     await exportBackup('session-token');
     await restoreBackup('session-token', {
       file: new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }),
@@ -488,6 +522,68 @@ describe('web api client', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      `${apiBaseUrl}/admin/backups/files`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      `${apiBaseUrl}/admin/backups/files/create`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+
+    const uploadCall = fetchMock.mock.calls[4];
+    expect(uploadCall?.[0]).toBe(`${apiBaseUrl}/admin/backups/files/upload`);
+    expect(uploadCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(((uploadCall?.[1]?.body as FormData).get('file') as File | null)?.name).toBe('backup.json');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      `${apiBaseUrl}/admin/backups/files/${storedBackup.name}/download?mode=preserve-passwords`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      `${apiBaseUrl}/admin/backups/files/${storedBackup.name}/restore`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+          'content-type': 'application/json',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      8,
+      `${apiBaseUrl}/admin/backups/files/${storedBackup.name}`,
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      9,
       `${apiBaseUrl}/admin/backups/export?mode=preserve-passwords`,
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -496,7 +592,7 @@ describe('web api client', () => {
       }),
     );
 
-    const restoreCall = fetchMock.mock.calls[3];
+    const restoreCall = fetchMock.mock.calls[9];
     expect(restoreCall?.[0]).toBe(`${apiBaseUrl}/admin/backups/restore`);
     expect(restoreCall?.[1]).toEqual(
       expect.objectContaining({

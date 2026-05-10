@@ -3,21 +3,30 @@ import {
   backupExportResponseSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
+  backupStoredFileResponseSchema,
+  backupStoredFilesResponseSchema,
   employeesListResponseSchema,
   questionCategoriesListResponseSchema,
   questionSetsListResponseSchema,
   reviewPeriodsListResponseSchema,
 } from "@revu/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { buildApp } from "../../apps/api/src/app.js";
 import { getPool } from "../../apps/api/src/db.js";
 
 describe("backup and question category admin API", () => {
   const apps: Array<ReturnType<typeof buildApp>> = [];
+  const tempDirs: string[] = [];
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
+    tempDirs.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true }));
+    delete process.env.BACKUP_ARCHIVE_DIR;
+    delete process.env.BACKUP_STATUS_PATH;
   });
 
   async function createApp() {
@@ -92,6 +101,23 @@ describe("backup and question category admin API", () => {
     return backupRestoreResponseSchema.parse(response.json());
   }
 
+  function createUploadMultipartPayload(rawBackup: string, fileName: string) {
+    const boundary = `----revu-upload-${fileName}`;
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/json\r\n\r\n`,
+        "utf8",
+      ),
+      Buffer.from(rawBackup, "utf8"),
+      Buffer.from(`\r\n--${boundary}--\r\n`, "utf8"),
+    ]);
+
+    return {
+      body,
+      boundary,
+    };
+  }
+
   it("lists stored question categories and reports approved backup capabilities", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);
@@ -158,6 +184,92 @@ describe("backup and question category admin API", () => {
       },
     });
     expect(meResponse.statusCode).toBe(200);
+  });
+
+  it("creates, uploads, downloads, restores, and deletes stored backups", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "revu-backups-"));
+    tempDirs.push(tempRoot);
+    process.env.BACKUP_ARCHIVE_DIR = join(tempRoot, "archive");
+    process.env.BACKUP_STATUS_PATH = join(tempRoot, "config", "status.json");
+
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/backups/files/create",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(createResponse.statusCode).toBe(200);
+    const created = backupStoredFileResponseSchema.parse(createResponse.json()).item;
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/backups/files",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(backupStoredFilesResponseSchema.parse(listResponse.json()).items.map((item) => item.name)).toContain(created.name);
+
+    const downloadResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/backups/files/${created.name}/download?mode=preserve-passwords`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(downloadResponse.statusCode).toBe(200);
+    expect(downloadResponse.headers["content-disposition"]).toContain(created.name);
+    const storedBackup = backupExportResponseSchema.parse(downloadResponse.json());
+
+    const uploadPayload = createUploadMultipartPayload(JSON.stringify(storedBackup, null, 2), created.name);
+    const uploadResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/backups/files/upload",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+        "content-type": `multipart/form-data; boundary=${uploadPayload.boundary}`,
+      },
+      payload: uploadPayload.body,
+    });
+    expect(uploadResponse.statusCode).toBe(200);
+    const uploaded = backupStoredFileResponseSchema.parse(uploadResponse.json());
+    expect(uploaded.renamedFrom).toBe(created.name);
+    expect(uploaded.item.name).not.toBe(created.name);
+
+    const restoreResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/backups/files/${created.name}/restore`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        target: "reviews",
+        mode: "replace",
+      },
+    });
+    expect(restoreResponse.statusCode).toBe(200);
+    expect(backupRestoreResponseSchema.parse(restoreResponse.json())).toMatchObject({
+      target: "reviews",
+      userMode: storedBackup.users.mode,
+    });
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/backups/files/${uploaded.item.name}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toEqual({
+      name: uploaded.item.name,
+      deleted: true,
+    });
   });
 
   it("recreates the question category table on demand for older databases", async () => {

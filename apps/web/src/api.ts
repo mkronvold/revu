@@ -7,6 +7,10 @@ import {
   assessmentsListResponseSchema,
   assignmentResponseSchema,
   backupExportResponseSchema,
+  backupStoredFileDeleteResponseSchema,
+  backupStoredFileResponseSchema,
+  backupStoredFilesResponseSchema,
+  backupStoredFileRestoreRequestSchema,
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
   clearReadyAssessmentsResponseSchema,
@@ -61,6 +65,7 @@ import {
   type AuthUpdateProfileRequest,
   type BackupRestoreMode,
   type BackupRestoreScope,
+  type BackupStoredFileRestoreRequest,
   type CreateAssessmentRequest,
   type CreateAssignmentRequest,
   type CreateEmployeeRequest,
@@ -165,6 +170,46 @@ async function request<T>(
   }
 
   return schema.parse(payload);
+}
+
+async function requestText(path: string, init: RequestInit = {}) {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        ...(init.body && !isFormDataBody(init.body) ? { 'content-type': 'application/json' } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    notifyApiUnavailable();
+    throw error;
+  }
+
+  const rawText = await response.text();
+  if (!response.ok) {
+    if (shouldTreatResponseAsApiUnavailable(response.status)) {
+      notifyApiUnavailable();
+    }
+    const payload = rawText
+      ? (() => {
+          try {
+            return JSON.parse(rawText);
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const parsedError = errorResponseSchema.safeParse(payload);
+    throw new ApiClientError(parsedError.success ? parsedError.data.message : 'Request failed', response.status);
+  }
+
+  const filenameMatch = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/i);
+  return {
+    content: rawText,
+    filename: filenameMatch?.[1] ?? null,
+  };
 }
 
 export async function checkApiHealth() {
@@ -309,6 +354,61 @@ export function exportBackup(token: string, mode: LocalUsersExportMode = 'preser
     withSearchParams('/admin/backups/export', { mode }),
     backupExportResponseSchema,
     withAuthorization(token),
+  );
+}
+
+export function listStoredBackups(token: string) {
+  return request('/admin/backups/files', backupStoredFilesResponseSchema, withAuthorization(token));
+}
+
+export function createStoredBackup(token: string) {
+  return request(
+    '/admin/backups/files/create',
+    backupStoredFileResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+    }),
+  );
+}
+
+export function uploadStoredBackup(token: string, file: File) {
+  const formData = new FormData();
+  formData.set('file', file, file.name);
+  return request(
+    '/admin/backups/files/upload',
+    backupStoredFileResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: formData,
+    }),
+  );
+}
+
+export function downloadStoredBackup(token: string, fileName: string, mode: LocalUsersExportMode = 'preserve-passwords') {
+  return requestText(
+    withSearchParams(`/admin/backups/files/${encodeURIComponent(fileName)}/download`, { mode }),
+    withAuthorization(token),
+  );
+}
+
+export function restoreStoredBackup(token: string, fileName: string, payload: BackupStoredFileRestoreRequest) {
+  return request(
+    `/admin/backups/files/${encodeURIComponent(fileName)}/restore`,
+    backupRestoreResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: JSON.stringify(backupStoredFileRestoreRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function deleteStoredBackup(token: string, fileName: string) {
+  return request(
+    `/admin/backups/files/${encodeURIComponent(fileName)}`,
+    backupStoredFileDeleteResponseSchema,
+    withAuthorization(token, {
+      method: 'DELETE',
+    }),
   );
 }
 

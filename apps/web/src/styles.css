@@ -2062,6 +2062,22 @@ button.employee-row:focus-visible {
   min-width: 0;
 }
 
+.backup-list-dialog {
+  --modal-card-width: 56rem;
+}
+
+.backup-list-row {
+  align-items: flex-start;
+}
+
+.backup-list-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
