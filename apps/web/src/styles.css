@@ -797,18 +797,18 @@ button.employee-row:focus-visible {
 .employee-roster-table {
   --employee-roster-columns: minmax(0, 1.35fr) fit-content(7rem) minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr)
     fit-content(7rem);
+  --employee-roster-column-gap: 0.75rem;
   width: 100%;
   min-width: 0;
   display: grid;
   gap: 0.15rem;
 }
 
-.employee-roster-header,
-.employee-row-card {
+.employee-roster-header {
   display: grid;
   grid-template-columns: var(--employee-roster-columns);
   align-items: center;
-  gap: 0.65rem;
+  gap: var(--employee-roster-column-gap);
 }
 
 .employee-roster-header {
@@ -822,9 +822,8 @@ button.employee-row:focus-visible {
 }
 
 .employee-row-card {
-  padding: 0.2rem 0.35rem;
-  border: 1px solid transparent;
-  border-radius: 0.9rem;
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 
@@ -845,6 +844,8 @@ button.employee-row:focus-visible {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: var(--employee-roster-columns);
+  gap: var(--employee-roster-column-gap);
+  width: 100%;
 }
 
 .employee-row-summary .employee-row-cell {
