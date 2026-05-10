@@ -31,19 +31,23 @@ import {
   updateEmployee,
 } from './api';
 import {
+  buildAssignmentsExportNotice,
+  buildAssignmentsImportNotice,
   buildDeleteReviewPeriodConfirmation,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
+  buildAssignmentsImportPayload,
   buildLocalUsersImportPayload,
   buildLocalUsersImportPayloadFromFile,
   buildQuestionSetExportFilename,
   buildQuestionSetExportNotice,
-  buildExportNotice,
-  buildImportNotice,
+  buildQuestionSetImportNotice,
+  buildQuestionSetsImportPayload,
   copyQuestionSetToReviewPeriodInApi,
   deleteReviewPeriodFromApi,
   saveAssignmentToApi,
   saveQuestionSetToApi,
+  serializeAssignmentsTransfer,
   serializeLocalUsersTransfer,
   serializeQuestionSetsTransfer,
   toggleReviewPeriodArchiveInApi,
@@ -230,24 +234,33 @@ describe('review admin API orchestration', () => {
     expect(archiveReviewPeriod).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     expect(archiveResult.reviewPeriod.status).toBe('archived');
     expect(
-      buildExportNotice({
-        reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        resource: 'assignments',
+      buildAssignmentsExportNotice({
         format: 'csv',
-        exportedAt: '2026-06-01T12:00:00.000Z',
-        stub: true,
         itemCount: 4,
       }),
     ).toContain('CSV');
     expect(
-      buildImportNotice({
+      buildQuestionSetImportNotice({
         reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        resource: 'questionSets',
-        accepted: false,
-        status: 'not_implemented',
-        supportedFormats: ['json', 'csv'],
+        format: 'json',
+        importedAt: '2026-06-01T12:30:00.000Z',
+        itemCount: 2,
+        createdCount: 1,
+        updatedCount: 1,
+        items: foundationSnapshotExample.questionSets.slice(0, 2),
       }),
-    ).toContain('json, csv');
+    ).toContain('1 created, 1 updated');
+    expect(
+      buildAssignmentsImportNotice({
+        reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        format: 'csv',
+        importedAt: '2026-06-01T12:45:00.000Z',
+        itemCount: 1,
+        createdCount: 0,
+        updatedCount: 1,
+        items: foundationSnapshotExample.assignments.slice(0, 1),
+      }),
+    ).toContain('1 updated');
   });
 
   it('serializes and parses local user transfer payloads for import-ready reuse', () => {
@@ -287,6 +300,51 @@ describe('review admin API orchestration', () => {
     expect(buildLocalUsersImportPayload('csv', csvPayload)).toEqual({
       format: 'csv',
       items: exportResponse.items,
+    });
+  });
+
+  it('serializes and parses question-set and assignment transfers for download/upload', () => {
+    const questionSet = foundationSnapshotExample.questionSets.find((item) => item.questions.length > 0)!;
+    const questionSetResponse = {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      format: 'csv' as const,
+      exportedAt: '2026-06-01T12:00:00.000Z',
+      itemCount: 1,
+      items: [questionSet],
+    };
+    expect(serializeQuestionSetsTransfer(questionSetResponse)).toContain('questionSetId');
+    expect(
+      buildQuestionSetsImportPayload(
+        'csv',
+        serializeQuestionSetsTransfer(questionSetResponse),
+      ).items[0],
+    ).toMatchObject({
+      id: questionSet.id,
+      title: questionSet.title,
+    });
+
+    const assignmentResponse = {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      format: 'csv' as const,
+      exportedAt: '2026-06-01T12:00:00.000Z',
+      itemCount: 1,
+      items: [
+        {
+          assignmentId: foundationSnapshotExample.assignments[0]!.id,
+          employeeUsername: 'elliot.employee',
+          employeeFullName: 'Elliot Employee',
+          managerUsername: 'manny.manager',
+          managerFullName: 'Manny Manager',
+          assessorUsername: 'pat.peer',
+          assessorFullName: 'Pat Peer',
+        },
+      ],
+    };
+    expect(serializeAssignmentsTransfer(assignmentResponse)).toContain('employeeUsername');
+    expect(buildAssignmentsImportPayload('csv', serializeAssignmentsTransfer(assignmentResponse)).items[0]).toMatchObject({
+      assignmentId: foundationSnapshotExample.assignments[0]!.id,
+      employeeUsername: 'elliot.employee',
+      assessorUsername: 'pat.peer',
     });
   });
 

@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs";
 import {
   assessmentsListResponseSchema,
   assignmentResponseSchema,
+  assignmentsExportResponseSchema,
+  assignmentsImportResponseSchema,
   authLoginResponseSchema,
   clearReadyAssessmentsResponseSchema,
   deleteReviewPeriodResponseSchema,
   employeeResponseSchema,
-  exportStubResponseSchema,
   foundationSnapshotExample,
-  importStubResponseSchema,
+  questionSetsImportResponseSchema,
   questionSetsExportResponseSchema,
   questionSetResponseSchema,
   questionSetsListResponseSchema,
@@ -263,10 +264,13 @@ describe("review periods, question sets, and assignments admin API", () => {
       },
       payload: {
         format: "csv",
+        items: questionSetExport.items,
       },
     });
     expect(questionSetImportResponse.statusCode).toBe(200);
-    expect(importStubResponseSchema.parse(questionSetImportResponse.json()).status).toBe("not_implemented");
+    const questionSetImport = questionSetsImportResponseSchema.parse(questionSetImportResponse.json());
+    expect(questionSetImport.itemCount).toBe(2);
+    expect(questionSetImport.updatedCount).toBe(2);
 
     const assignmentExportResponse = await app.inject({
       method: "GET",
@@ -276,7 +280,29 @@ describe("review periods, question sets, and assignments admin API", () => {
       },
     });
     expect(assignmentExportResponse.statusCode).toBe(200);
-    expect(exportStubResponseSchema.parse(assignmentExportResponse.json()).resource).toBe("assignments");
+    const assignmentExport = assignmentsExportResponseSchema.parse(assignmentExportResponse.json());
+    expect(assignmentExport.itemCount).toBe(1);
+    expect(assignmentExport.items[0]).toMatchObject({
+      employeeUsername: "elliot.employee",
+      managerUsername: "manny.manager",
+      assessorUsername: "ada.admin",
+    });
+
+    const assignmentImportResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}/assignments/import`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        format: "csv",
+        items: assignmentExport.items,
+      },
+    });
+    expect(assignmentImportResponse.statusCode).toBe(200);
+    const assignmentImport = assignmentsImportResponseSchema.parse(assignmentImportResponse.json());
+    expect(assignmentImport.itemCount).toBe(1);
+    expect(assignmentImport.updatedCount).toBe(1);
   });
 
   it("preserves referenced question ids on update and blocks removing questions with recorded responses", async () => {

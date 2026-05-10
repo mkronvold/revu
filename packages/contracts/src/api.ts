@@ -396,12 +396,70 @@ export const localUsersExportResponseSchema = z.object({
   items: z.array(localUserTransferItemSchema),
 });
 
+export const questionSetTransferItemSchema = z.object({
+  id: idSchema.optional(),
+  target: questionSetSchema.shape.target,
+  status: questionSetSchema.shape.status,
+  title: z.string().min(1),
+  headerMarkdown: z.string(),
+  footerMarkdown: z.string(),
+  questions: z.array(createQuestionInputSchema).min(1),
+});
+
 export const questionSetsExportResponseSchema = z.object({
   reviewPeriodId: idSchema,
   format: exportFormatSchema,
   exportedAt: isoTimestampSchema,
   itemCount: z.number().int().nonnegative(),
   items: z.array(questionSetSchema),
+});
+
+export const questionSetsImportRequestSchema = z.object({
+  format: exportFormatSchema,
+  items: z.array(questionSetTransferItemSchema).min(1),
+});
+
+export const questionSetsImportResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  format: exportFormatSchema,
+  importedAt: isoTimestampSchema,
+  itemCount: z.number().int().positive(),
+  createdCount: z.number().int().nonnegative(),
+  updatedCount: z.number().int().nonnegative(),
+  items: z.array(questionSetSchema),
+});
+
+export const assignmentTransferItemSchema = z.object({
+  assignmentId: idSchema.optional(),
+  employeeUsername: usernameSchema,
+  employeeFullName: z.string(),
+  managerUsername: usernameSchema.nullable(),
+  managerFullName: z.string().nullable(),
+  assessorUsername: usernameSchema,
+  assessorFullName: z.string(),
+});
+
+export const assignmentsExportResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  format: exportFormatSchema,
+  exportedAt: isoTimestampSchema,
+  itemCount: z.number().int().nonnegative(),
+  items: z.array(assignmentTransferItemSchema),
+});
+
+export const assignmentsImportRequestSchema = z.object({
+  format: exportFormatSchema,
+  items: z.array(assignmentTransferItemSchema).min(1),
+});
+
+export const assignmentsImportResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  format: exportFormatSchema,
+  importedAt: isoTimestampSchema,
+  itemCount: z.number().int().positive(),
+  createdCount: z.number().int().nonnegative(),
+  updatedCount: z.number().int().nonnegative(),
+  items: z.array(assignmentSchema),
 });
 
 export const localUsersImportRequestSchema = z.object({
@@ -611,7 +669,14 @@ export type ReviewAssessmentRequest = z.infer<typeof reviewAssessmentRequestSche
 export type ReassignAssessmentRequest = z.infer<typeof reassignAssessmentRequestSchema>;
 export type AssessmentReassignmentResponse = z.infer<typeof assessmentReassignmentResponseSchema>;
 export type LocalUsersExportResponse = z.infer<typeof localUsersExportResponseSchema>;
+export type QuestionSetTransferItem = z.infer<typeof questionSetTransferItemSchema>;
 export type QuestionSetsExportResponse = z.infer<typeof questionSetsExportResponseSchema>;
+export type QuestionSetsImportRequest = z.infer<typeof questionSetsImportRequestSchema>;
+export type QuestionSetsImportResponse = z.infer<typeof questionSetsImportResponseSchema>;
+export type AssignmentTransferItem = z.infer<typeof assignmentTransferItemSchema>;
+export type AssignmentsExportResponse = z.infer<typeof assignmentsExportResponseSchema>;
+export type AssignmentsImportRequest = z.infer<typeof assignmentsImportRequestSchema>;
+export type AssignmentsImportResponse = z.infer<typeof assignmentsImportResponseSchema>;
 export type LocalUsersImportRequest = z.infer<typeof localUsersImportRequestSchema>;
 export type LocalUsersImportResponse = z.infer<typeof localUsersImportResponseSchema>;
 export type ExportStubResponse = z.infer<typeof exportStubResponseSchema>;

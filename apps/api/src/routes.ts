@@ -38,22 +38,24 @@ import {
   deleteEmployeeResponseSchema,
   deleteReviewPeriodResponseSchema,
   domainRulesExample,
-    employeeResponseSchema,
-    employeesListResponseSchema,
-    exportFormatSchema,
-    exportStubResponseSchema,
-    foundationSnapshotSchema,
+  assignmentsExportResponseSchema,
+  assignmentsImportRequestSchema,
+  assignmentsImportResponseSchema,
+  employeeResponseSchema,
+  employeesListResponseSchema,
+  exportFormatSchema,
+  foundationSnapshotSchema,
   idSchema,
-  importStubRequestSchema,
-  importStubResponseSchema,
   localUsersExportResponseSchema,
   localUsersExportModeSchema,
   localUsersImportRequestSchema,
   localUsersImportResponseSchema,
-    questionCategoriesListResponseSchema,
-    questionSetsExportResponseSchema,
-    questionSetResponseSchema,
-    questionSetsListResponseSchema,
+  questionCategoriesListResponseSchema,
+  questionSetsExportResponseSchema,
+  questionSetsImportRequestSchema,
+  questionSetsImportResponseSchema,
+  questionSetResponseSchema,
+  questionSetsListResponseSchema,
   reassignAssessmentRequestSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
@@ -873,8 +875,8 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       const session = await requireSession(request, store);
       requirePermissions(session, ["questionSets:import"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      parseWithSchema(importStubRequestSchema, request.body ?? {});
-      return importStubResponseSchema.parse(await store.importQuestionSetsStub(reviewPeriodId));
+      const body = questionSetsImportRequestSchema.parse(request.body ?? {});
+      return questionSetsImportResponseSchema.parse(await store.importQuestionSets(reviewPeriodId, body.format, body.items));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -948,7 +950,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["assignments:export"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return exportStubResponseSchema.parse(await store.exportAssignments(reviewPeriodId, query.format ?? "json"));
+      return assignmentsExportResponseSchema.parse(await store.exportAssignments(reviewPeriodId, query.format ?? "json"));
     } catch (error) {
       return sendError(reply, error);
     }
@@ -959,8 +961,8 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       const session = await requireSession(request, store);
       requirePermissions(session, ["assignments:import"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      parseWithSchema(importStubRequestSchema, request.body ?? {});
-      return importStubResponseSchema.parse(await store.importAssignmentsStub(reviewPeriodId));
+      const body = assignmentsImportRequestSchema.parse(request.body ?? {});
+      return assignmentsImportResponseSchema.parse(await store.importAssignments(reviewPeriodId, body.format, body.items));
     } catch (error) {
       return sendError(reply, error);
     }

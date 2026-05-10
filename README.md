@@ -9,7 +9,7 @@ See `LCM.md` for the lifecycle-management model covering CVE mitigation, schedul
 - API and web foundations are in place for auth, employee admin, review periods, question sets, assignments, assessments, and manager/admin review actions.
 - The API currently serves seeded in-memory demo data for local workflow development. Restarting the API resets that data.
 - PostgreSQL migrations in `prisma/migrations/` define the intended schema and can be applied locally for schema validation and future persistence work.
-- Question-set exports now return real JSON/CSV payloads for download, while assignment exports still return metadata stubs; matching import routes acknowledge supported formats but are still `not_implemented`.
+- Local user, question-set, and assignment transfers now support real JSON/CSV downloads plus browser-selected JSON/CSV imports from the File Management admin UI.
 - Local user import/export is available from the employee admin UI. Exporting local users rotates every exported account to a generated one-time passcode and immediately signs those users out.
 - GitHub Actions publishes deployment images to `ghcr.io/mkronvold/revu-api` and `ghcr.io/mkronvold/revu-web`.
 
@@ -233,8 +233,10 @@ If a user signs in with a generated reset password or exported one-time passcode
 
 Current behavior:
 
-- export endpoints return typed stub metadata describing what would be exported
-- import endpoints return `status: "not_implemented"`
+- question-set and assignment exports return import-ready JSON/CSV payloads for the selected review period
+- question-set imports upsert sets in the selected review period by target plus title and preserve imported question ordering/content
+- assignment exports include employee, manager, and assessor usernames so imports can resolve relationships across environments
+- assignment imports upsert rows by employee username for the selected review period and keep employee manager/peer-reviewer relationships aligned
 - local user exports return import-ready payloads plus generated one-time passcodes
 - local user imports upsert users, preserve the supplied `passwordResetRequired` flag, and invalidate sessions for imported accounts
-- the Employees admin screen exports local users as direct `.json` or `.csv` downloads and imports from a browser-selected file with JSON/CSV autodetection
+- the File Management admin screen exports direct `.json` or `.csv` downloads and imports from a browser-selected file for local users, question sets, and assignments

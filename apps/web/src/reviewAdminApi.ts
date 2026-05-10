@@ -1,18 +1,30 @@
 import type {
   Assignment,
+  AssignmentsExportResponse,
+  AssignmentsImportRequest,
+  AssignmentsImportResponse,
+  AssignmentTransferItem,
   Employee,
   LocalUsersExportMode,
   LocalUsersExportResponse,
   LocalUsersImportRequest,
   LocalUsersImportResponse,
   LocalUserTransferItem,
-  ExportStubResponse,
-  ImportStubResponse,
   QuestionSet,
+  QuestionSetsImportRequest,
+  QuestionSetsImportResponse,
+  QuestionSetTransferItem,
   QuestionSetsExportResponse,
   ReviewPeriod,
 } from '@revu/contracts';
-import { localUsersImportRequestSchema, localUserTransferItemSchema } from '@revu/contracts';
+import {
+  assignmentTransferItemSchema,
+  assignmentsImportRequestSchema,
+  localUsersImportRequestSchema,
+  localUserTransferItemSchema,
+  questionSetTransferItemSchema,
+  questionSetsImportRequestSchema,
+} from '@revu/contracts';
 
 import {
   activateQuestionSet,
@@ -70,6 +82,16 @@ const questionSetExportHeaders = [
   'questionType',
   'questionCategory',
   'questionPrompt',
+] as const;
+const assignmentExportHeaders = [
+  'reviewPeriodId',
+  'assignmentId',
+  'employeeUsername',
+  'employeeFullName',
+  'managerUsername',
+  'managerFullName',
+  'assessorUsername',
+  'assessorFullName',
 ] as const;
 
 function escapeCsvCell(value: string) {
@@ -226,6 +248,194 @@ function parseLocalUsersJson(raw: string, preferredFormat: TransferFormat): Loca
   return localUsersImportRequestSchema.parse({
     format: 'format' in candidate && candidate.format === 'csv' ? 'csv' : preferredFormat,
     items: candidate.items,
+  });
+}
+
+function parseJsonCandidate(raw: string, invalidMessage: string) {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(invalidMessage);
+  }
+}
+
+function normalizeQuestionSetTransferItem(item: unknown): QuestionSetTransferItem {
+  const draft = item as Partial<QuestionSet> & {
+    questions?: Array<{
+      id?: string;
+      order?: number;
+      type?: QuestionSet['questions'][number]['type'];
+      category?: string | null;
+      prompt?: string;
+    }>;
+  };
+
+  return questionSetTransferItemSchema.parse({
+    id: typeof draft.id === 'string' ? draft.id : undefined,
+    target: draft.target,
+    status: draft.status,
+    title: draft.title,
+    headerMarkdown: draft.headerMarkdown ?? '',
+    footerMarkdown: draft.footerMarkdown ?? '',
+    questions: Array.isArray(draft.questions)
+      ? draft.questions.map((question) => ({
+          id: typeof question.id === 'string' ? question.id : undefined,
+          order: question.order,
+          type: question.type,
+          category: question.category ?? null,
+          prompt: question.prompt,
+        }))
+      : [],
+  });
+}
+
+function parseQuestionSetsJson(raw: string, preferredFormat: TransferFormat): QuestionSetsImportRequest {
+  const parsed = parseJsonCandidate(raw, 'Paste valid JSON before importing question sets.');
+  const candidate =
+    Array.isArray(parsed) ? { format: preferredFormat, items: parsed } : parsed && typeof parsed === 'object' ? parsed : null;
+
+  if (!candidate || !('items' in candidate) || !Array.isArray(candidate.items)) {
+    throw new Error('JSON imports must be an array of question sets or an object with an items array.');
+  }
+
+  return questionSetsImportRequestSchema.parse({
+    format: 'format' in candidate && candidate.format === 'csv' ? 'csv' : preferredFormat,
+    items: candidate.items.map(normalizeQuestionSetTransferItem),
+  });
+}
+
+function parseQuestionSetsCsv(raw: string): QuestionSetsImportRequest {
+  const rows = parseCsvRows(raw.trim());
+  if (rows.length < 2) {
+    throw new Error('Paste a CSV export with a header row and at least one question set.');
+  }
+
+  const [headerRow, ...dataRows] = rows;
+  const headers = new Map(headerRow?.map((header, index) => [header.trim(), index]));
+  for (const header of ['target', 'status', 'title', 'questionOrder', 'questionType', 'questionPrompt']) {
+    if (!headers.has(header)) {
+      throw new Error(`CSV imports must include the ${header} column.`);
+    }
+  }
+
+  type QuestionSetTransferCsvDraft = {
+    id?: string;
+    target: string;
+    status: string;
+    title: string;
+    headerMarkdown: string;
+    footerMarkdown: string;
+    questions: Array<{
+      id?: string;
+      order: number;
+      type: QuestionSet['questions'][number]['type'];
+      category: string | null;
+      prompt: string;
+    }>;
+  };
+
+  const items: QuestionSetTransferCsvDraft[] = [];
+  const itemsByKey = new Map<string, QuestionSetTransferCsvDraft>();
+
+  for (const row of dataRows) {
+    const questionSetId = row[headers.get('questionSetId') ?? -1]?.trim() || '';
+    const target = row[headers.get('target') ?? -1]?.trim();
+    const title = row[headers.get('title') ?? -1]?.trim();
+    const questionSetKey = questionSetId || `${target ?? ''}\u0000${title ?? ''}`;
+    const existing =
+      itemsByKey.get(questionSetKey) ??
+      {
+        id: questionSetId || undefined,
+        target: target ?? '',
+        status: row[headers.get('status') ?? -1]?.trim() ?? '',
+        title: title ?? '',
+        headerMarkdown: row[headers.get('headerMarkdown') ?? -1] ?? '',
+        footerMarkdown: row[headers.get('footerMarkdown') ?? -1] ?? '',
+        questions: [],
+      };
+
+    const prompt = row[headers.get('questionPrompt') ?? -1] ?? '';
+    const type = row[headers.get('questionType') ?? -1]?.trim() ?? '';
+    const orderCell = row[headers.get('questionOrder') ?? -1]?.trim() ?? '';
+    const questionCellHasData = prompt.trim().length > 0 || type.length > 0 || orderCell.length > 0;
+
+    if (questionCellHasData) {
+      existing.questions.push({
+        id: row[headers.get('questionId') ?? -1]?.trim() || undefined,
+        order: Number.parseInt(orderCell, 10),
+        type: row[headers.get('questionType') ?? -1]?.trim() as QuestionSet['questions'][number]['type'],
+        category: row[headers.get('questionCategory') ?? -1]?.trim() || null,
+        prompt,
+      });
+    }
+
+    if (!itemsByKey.has(questionSetKey)) {
+      itemsByKey.set(questionSetKey, existing);
+      items.push(existing);
+    }
+  }
+
+  return questionSetsImportRequestSchema.parse({
+    format: 'csv',
+    items,
+  });
+}
+
+function normalizeAssignmentTransferItem(item: unknown): AssignmentTransferItem {
+  const draft = item as Partial<AssignmentTransferItem>;
+  return assignmentTransferItemSchema.parse({
+    assignmentId: typeof draft.assignmentId === 'string' ? draft.assignmentId : undefined,
+    employeeUsername: draft.employeeUsername,
+    employeeFullName: draft.employeeFullName ?? '',
+    managerUsername: draft.managerUsername ?? null,
+    managerFullName: draft.managerFullName ?? null,
+    assessorUsername: draft.assessorUsername,
+    assessorFullName: draft.assessorFullName ?? '',
+  });
+}
+
+function parseAssignmentsJson(raw: string, preferredFormat: TransferFormat): AssignmentsImportRequest {
+  const parsed = parseJsonCandidate(raw, 'Paste valid JSON before importing assignments.');
+  const candidate =
+    Array.isArray(parsed) ? { format: preferredFormat, items: parsed } : parsed && typeof parsed === 'object' ? parsed : null;
+
+  if (!candidate || !('items' in candidate) || !Array.isArray(candidate.items)) {
+    throw new Error('JSON imports must be an array of assignments or an object with an items array.');
+  }
+
+  return assignmentsImportRequestSchema.parse({
+    format: 'format' in candidate && candidate.format === 'csv' ? 'csv' : preferredFormat,
+    items: candidate.items.map(normalizeAssignmentTransferItem),
+  });
+}
+
+function parseAssignmentsCsv(raw: string): AssignmentsImportRequest {
+  const rows = parseCsvRows(raw.trim());
+  if (rows.length < 2) {
+    throw new Error('Paste a CSV export with a header row and at least one assignment.');
+  }
+
+  const [headerRow, ...dataRows] = rows;
+  const headers = new Map(headerRow?.map((header, index) => [header.trim(), index]));
+  for (const header of ['employeeUsername', 'assessorUsername']) {
+    if (!headers.has(header)) {
+      throw new Error(`CSV imports must include the ${header} column.`);
+    }
+  }
+
+  return assignmentsImportRequestSchema.parse({
+    format: 'csv',
+    items: dataRows.map((row) =>
+      assignmentTransferItemSchema.parse({
+        assignmentId: row[headers.get('assignmentId') ?? -1]?.trim() || undefined,
+        employeeUsername: row[headers.get('employeeUsername') ?? -1]?.trim(),
+        employeeFullName: row[headers.get('employeeFullName') ?? -1]?.trim() || '',
+        managerUsername: row[headers.get('managerUsername') ?? -1]?.trim() || null,
+        managerFullName: row[headers.get('managerFullName') ?? -1]?.trim() || null,
+        assessorUsername: row[headers.get('assessorUsername') ?? -1]?.trim(),
+        assessorFullName: row[headers.get('assessorFullName') ?? -1]?.trim() || '',
+      }),
+    ),
   });
 }
 
@@ -510,16 +720,16 @@ export async function exportQuestionSetsFromApi(token: string, reviewPeriodId: s
   return exportQuestionSets(token, reviewPeriodId, format);
 }
 
-export async function importQuestionSetsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
-  return importQuestionSets(token, reviewPeriodId, { format });
+export async function importQuestionSetsFromApi(token: string, reviewPeriodId: string, payload: QuestionSetsImportRequest) {
+  return importQuestionSets(token, reviewPeriodId, payload);
 }
 
 export async function exportAssignmentsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
   return exportAssignments(token, reviewPeriodId, format);
 }
 
-export async function importAssignmentsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
-  return importAssignments(token, reviewPeriodId, { format });
+export async function importAssignmentsFromApi(token: string, reviewPeriodId: string, payload: AssignmentsImportRequest) {
+  return importAssignments(token, reviewPeriodId, payload);
 }
 
 export async function exportLocalUsersFromApi(token: string, format: TransferFormat, mode: LocalUsersExportMode) {
@@ -579,12 +789,44 @@ export function serializeQuestionSetsTransfer(response: QuestionSetsExportRespon
   return JSON.stringify(response, null, 2);
 }
 
+export function serializeAssignmentsTransfer(response: AssignmentsExportResponse) {
+  if (response.format === 'csv') {
+    return [
+      assignmentExportHeaders.join(','),
+      ...response.items.map((item) =>
+        [
+          response.reviewPeriodId,
+          item.assignmentId ?? '',
+          item.employeeUsername,
+          item.employeeFullName,
+          item.managerUsername ?? '',
+          item.managerFullName ?? '',
+          item.assessorUsername,
+          item.assessorFullName,
+        ]
+          .map(escapeCsvCell)
+          .join(','),
+      ),
+    ].join('\n');
+  }
+
+  return JSON.stringify(response, null, 2);
+}
+
 export function buildQuestionSetExportFilename(
   reviewPeriod: Pick<ReviewPeriod, 'key' | 'label'>,
   response: Pick<QuestionSetsExportResponse, 'format' | 'exportedAt'>,
 ) {
   const baseLabel = sanitizeFileLabel(reviewPeriod.key || reviewPeriod.label);
   return `${baseLabel}-question-sets-${compactTimestamp(response.exportedAt)}.${response.format}`;
+}
+
+export function buildAssignmentsExportFilename(
+  reviewPeriod: Pick<ReviewPeriod, 'key' | 'label'>,
+  response: Pick<AssignmentsExportResponse, 'format' | 'exportedAt'>,
+) {
+  const baseLabel = sanitizeFileLabel(reviewPeriod.key || reviewPeriod.label);
+  return `${baseLabel}-assignments-${compactTimestamp(response.exportedAt)}.${response.format}`;
 }
 
 export function buildLocalUsersImportPayload(format: TransferFormat, raw: string) {
@@ -597,16 +839,28 @@ export function buildLocalUsersImportPayloadFromFile(raw: string) {
   return looksLikeJson ? parseLocalUsersJson(raw, 'json') : parseLocalUsersCsv(raw);
 }
 
-export function buildExportNotice(response: ExportStubResponse) {
-  return `Prepared ${response.resource} ${response.format.toUpperCase()} export stub for ${response.itemCount} items.`;
+export function buildQuestionSetsImportPayload(format: TransferFormat, raw: string) {
+  return format === 'csv' ? parseQuestionSetsCsv(raw) : parseQuestionSetsJson(raw, format);
 }
 
-export function buildImportNotice(response: ImportStubResponse) {
-  return `${response.resource} import is still a stub. Supported formats: ${response.supportedFormats.join(', ')}.`;
+export function buildAssignmentsImportPayload(format: TransferFormat, raw: string) {
+  return format === 'csv' ? parseAssignmentsCsv(raw) : parseAssignmentsJson(raw, format);
 }
 
 export function buildQuestionSetExportNotice(response: Pick<QuestionSetsExportResponse, 'format' | 'itemCount'>) {
   return `Exported ${response.itemCount} question ${response.itemCount === 1 ? 'set' : 'sets'} as ${response.format.toUpperCase()}.`;
+}
+
+export function buildQuestionSetImportNotice(response: QuestionSetsImportResponse) {
+  return `Imported ${response.itemCount} question ${response.itemCount === 1 ? 'set' : 'sets'} (${response.createdCount} created, ${response.updatedCount} updated).`;
+}
+
+export function buildAssignmentsExportNotice(response: Pick<AssignmentsExportResponse, 'format' | 'itemCount'>) {
+  return `Exported ${response.itemCount} assignment ${response.itemCount === 1 ? 'row' : 'rows'} as ${response.format.toUpperCase()}.`;
+}
+
+export function buildAssignmentsImportNotice(response: AssignmentsImportResponse) {
+  return `Imported ${response.itemCount} assignment ${response.itemCount === 1 ? 'row' : 'rows'} (${response.createdCount} created, ${response.updatedCount} updated).`;
 }
 
 export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount' | 'mode'>) {

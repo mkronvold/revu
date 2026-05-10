@@ -6,6 +6,9 @@ import {
   assessmentsListQuerySchema,
   assessmentsListResponseSchema,
   assignmentResponseSchema,
+  assignmentsExportResponseSchema,
+  assignmentsImportRequestSchema,
+  assignmentsImportResponseSchema,
   backupExportResponseSchema,
   backupStoredFileDeleteResponseSchema,
   backupStoredFileResponseSchema,
@@ -33,16 +36,15 @@ import {
   deleteReviewPeriodResponseSchema,
   employeeResponseSchema,
   employeesListResponseSchema,
-  exportStubResponseSchema,
   foundationSnapshotSchema,
-  importStubRequestSchema,
-  importStubResponseSchema,
-    localUsersExportResponseSchema,
-    localUsersImportRequestSchema,
-    localUsersImportResponseSchema,
-    questionCategoriesListResponseSchema,
-    questionSetsExportResponseSchema,
-    questionSetResponseSchema,
+  localUsersExportResponseSchema,
+  localUsersImportRequestSchema,
+  localUsersImportResponseSchema,
+  questionCategoriesListResponseSchema,
+  questionSetsExportResponseSchema,
+  questionSetsImportRequestSchema,
+  questionSetsImportResponseSchema,
+  questionSetResponseSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
   resetEmployeePasswordResponseSchema,
@@ -73,9 +75,10 @@ import {
   type CreateEmployeeRequest,
   type CreateQuestionSetRequest,
   type CreateReviewPeriodRequest,
-  type ImportStubRequest,
+  type AssignmentsImportRequest,
   type LocalUsersExportMode,
   type LocalUsersImportRequest,
+  type QuestionSetsImportRequest,
   type RejectAssessmentToDraftRequest,
   type ReassignAssessmentRequest,
   type ResetEmployeePasswordRequest,
@@ -614,13 +617,13 @@ export function exportQuestionSets(token: string, reviewPeriodId: string, format
   );
 }
 
-export function importQuestionSets(token: string, reviewPeriodId: string, payload: ImportStubRequest) {
+export function importQuestionSets(token: string, reviewPeriodId: string, payload: QuestionSetsImportRequest) {
   return request(
     `/review-periods/${reviewPeriodId}/question-sets/import`,
-    importStubResponseSchema,
+    questionSetsImportResponseSchema,
     withAuthorization(token, {
       method: 'POST',
-      body: JSON.stringify(importStubRequestSchema.parse(payload)),
+      body: JSON.stringify(questionSetsImportRequestSchema.parse(payload)),
     }),
   );
 }
@@ -675,18 +678,18 @@ export function deleteAssignment(token: string, assignmentId: string) {
 export function exportAssignments(token: string, reviewPeriodId: string, format: ExportFormat) {
   return request(
     withSearchParams(`/review-periods/${reviewPeriodId}/assignments/export`, { format }),
-    exportStubResponseSchema,
+    assignmentsExportResponseSchema,
     withAuthorization(token),
   );
 }
 
-export function importAssignments(token: string, reviewPeriodId: string, payload: ImportStubRequest) {
+export function importAssignments(token: string, reviewPeriodId: string, payload: AssignmentsImportRequest) {
   return request(
     `/review-periods/${reviewPeriodId}/assignments/import`,
-    importStubResponseSchema,
+    assignmentsImportResponseSchema,
     withAuthorization(token, {
       method: 'POST',
-      body: JSON.stringify(importStubRequestSchema.parse(payload)),
+      body: JSON.stringify(assignmentsImportRequestSchema.parse(payload)),
     }),
   );
 }

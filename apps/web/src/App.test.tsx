@@ -91,12 +91,14 @@ import {
   deleteReviewPeriod,
   deleteStoredBackup,
   downloadStoredBackup,
+  exportAssignments,
   exportLocalUsers,
   exportQuestionSets,
   getApiIndex,
   getBackupStatus,
   getEmployee,
   getFoundation,
+  importAssignments,
   importLocalUsers,
   importQuestionSets,
   listEmployees,
@@ -1605,10 +1607,38 @@ describe('file management screen', () => {
     });
     vi.mocked(importQuestionSets).mockResolvedValue({
       reviewPeriodId: selectedReviewPeriod.id,
-      resource: 'questionSets',
-      accepted: false,
-      status: 'not_implemented',
-      supportedFormats: ['json', 'csv'],
+      format: 'csv',
+      importedAt: '2026-06-03T08:05:00.000Z',
+      itemCount: 2,
+      createdCount: 0,
+      updatedCount: 2,
+      items: questionSnapshot.questionSets.filter((item) => item.reviewPeriodId === selectedReviewPeriod.id),
+    });
+    vi.mocked(exportAssignments).mockResolvedValue({
+      reviewPeriodId: selectedReviewPeriod.id,
+      format: 'json',
+      exportedAt: '2026-06-03T08:06:00.000Z',
+      itemCount: 1,
+      items: [
+        {
+          assignmentId: foundationSnapshotExample.assignments[0]!.id,
+          employeeUsername: 'elliot.employee',
+          employeeFullName: 'Elliot Employee',
+          managerUsername: 'manny.manager',
+          managerFullName: 'Manny Manager',
+          assessorUsername: 'pat.peer',
+          assessorFullName: 'Pat Peer',
+        },
+      ],
+    });
+    vi.mocked(importAssignments).mockResolvedValue({
+      reviewPeriodId: selectedReviewPeriod.id,
+      format: 'csv',
+      importedAt: '2026-06-03T08:07:00.000Z',
+      itemCount: 1,
+      createdCount: 0,
+      updatedCount: 1,
+      items: [foundationSnapshotExample.assignments[0]!],
     });
     vi.mocked(downloadStoredBackup).mockResolvedValue({
       filename: currentStoredBackups[0]!.name,
@@ -1870,8 +1900,10 @@ describe('file management screen', () => {
     const questionImportButton = Array.from(questionTransferCard?.querySelectorAll('button') ?? []).find(
       (button) => button.textContent === 'Import CSV',
     );
+    const questionImportInput = questionTransferCard?.querySelector('input[type="file"]') as HTMLInputElement | null;
     expect(questionExportButton).toBeTruthy();
     expect(questionImportButton).toBeTruthy();
+    expect(questionImportInput).toBeTruthy();
 
     await act(async () => {
       questionExportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1887,7 +1919,39 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    expect(importQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, { format: 'csv' });
+    const importedQuestionSetsFile = new File(
+      [
+        [
+          'reviewPeriodId,questionSetId,target,status,title,headerMarkdown,footerMarkdown,questionId,questionOrder,questionType,questionCategory,questionPrompt',
+          `${selectedReviewPeriod.id},aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa,self,active,2026 Self Questions,Heading,Footer,bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb,1,subjective,Impact,What impact did you have?`,
+        ].join('\n'),
+      ],
+      'question-sets.csv',
+      { type: 'text/csv' },
+    );
+    Object.defineProperty(questionImportInput!, 'files', {
+      configurable: true,
+      value: [importedQuestionSetsFile],
+    });
+
+    await act(async () => {
+      questionImportInput?.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(importQuestionSets).mock.calls.length === 1);
+    expect(importQuestionSets).toHaveBeenCalledWith(
+      'session-token',
+      selectedReviewPeriod.id,
+      expect.objectContaining({
+        format: 'csv',
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            title: expect.any(String),
+          }),
+        ]),
+      }),
+    );
 
     const showBackupsButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Show backups');
     expect(showBackupsButton).toBeTruthy();

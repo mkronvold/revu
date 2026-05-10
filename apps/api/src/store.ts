@@ -9,6 +9,9 @@ import type {
   AssessmentReviewState,
   AssessmentsListQuery,
   Assignment,
+  AssignmentsExportResponse,
+  AssignmentsImportResponse,
+  AssignmentTransferItem,
   AuthChangePasswordResponse,
   AuthPermission,
   AuthSession,
@@ -28,8 +31,6 @@ import type {
   Employee,
   EmployeeAdmin,
   EmployeeAuthMetadata,
-  ExportStubResponse,
-  ImportStubResponse,
   LocalUserCredentialKind,
   LocalUserTransferItem,
   LocalUsersExportMode,
@@ -37,7 +38,9 @@ import type {
   LocalUsersImportResponse,
   BackupStoredFile,
   QuestionSet,
+  QuestionSetTransferItem,
   QuestionSetsExportResponse,
+  QuestionSetsImportResponse,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
   ReviewAssessmentRequest,
@@ -3037,15 +3040,219 @@ export class ApiStore {
     };
   }
 
-  async importQuestionSetsStub(reviewPeriodId: string): Promise<ImportStubResponse> {
-    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
-    return {
-      reviewPeriodId,
-      resource: "questionSets",
-      accepted: false,
-      status: "not_implemented",
-      supportedFormats: ["json", "csv"],
-    };
+  async importQuestionSets(
+    reviewPeriodId: string,
+    format: "json" | "csv",
+    items: QuestionSetTransferItem[],
+  ): Promise<QuestionSetsImportResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        await this.reviewPeriodOrThrow(client, reviewPeriodId);
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+
+        const importedAt = nowIso();
+        const seenQuestionSetKeys = new Set<string>();
+        const buildQuestionSetKey = (item: Pick<QuestionSetTransferItem, "target" | "title">) =>
+          `${item.target}\u0000${item.title.trim().toLowerCase()}`;
+
+        for (const item of items) {
+          this.assertQuestionInputs(item.questions);
+          const questionSetKey = buildQuestionSetKey(item);
+          if (seenQuestionSetKeys.has(questionSetKey)) {
+            throw new ApiError(400, `Imported question sets must be unique by target and title: ${item.title}`);
+          }
+          seenQuestionSetKeys.add(questionSetKey);
+        }
+
+        const existingQuestionSets = await this.loadQuestionSets(client, { reviewPeriodId });
+        const existingByKey = new Map(
+          existingQuestionSets.map((questionSet) => [buildQuestionSetKey(questionSet), questionSet] as const),
+        );
+
+        let createdCount = 0;
+        let updatedCount = 0;
+        const importedQuestionSetIds: string[] = [];
+
+        for (const item of items) {
+          const existing = existingByKey.get(buildQuestionSetKey(item));
+          if (existing) {
+            updatedCount += 1;
+
+            const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? item.status : "active";
+            if (nextStatus === "active") {
+              await client.query(
+                `
+                  UPDATE question_sets
+                  SET status = 'draft'
+                  WHERE review_period_id = $1
+                    AND target = $2
+                    AND id <> $3
+                    AND status = 'active'
+                `,
+                [reviewPeriodId, existing.target, existing.id],
+              );
+            }
+
+            await client.query(
+              `
+                UPDATE question_sets
+                SET title = $2,
+                    header_markdown = $3,
+                    footer_markdown = $4,
+                    status = $5
+                WHERE id = $1
+              `,
+              [existing.id, item.title, item.headerMarkdown, item.footerMarkdown, nextStatus],
+            );
+
+            const existingQuestionIds = new Set(existing.questions.map((question) => question.id));
+            const retainedQuestionIds = new Set(
+              item.questions.flatMap((question) => (question.id && existingQuestionIds.has(question.id) ? [question.id] : [])),
+            );
+            const removedQuestionIds = existing.questions
+              .map((question) => question.id)
+              .filter((questionId) => !retainedQuestionIds.has(questionId));
+
+            if (removedQuestionIds.length > 0) {
+              const referencedQuestionResult = await client.query<{ question_id: string }>(
+                `
+                  SELECT DISTINCT question_id
+                  FROM assessment_responses
+                  WHERE question_id = ANY($1::uuid[])
+                `,
+                [removedQuestionIds],
+              );
+
+              if (referencedQuestionResult.rows.length > 0) {
+                throw new ApiError(
+                  409,
+                  "Questions with recorded assessment responses cannot be removed from a question set. Create a new question set instead.",
+                );
+              }
+            }
+
+            for (const question of item.questions) {
+              if (question.id && existingQuestionIds.has(question.id)) {
+                await client.query(
+                  `
+                    UPDATE question_set_questions
+                    SET display_order = $3,
+                        type = $4,
+                        category = $5,
+                        prompt = $6
+                    WHERE id = $1
+                      AND question_set_id = $2
+                  `,
+                  [question.id, existing.id, question.order, question.type, question.category, question.prompt],
+                );
+                continue;
+              }
+
+              await client.query(
+                `
+                  INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
+                  VALUES ($1, $2, $3, $4, $5, $6)
+                `,
+                [randomUUID(), existing.id, question.order, question.type, question.category, question.prompt],
+              );
+            }
+
+            if (removedQuestionIds.length > 0) {
+              await client.query("DELETE FROM question_set_questions WHERE question_set_id = $1 AND id = ANY($2::uuid[])", [
+                existing.id,
+                removedQuestionIds,
+              ]);
+            }
+
+            await this.insertQuestionCategories(client, item.questions.map((question) => question.category));
+
+            importedQuestionSetIds.push(existing.id);
+            existingByKey.set(buildQuestionSetKey(item), await this.questionSetOrThrow(client, existing.id));
+            continue;
+          }
+
+          createdCount += 1;
+
+          const questionSetId = randomUUID();
+          const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? item.status : "active";
+
+          if (nextStatus === "active") {
+            await client.query(
+              `
+                UPDATE question_sets
+                SET status = 'draft'
+                WHERE review_period_id = $1
+                  AND target = $2
+                  AND status = 'active'
+              `,
+              [reviewPeriodId, item.target],
+            );
+          }
+
+          await client.query(
+            `
+              INSERT INTO question_sets (
+                id,
+                review_period_id,
+                target,
+                status,
+                title,
+                header_markdown,
+                footer_markdown,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8::timestamptz,
+                $8::timestamptz
+              )
+            `,
+            [questionSetId, reviewPeriodId, item.target, nextStatus, item.title, item.headerMarkdown, item.footerMarkdown, importedAt],
+          );
+
+          for (const question of item.questions) {
+            await client.query(
+              `
+                INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
+                VALUES ($1, $2, $3, $4, $5, $6)
+              `,
+              [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+            );
+          }
+
+          await this.insertQuestionCategories(client, item.questions.map((question) => question.category));
+
+          importedQuestionSetIds.push(questionSetId);
+          existingByKey.set(buildQuestionSetKey(item), await this.questionSetOrThrow(client, questionSetId));
+        }
+
+        const importedQuestionSets: QuestionSet[] = [];
+        for (const questionSetId of importedQuestionSetIds) {
+          importedQuestionSets.push(await this.questionSetOrThrow(client, questionSetId));
+        }
+
+        return {
+          reviewPeriodId,
+          format,
+          importedAt,
+          itemCount: items.length,
+          createdCount,
+          updatedCount,
+          items: importedQuestionSets,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
   async exportLocalUsers(
@@ -3452,36 +3659,187 @@ export class ApiStore {
     }
   }
 
-  async exportAssignments(reviewPeriodId: string, format: "json" | "csv"): Promise<ExportStubResponse> {
-    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
-    const result = await this.pool.query<{ count: string }>(
-      `
-        SELECT COUNT(*)::text AS count
-        FROM review_period_assignments
-        WHERE review_period_id = $1
-      `,
-      [reviewPeriodId],
-    );
+  async exportAssignments(reviewPeriodId: string, format: "json" | "csv"): Promise<AssignmentsExportResponse> {
+    return withTransaction(async (client) => {
+      await this.reviewPeriodOrThrow(client, reviewPeriodId);
 
-    return {
-      reviewPeriodId,
-      resource: "assignments",
-      format,
-      exportedAt: nowIso(),
-      stub: true,
-      itemCount: Number(result.rows[0]?.count ?? "0"),
-    };
+      const assignments = await this.loadAssignments(client, { reviewPeriodId });
+      const employeeIds = Array.from(
+        new Set(
+          assignments.flatMap((assignment) =>
+            [assignment.employeeId, assignment.managerId, assignment.assessorId].filter((value): value is string => value !== null),
+          ),
+        ),
+      );
+      const employeeRows = employeeIds.length > 0
+        ? await this.loadEmployeeRows(client, { employeeIds, includeDeleted: true })
+        : [];
+      const employeesById = new Map(employeeRows.map((row) => [row.id, row] as const));
+
+      const items = assignments.map((assignment) => {
+        const employee = employeesById.get(assignment.employeeId);
+        const manager = assignment.managerId ? employeesById.get(assignment.managerId) ?? null : null;
+        const assessor = employeesById.get(assignment.assessorId);
+        if (!employee || !assessor) {
+          throw new ApiError(500, "Assignment export could not resolve employee details");
+        }
+
+        return {
+          assignmentId: assignment.id,
+          employeeUsername: employee.username,
+          employeeFullName: employee.full_name,
+          managerUsername: manager?.username ?? null,
+          managerFullName: manager?.full_name ?? null,
+          assessorUsername: assessor.username,
+          assessorFullName: assessor.full_name,
+        } satisfies AssignmentTransferItem;
+      });
+
+      return {
+        reviewPeriodId,
+        format,
+        exportedAt: nowIso(),
+        itemCount: items.length,
+        items,
+      };
+    });
   }
 
-  async importAssignmentsStub(reviewPeriodId: string): Promise<ImportStubResponse> {
-    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
-    return {
-      reviewPeriodId,
-      resource: "assignments",
-      accepted: false,
-      status: "not_implemented",
-      supportedFormats: ["json", "csv"],
-    };
+  async importAssignments(
+    reviewPeriodId: string,
+    format: "json" | "csv",
+    items: AssignmentTransferItem[],
+  ): Promise<AssignmentsImportResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        await this.reviewPeriodOrThrow(client, reviewPeriodId);
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+
+        const importedAt = nowIso();
+        const seenEmployeeUsernames = new Set<string>();
+        for (const item of items) {
+          const normalizedUsername = this.normalizeUsername(item.employeeUsername);
+          if (seenEmployeeUsernames.has(normalizedUsername)) {
+            throw new ApiError(400, `Imported assignments must be unique by employee username: ${item.employeeUsername}`);
+          }
+          seenEmployeeUsernames.add(normalizedUsername);
+        }
+
+        const referencedUsernames = Array.from(
+          new Set(
+            items
+              .flatMap((item) => [item.employeeUsername, item.managerUsername, item.assessorUsername])
+              .filter((value): value is string => value !== null),
+          ),
+        );
+        const employeeRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
+        const employeesByUsername = new Map(
+          employeeRows.map((row) => [this.normalizeUsername(row.username), row] as const),
+        );
+        const existingAssignments = await this.loadAssignments(client, { reviewPeriodId });
+        const existingByEmployeeId = new Map(existingAssignments.map((assignment) => [assignment.employeeId, assignment] as const));
+
+        let createdCount = 0;
+        let updatedCount = 0;
+        const importedAssignmentIds: string[] = [];
+
+        for (const item of items) {
+          const employee = employeesByUsername.get(this.normalizeUsername(item.employeeUsername));
+          if (!employee) {
+            throw new ApiError(400, `Employee username not found: ${item.employeeUsername}`);
+          }
+
+          const managerId = item.managerUsername === null
+            ? null
+            : employeesByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
+                throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+              })();
+          const assessorId = employeesByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
+            throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+          })();
+          const existing = existingByEmployeeId.get(employee.id) ?? null;
+
+          await this.ensureAssignmentCandidate(client, reviewPeriodId, {
+            id: existing?.id,
+            employeeId: employee.id,
+            managerId,
+            assessorId,
+          });
+
+          const assignmentId = existing?.id ?? randomUUID();
+          if (existing) {
+            updatedCount += 1;
+            await client.query(
+              `
+                UPDATE review_period_assignments
+                SET manager_employee_id = $2,
+                    assessor_employee_id = $3
+                WHERE id = $1
+              `,
+              [assignmentId, managerId, assessorId],
+            );
+          } else {
+            createdCount += 1;
+            await client.query(
+              `
+                INSERT INTO review_period_assignments (
+                  id,
+                  review_period_id,
+                  employee_id,
+                  manager_employee_id,
+                  assessor_employee_id,
+                  created_at,
+                  updated_at
+                ) VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  $4,
+                  $5,
+                  $6::timestamptz,
+                  $6::timestamptz
+                )
+              `,
+              [assignmentId, reviewPeriodId, employee.id, managerId, assessorId, importedAt],
+            );
+          }
+
+          await client.query(
+            `
+              UPDATE employees
+              SET manager_employee_id = $2,
+                  assessor2_employee_id = $3
+              WHERE id = $1
+            `,
+            [employee.id, managerId, assessorId],
+          );
+
+          const nextAssignment = await this.assignmentOrThrow(client, assignmentId);
+          importedAssignmentIds.push(assignmentId);
+          existingByEmployeeId.set(employee.id, nextAssignment);
+        }
+
+        const importedAssignments: Assignment[] = [];
+        for (const assignmentId of importedAssignmentIds) {
+          importedAssignments.push(await this.assignmentOrThrow(client, assignmentId));
+        }
+
+        return {
+          reviewPeriodId,
+          format,
+          importedAt,
+          itemCount: items.length,
+          createdCount,
+          updatedCount,
+          items: importedAssignments,
+        };
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
   }
 
   async listQuestionCategories() {

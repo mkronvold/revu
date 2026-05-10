@@ -94,13 +94,17 @@ import {
   MarkdownContent,
 } from './questionPresentation';
 import {
-  buildExportNotice,
-  buildImportNotice,
+  buildAssignmentsExportFilename,
+  buildAssignmentsExportNotice,
+  buildAssignmentsImportNotice,
+  buildAssignmentsImportPayload,
   buildDeleteReviewPeriodConfirmation,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
   buildQuestionSetExportFilename,
   buildQuestionSetExportNotice,
+  buildQuestionSetImportNotice,
+  buildQuestionSetsImportPayload,
   clearReadyAssessmentsForReviewPeriod,
   copyQuestionSetToReviewPeriodInApi,
   deleteReviewPeriodFromApi,
@@ -113,6 +117,7 @@ import {
   importQuestionSetsFromApi,
   saveAssignmentToApi,
   saveQuestionSetToApi,
+  serializeAssignmentsTransfer,
   serializeLocalUsersTransfer,
   serializeQuestionSetsTransfer,
   syncAssessmentsForReviewPeriod,
@@ -632,6 +637,10 @@ function App() {
   const [isRefreshAvailable, setIsRefreshAvailable] = useState(false);
   const [apiRecoveryPollCount, setApiRecoveryPollCount] = useState(0);
   const localUserImportInputRef = useRef<HTMLInputElement | null>(null);
+  const questionSetImportInputRef = useRef<HTMLInputElement | null>(null);
+  const questionSetImportFormatRef = useRef<TransferFormat>('json');
+  const assignmentImportInputRef = useRef<HTMLInputElement | null>(null);
+  const assignmentImportFormatRef = useRef<TransferFormat>('json');
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const cycleTheme = () => {
@@ -3212,7 +3221,15 @@ function App() {
   };
 
   const handleQuestionSetImport = async (format: TransferFormat) => {
-    if (!selectedReviewPeriod || !sessionToken) {
+    questionSetImportFormatRef.current = format;
+    questionSetImportInputRef.current?.click();
+  };
+
+  const handleQuestionSetImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!selectedReviewPeriod || !sessionToken || !file) {
       return;
     }
 
@@ -3220,8 +3237,12 @@ function App() {
     setAppError('');
 
     try {
-      const response = await importQuestionSetsFromApi(sessionToken, selectedReviewPeriod.id, format);
-      setAdminNotice(buildImportNotice(response));
+      const raw = await file.text();
+      const payload = buildQuestionSetsImportPayload(questionSetImportFormatRef.current, raw);
+      const response = await importQuestionSetsFromApi(sessionToken, selectedReviewPeriod.id, payload);
+      closeQuestionSetDialog({ force: true });
+      await refreshFoundationSnapshot();
+      setAdminNotice(buildQuestionSetImportNotice(response));
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -3256,7 +3277,11 @@ function App() {
 
     try {
       const response = await exportAssignmentsFromApi(sessionToken, selectedReviewPeriod.id, format);
-      setAdminNotice(buildExportNotice(response));
+      const content = serializeAssignmentsTransfer(response);
+      const downloadName = buildAssignmentsExportFilename(selectedReviewPeriod, response);
+      const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+      triggerDownload(downloadName, content, mimeType);
+      setAdminNotice(buildAssignmentsExportNotice(response));
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -3265,7 +3290,15 @@ function App() {
   };
 
   const handleAssignmentImport = async (format: TransferFormat) => {
-    if (!selectedReviewPeriod || !sessionToken) {
+    assignmentImportFormatRef.current = format;
+    assignmentImportInputRef.current?.click();
+  };
+
+  const handleAssignmentImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!selectedReviewPeriod || !sessionToken || !file) {
       return;
     }
 
@@ -3273,8 +3306,15 @@ function App() {
     setAppError('');
 
     try {
-      const response = await importAssignmentsFromApi(sessionToken, selectedReviewPeriod.id, format);
-      setAdminNotice(buildImportNotice(response));
+      const raw = await file.text();
+      const payload = buildAssignmentsImportPayload(assignmentImportFormatRef.current, raw);
+      const response = await importAssignmentsFromApi(sessionToken, selectedReviewPeriod.id, payload);
+      await Promise.all([refreshFoundationSnapshot(), refreshEmployeeDirectory()]);
+      if (selectedEmployeeId) {
+        const employeeResponse = await getEmployee(sessionToken, selectedEmployeeId);
+        setSelectedEmployeeDetail(employeeResponse.item);
+      }
+      setAdminNotice(buildAssignmentsImportNotice(response));
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -4148,10 +4188,10 @@ function App() {
           </dl>
           <div className="action-row">
             <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleAssignmentExport('json')}>
-              Export JSON stub
+              Export JSON
             </button>
             <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleAssignmentExport('csv')}>
-              Export CSV stub
+              Export CSV
             </button>
             <button
               type="button"
@@ -4159,18 +4199,25 @@ function App() {
               disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
               onClick={() => void handleAssignmentImport('json')}
             >
-              Import JSON stub
+              Import JSON
             </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-              onClick={() => void handleAssignmentImport('csv')}
-            >
-              Import CSV stub
-            </button>
-          </div>
-        </section>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+            onClick={() => void handleAssignmentImport('csv')}
+          >
+            Import CSV
+          </button>
+        </div>
+        <input
+          ref={assignmentImportInputRef}
+          type="file"
+          accept=".json,.csv,application/json,text/csv,text/plain"
+          style={{ display: 'none' }}
+          onChange={(event) => void handleAssignmentImportFileChange(event)}
+        />
+      </section>
 
         <section className="card">
           <p className="section-label">Assignment matrix</p>
@@ -4532,6 +4579,13 @@ function App() {
             Import CSV
           </button>
         </div>
+        <input
+          ref={questionSetImportInputRef}
+          type="file"
+          accept=".json,.csv,application/json,text/csv,text/plain"
+          style={{ display: 'none' }}
+          onChange={(event) => void handleQuestionSetImportFileChange(event)}
+        />
       </section>
     );
   };
