@@ -99,6 +99,8 @@ import {
   buildDeleteReviewPeriodConfirmation,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
+  buildQuestionSetExportFilename,
+  buildQuestionSetExportNotice,
   clearReadyAssessmentsForReviewPeriod,
   copyQuestionSetToReviewPeriodInApi,
   deleteReviewPeriodFromApi,
@@ -112,6 +114,7 @@ import {
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
+  serializeQuestionSetsTransfer,
   syncAssessmentsForReviewPeriod,
   triggerDownload,
   saveReviewPeriodToApi,
@@ -3161,7 +3164,11 @@ function App() {
 
     try {
       const response = await exportQuestionSetsFromApi(sessionToken, selectedReviewPeriod.id, format);
-      setAdminNotice(buildExportNotice(response));
+      const content = serializeQuestionSetsTransfer(response);
+      const downloadName = buildQuestionSetExportFilename(selectedReviewPeriod, response);
+      const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+      triggerDownload(downloadName, content, mimeType);
+      setAdminNotice(buildQuestionSetExportNotice(response));
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {

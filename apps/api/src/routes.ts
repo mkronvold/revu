@@ -38,11 +38,11 @@ import {
   deleteEmployeeResponseSchema,
   deleteReviewPeriodResponseSchema,
   domainRulesExample,
-  employeeResponseSchema,
-  employeesListResponseSchema,
-  exportFormatSchema,
-  exportStubResponseSchema,
-  foundationSnapshotSchema,
+    employeeResponseSchema,
+    employeesListResponseSchema,
+    exportFormatSchema,
+    exportStubResponseSchema,
+    foundationSnapshotSchema,
   idSchema,
   importStubRequestSchema,
   importStubResponseSchema,
@@ -50,9 +50,10 @@ import {
   localUsersExportModeSchema,
   localUsersImportRequestSchema,
   localUsersImportResponseSchema,
-  questionCategoriesListResponseSchema,
-  questionSetResponseSchema,
-  questionSetsListResponseSchema,
+    questionCategoriesListResponseSchema,
+    questionSetsExportResponseSchema,
+    questionSetResponseSchema,
+    questionSetsListResponseSchema,
   reassignAssessmentRequestSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
@@ -861,7 +862,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["questionSets:export"]);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return exportStubResponseSchema.parse(await store.exportQuestionSets(reviewPeriodId, query.format ?? "json"));
+      return questionSetsExportResponseSchema.parse(await store.exportQuestionSets(reviewPeriodId, query.format ?? "json"));
     } catch (error) {
       return sendError(reply, error);
     }

@@ -37,6 +37,7 @@ import type {
   LocalUsersImportResponse,
   BackupStoredFile,
   QuestionSet,
+  QuestionSetsExportResponse,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
   ReviewAssessmentRequest,
@@ -3023,24 +3024,16 @@ export class ApiStore {
     }
   }
 
-  async exportQuestionSets(reviewPeriodId: string, format: "json" | "csv"): Promise<ExportStubResponse> {
-    await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
-    const result = await this.pool.query<{ count: string }>(
-      `
-        SELECT COUNT(*)::text AS count
-        FROM question_sets
-        WHERE review_period_id = $1
-      `,
-      [reviewPeriodId],
-    );
+  async exportQuestionSets(reviewPeriodId: string, format: "json" | "csv"): Promise<QuestionSetsExportResponse> {
+    const reviewPeriod = await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
+    const items = await this.loadQuestionSets(this.pool, { reviewPeriodId });
 
     return {
-      reviewPeriodId,
-      resource: "questionSets",
+      reviewPeriodId: reviewPeriod.id,
       format,
       exportedAt: nowIso(),
-      stub: true,
-      itemCount: Number(result.rows[0]?.count ?? "0"),
+      itemCount: items.length,
+      items: clone(items),
     };
   }
 

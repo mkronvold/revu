@@ -9,6 +9,7 @@ import type {
   ExportStubResponse,
   ImportStubResponse,
   QuestionSet,
+  QuestionSetsExportResponse,
   ReviewPeriod,
 } from '@revu/contracts';
 import { localUsersImportRequestSchema, localUserTransferItemSchema } from '@revu/contracts';
@@ -56,6 +57,20 @@ const localUserTransferRequiredHeaders = [
   'password',
 ] as const;
 const localUserTransferHeaders = [...localUserTransferRequiredHeaders, 'credentialKind', 'passwordResetRequired'] as const;
+const questionSetExportHeaders = [
+  'reviewPeriodId',
+  'questionSetId',
+  'target',
+  'status',
+  'title',
+  'headerMarkdown',
+  'footerMarkdown',
+  'questionId',
+  'questionOrder',
+  'questionType',
+  'questionCategory',
+  'questionPrompt',
+] as const;
 
 function escapeCsvCell(value: string) {
   return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
@@ -212,6 +227,14 @@ function parseLocalUsersJson(raw: string, preferredFormat: TransferFormat): Loca
     format: 'format' in candidate && candidate.format === 'csv' ? 'csv' : preferredFormat,
     items: candidate.items,
   });
+}
+
+function compactTimestamp(value: string) {
+  return value.replace(/[-:]/g, '').replace(/\.\d{3}Z$/u, 'Z');
+}
+
+function sanitizeFileLabel(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'review-period';
 }
 
 function toQuestionInput(questionSetDraft: QuestionSetDraft, options?: { includeIds?: boolean }) {
@@ -525,6 +548,45 @@ export function serializeLocalUsersTransfer(
   );
 }
 
+export function serializeQuestionSetsTransfer(response: QuestionSetsExportResponse) {
+  if (response.format === 'csv') {
+    return [
+      questionSetExportHeaders.join(','),
+      ...response.items.flatMap((item) => {
+        const questions = item.questions.length > 0 ? item.questions : [null];
+        return questions.map((question) =>
+          [
+            item.reviewPeriodId,
+            item.id,
+            item.target,
+            item.status,
+            item.title,
+            item.headerMarkdown,
+            item.footerMarkdown,
+            question?.id ?? '',
+            question?.order?.toString() ?? '',
+            question?.type ?? '',
+            question?.category ?? '',
+            question?.prompt ?? '',
+          ]
+            .map(escapeCsvCell)
+            .join(','),
+        );
+      }),
+    ].join('\n');
+  }
+
+  return JSON.stringify(response, null, 2);
+}
+
+export function buildQuestionSetExportFilename(
+  reviewPeriod: Pick<ReviewPeriod, 'key' | 'label'>,
+  response: Pick<QuestionSetsExportResponse, 'format' | 'exportedAt'>,
+) {
+  const baseLabel = sanitizeFileLabel(reviewPeriod.key || reviewPeriod.label);
+  return `${baseLabel}-question-sets-${compactTimestamp(response.exportedAt)}.${response.format}`;
+}
+
 export function buildLocalUsersImportPayload(format: TransferFormat, raw: string) {
   return format === 'csv' ? parseLocalUsersCsv(raw) : parseLocalUsersJson(raw, format);
 }
@@ -541,6 +603,10 @@ export function buildExportNotice(response: ExportStubResponse) {
 
 export function buildImportNotice(response: ImportStubResponse) {
   return `${response.resource} import is still a stub. Supported formats: ${response.supportedFormats.join(', ')}.`;
+}
+
+export function buildQuestionSetExportNotice(response: Pick<QuestionSetsExportResponse, 'format' | 'itemCount'>) {
+  return `Exported ${response.itemCount} question ${response.itemCount === 1 ? 'set' : 'sets'} as ${response.format.toUpperCase()}.`;
 }
 
 export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount' | 'mode'>) {

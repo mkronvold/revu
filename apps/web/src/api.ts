@@ -37,11 +37,12 @@ import {
   foundationSnapshotSchema,
   importStubRequestSchema,
   importStubResponseSchema,
-  localUsersExportResponseSchema,
-  localUsersImportRequestSchema,
-  localUsersImportResponseSchema,
-  questionCategoriesListResponseSchema,
-  questionSetResponseSchema,
+    localUsersExportResponseSchema,
+    localUsersImportRequestSchema,
+    localUsersImportResponseSchema,
+    questionCategoriesListResponseSchema,
+    questionSetsExportResponseSchema,
+    questionSetResponseSchema,
   rejectAssessmentToDraftRequestSchema,
   resetEmployeePasswordRequestSchema,
   resetEmployeePasswordResponseSchema,
@@ -608,7 +609,7 @@ export function activateQuestionSet(token: string, questionSetId: string) {
 export function exportQuestionSets(token: string, reviewPeriodId: string, format: ExportFormat) {
   return request(
     withSearchParams(`/review-periods/${reviewPeriodId}/question-sets/export`, { format }),
-    exportStubResponseSchema,
+    questionSetsExportResponseSchema,
     withAuthorization(token),
   );
 }

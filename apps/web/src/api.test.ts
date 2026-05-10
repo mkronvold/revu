@@ -12,6 +12,7 @@ import {
   downloadStoredBackup,
   exportBackup,
   exportLocalUsers,
+  exportQuestionSets,
   getApiIndex,
   getEmployee,
   getBackupStatus,
@@ -415,6 +416,39 @@ describe('web api client', () => {
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
           'content-type': 'application/json',
+        }),
+      }),
+    );
+  });
+
+  it('loads question-set export payloads for UI-triggered downloads', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          format: 'csv',
+          exportedAt: '2026-06-03T08:00:00.000Z',
+          itemCount: 2,
+          items: foundationSnapshotExample.questionSets.filter(
+            (item) => item.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          ),
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const response = await exportQuestionSets('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'csv');
+
+    expect(response).toMatchObject({
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      format: 'csv',
+      itemCount: 2,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${apiBaseUrl}/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/question-sets/export?format=csv`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
         }),
       }),
     );

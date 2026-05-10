@@ -9,7 +9,7 @@ See `LCM.md` for the lifecycle-management model covering CVE mitigation, schedul
 - API and web foundations are in place for auth, employee admin, review periods, question sets, assignments, assessments, and manager/admin review actions.
 - The API currently serves seeded in-memory demo data for local workflow development. Restarting the API resets that data.
 - PostgreSQL migrations in `prisma/migrations/` define the intended schema and can be applied locally for schema validation and future persistence work.
-- Question-set and assignment export routes return metadata stubs today; matching import routes acknowledge supported formats but are still `not_implemented`.
+- Question-set exports now return real JSON/CSV payloads for download, while assignment exports still return metadata stubs; matching import routes acknowledge supported formats but are still `not_implemented`.
 - Local user import/export is available from the employee admin UI. Exporting local users rotates every exported account to a generated one-time passcode and immediately signs those users out.
 - GitHub Actions publishes deployment images to `ghcr.io/mkronvold/revu-api` and `ghcr.io/mkronvold/revu-web`.
 

@@ -396,6 +396,14 @@ export const localUsersExportResponseSchema = z.object({
   items: z.array(localUserTransferItemSchema),
 });
 
+export const questionSetsExportResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  format: exportFormatSchema,
+  exportedAt: isoTimestampSchema,
+  itemCount: z.number().int().nonnegative(),
+  items: z.array(questionSetSchema),
+});
+
 export const localUsersImportRequestSchema = z.object({
   format: exportFormatSchema,
   items: z.array(localUserTransferItemSchema).min(1),
@@ -603,6 +611,7 @@ export type ReviewAssessmentRequest = z.infer<typeof reviewAssessmentRequestSche
 export type ReassignAssessmentRequest = z.infer<typeof reassignAssessmentRequestSchema>;
 export type AssessmentReassignmentResponse = z.infer<typeof assessmentReassignmentResponseSchema>;
 export type LocalUsersExportResponse = z.infer<typeof localUsersExportResponseSchema>;
+export type QuestionSetsExportResponse = z.infer<typeof questionSetsExportResponseSchema>;
 export type LocalUsersImportRequest = z.infer<typeof localUsersImportRequestSchema>;
 export type LocalUsersImportResponse = z.infer<typeof localUsersImportResponseSchema>;
 export type ExportStubResponse = z.infer<typeof exportStubResponseSchema>;

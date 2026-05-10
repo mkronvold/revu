@@ -36,6 +36,8 @@ import {
   buildLocalUsersImportNotice,
   buildLocalUsersImportPayload,
   buildLocalUsersImportPayloadFromFile,
+  buildQuestionSetExportFilename,
+  buildQuestionSetExportNotice,
   buildExportNotice,
   buildImportNotice,
   copyQuestionSetToReviewPeriodInApi,
@@ -43,6 +45,7 @@ import {
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
+  serializeQuestionSetsTransfer,
   toggleReviewPeriodArchiveInApi,
 } from './reviewAdminApi';
 import { createReviewAdminSnapshot, toQuestionSetDraft } from './reviewAdmin';
@@ -285,6 +288,27 @@ describe('review admin API orchestration', () => {
       format: 'csv',
       items: exportResponse.items,
     });
+  });
+
+  it('serializes question-set exports for download notices and filenames', () => {
+    const exportResponse = {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      format: 'csv' as const,
+      exportedAt: '2026-06-01T12:00:00.000Z',
+      itemCount: 2,
+      items: foundationSnapshotExample.questionSets.filter(
+        (item) => item.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
+    };
+
+    const csvPayload = serializeQuestionSetsTransfer(exportResponse);
+
+    expect(csvPayload).toContain('reviewPeriodId,questionSetId,target,status,title');
+    expect(csvPayload).toContain('2026 Self Questions');
+    expect(buildQuestionSetExportNotice(exportResponse)).toBe('Exported 2 question sets as CSV.');
+    expect(buildQuestionSetExportFilename(foundationSnapshotExample.reviewPeriods[0]!, exportResponse)).toBe(
+      '2026-question-sets-20260601T120000Z.csv',
+    );
   });
 
   it('autodetects JSON vs CSV when parsing from a file', () => {

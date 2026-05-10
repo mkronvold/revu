@@ -10,6 +10,7 @@ import {
   exportStubResponseSchema,
   foundationSnapshotExample,
   importStubResponseSchema,
+  questionSetsExportResponseSchema,
   questionSetResponseSchema,
   questionSetsListResponseSchema,
   reviewPeriodResponseSchema,
@@ -47,7 +48,7 @@ describe("review periods, question sets, and assignments admin API", () => {
     return authLoginResponseSchema.parse(response.json()).session;
   }
 
-  it("supports admin CRUD flows for review periods, question sets, assignment sync, and import/export stubs", async () => {
+  it("supports admin CRUD flows for review periods, question sets, assignment sync, and question-set export downloads", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);
 
@@ -238,7 +239,21 @@ describe("review periods, question sets, and assignments admin API", () => {
       },
     });
     expect(questionSetExportResponse.statusCode).toBe(200);
-    expect(exportStubResponseSchema.parse(questionSetExportResponse.json()).itemCount).toBe(2);
+    const questionSetExport = questionSetsExportResponseSchema.parse(questionSetExportResponse.json());
+    expect(questionSetExport.itemCount).toBe(2);
+    expect(questionSetExport.items.map((item) => item.title)).toEqual(["2027 Self Questions v1", "2027 Self Questions v2"]);
+
+    const questionSetCsvExportResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}/question-sets/export?format=csv`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(questionSetCsvExportResponse.statusCode).toBe(200);
+    const questionSetCsvExport = questionSetsExportResponseSchema.parse(questionSetCsvExportResponse.json());
+    expect(questionSetCsvExport.format).toBe("csv");
+    expect(questionSetCsvExport.itemCount).toBe(2);
 
     const questionSetImportResponse = await app.inject({
       method: "POST",

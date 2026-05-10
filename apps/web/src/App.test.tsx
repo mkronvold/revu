@@ -1598,11 +1598,10 @@ describe('file management screen', () => {
     });
     vi.mocked(exportQuestionSets).mockResolvedValue({
       reviewPeriodId: selectedReviewPeriod.id,
-      resource: 'questionSets',
       format: 'json',
       exportedAt: '2026-06-03T08:00:00.000Z',
-      stub: true,
       itemCount: 2,
+      items: questionSnapshot.questionSets.filter((item) => item.reviewPeriodId === selectedReviewPeriod.id),
     });
     vi.mocked(importQuestionSets).mockResolvedValue({
       reviewPeriodId: selectedReviewPeriod.id,
@@ -1876,11 +1875,18 @@ describe('file management screen', () => {
 
     await act(async () => {
       questionExportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      questionImportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
     expect(exportQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, 'json');
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(container.textContent).toContain('Exported 2 question sets as JSON.');
+
+    await act(async () => {
+      questionImportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
     expect(importQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, { format: 'csv' });
 
     const showBackupsButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Show backups');
