@@ -7,6 +7,7 @@ import {
   apiBaseUrl,
   changePassword,
   createStoredBackup,
+  deleteReviewPeriod,
   deleteStoredBackup,
   downloadStoredBackup,
   exportBackup,
@@ -98,6 +99,35 @@ describe('web api client', () => {
       2,
       `${apiBaseUrl}/employees/${adminEmployeeExample.item.id}`,
       expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+  });
+
+  it('deletes review periods through the admin endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          reviewPeriodId: foundationSnapshotExample.reviewPeriods[0]!.id,
+          label: foundationSnapshotExample.reviewPeriods[0]!.label,
+          deleted: true,
+          questionSetCount: 2,
+          assessmentCount: 5,
+          assignmentCount: 3,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const response = await deleteReviewPeriod('session-token', foundationSnapshotExample.reviewPeriods[0]!.id);
+
+    expect(response.deleted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${apiBaseUrl}/review-periods/${foundationSnapshotExample.reviewPeriods[0]!.id}`,
+      expect.objectContaining({
+        method: 'DELETE',
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
         }),

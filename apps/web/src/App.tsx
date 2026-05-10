@@ -95,10 +95,12 @@ import {
 import {
   buildExportNotice,
   buildImportNotice,
+  buildDeleteReviewPeriodConfirmation,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
   clearReadyAssessmentsForReviewPeriod,
   copyQuestionSetToReviewPeriodInApi,
+  deleteReviewPeriodFromApi,
   buildLocalUsersImportPayloadFromFile,
   exportAssignmentsFromApi,
   exportLocalUsersFromApi,
@@ -2700,6 +2702,35 @@ function App() {
     }
   };
 
+  const handleDeleteReviewPeriod = async (reviewPeriod: ReviewPeriod) => {
+    if (!sessionToken || !selectedReviewPeriodManagementSummary) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      buildDeleteReviewPeriodConfirmation(reviewPeriod, selectedReviewPeriodManagementSummary),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+
+    try {
+      const { notice } = await deleteReviewPeriodFromApi(sessionToken, reviewPeriod);
+      await refreshFoundationSnapshot();
+      setReviewPeriodDraft(null);
+      setQuestionSetDraft(null);
+      setEditingQuestionDraftId(null);
+      setAdminNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
+  };
+
   const handleSyncAssessments = async (reviewPeriodId: string) => {
     if (!sessionToken) {
       return;
@@ -3497,12 +3528,37 @@ function App() {
   };
 
   const renderReviewPeriod = () => {
-    if (!reviewAdmin || !selectedReviewPeriodManagement || !selectedReviewPeriodManagementSummary) {
+    if (!reviewAdmin) {
       return (
         <main className="admin-stack">
           <section className="card">
             <p className="muted-copy">Loading review period management...</p>
           </section>
+        </main>
+      );
+    }
+
+    if (!selectedReviewPeriodManagement || !selectedReviewPeriodManagementSummary) {
+      return (
+        <main className="admin-stack">
+          <section className="card admin-section-card review-period-card">
+            <div className="section-heading review-period-heading">
+              <div>
+                <p className="section-label">Review period management</p>
+                <h3>No review periods configured</h3>
+                <p className="muted-copy">Add a review period to resume review-period scheduling and question-set management.</p>
+              </div>
+            </div>
+            <div className="action-row review-period-actions">
+              <div className="review-period-primary-actions">
+                <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+                  Add period
+                </button>
+              </div>
+            </div>
+            {renderReviewPeriodEditorForm()}
+          </section>
+          {renderArchiveContent()}
         </main>
       );
     }
@@ -3588,6 +3644,14 @@ function App() {
                 onClick={() => startEditingReviewPeriod(selectedReviewPeriodManagement)}
               >
                 Edit period
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSavingReviewAdmin}
+                onClick={() => void handleDeleteReviewPeriod(selectedReviewPeriodManagement)}
+              >
+                Remove period
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@ vi.mock('./api', () => ({
   createQuestionSet: vi.fn(),
   createReviewPeriod: vi.fn(),
   deleteAssignment: vi.fn(),
+  deleteReviewPeriod: vi.fn(),
   exportLocalUsers: vi.fn(),
   exportAssignments: vi.fn(),
   exportQuestionSets: vi.fn(),
@@ -26,9 +27,11 @@ import {
   archiveReviewPeriod,
   createQuestionSet,
   deleteAssignment,
+  deleteReviewPeriod,
   updateEmployee,
 } from './api';
 import {
+  buildDeleteReviewPeriodConfirmation,
   buildLocalUsersExportNotice,
   buildLocalUsersImportNotice,
   buildLocalUsersImportPayload,
@@ -36,6 +39,7 @@ import {
   buildExportNotice,
   buildImportNotice,
   copyQuestionSetToReviewPeriodInApi,
+  deleteReviewPeriodFromApi,
   saveAssignmentToApi,
   saveQuestionSetToApi,
   serializeLocalUsersTransfer,
@@ -350,5 +354,35 @@ describe('review admin API orchestration', () => {
         ],
       }),
     ).toContain('1 imported account');
+  });
+
+  it('builds delete confirmations and delete notices for review periods', async () => {
+    const reviewPeriod = foundationSnapshotExample.reviewPeriods[0]!;
+
+    vi.mocked(deleteReviewPeriod).mockResolvedValue({
+      reviewPeriodId: reviewPeriod.id,
+      label: reviewPeriod.label,
+      deleted: true,
+      questionSetCount: 2,
+      assessmentCount: 5,
+      assignmentCount: 3,
+    });
+
+    expect(
+      buildDeleteReviewPeriodConfirmation(reviewPeriod, {
+        questionSetCount: 2,
+        activeQuestionSetCount: 1,
+        assignmentCount: 3,
+        assessmentCount: 5,
+        archivedAssessmentCount: 0,
+        reviewedAssessmentCount: 1,
+      }),
+    ).toContain('This is the active review period.');
+
+    const result = await deleteReviewPeriodFromApi('session-token', reviewPeriod);
+
+    expect(deleteReviewPeriod).toHaveBeenCalledWith('session-token', reviewPeriod.id);
+    expect(result.reviewPeriodId).toBe(reviewPeriod.id);
+    expect(result.notice).toContain('Deleted 2 question sets, 5 assessments, and 3 assignments');
   });
 });

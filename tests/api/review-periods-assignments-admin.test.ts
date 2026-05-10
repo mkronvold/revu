@@ -5,6 +5,7 @@ import {
   assignmentResponseSchema,
   authLoginResponseSchema,
   clearReadyAssessmentsResponseSchema,
+  deleteReviewPeriodResponseSchema,
   employeeResponseSchema,
   exportStubResponseSchema,
   foundationSnapshotExample,
@@ -319,6 +320,67 @@ describe("review periods, question sets, and assignments admin API", () => {
 
     expect(removeReferencedQuestionResponse.statusCode).toBe(409);
     expect(removeReferencedQuestionResponse.body).toContain("cannot be removed from a question set");
+  });
+
+  it("deletes a review period together with its question sets, assessments, and assignments", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+    const reviewPeriodToDelete = foundationSnapshotExample.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === "archived")
+      ?? foundationSnapshotExample.reviewPeriods[0]!;
+    const expectedQuestionSetCount = foundationSnapshotExample.questionSets.filter(
+      (questionSet) => questionSet.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+    const expectedAssessmentCount = foundationSnapshotExample.assessments.filter(
+      (assessment) => assessment.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+    const expectedAssignmentCount = foundationSnapshotExample.assignments.filter(
+      (assignment) => assignment.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/review-periods/${reviewPeriodToDelete.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteReviewPeriodResponseSchema.parse(deleteResponse.json())).toMatchObject({
+      reviewPeriodId: reviewPeriodToDelete.id,
+      label: reviewPeriodToDelete.label,
+      deleted: true,
+      questionSetCount: expectedQuestionSetCount,
+      assessmentCount: expectedAssessmentCount,
+      assignmentCount: expectedAssignmentCount,
+    });
+
+    const remainingQuestionSetsResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/question-sets?reviewPeriodId=${reviewPeriodToDelete.id}`,
+    });
+    expect(remainingQuestionSetsResponse.statusCode).toBe(200);
+    expect(questionSetsListResponseSchema.parse(remainingQuestionSetsResponse.json()).items).toHaveLength(0);
+
+    const remainingAssessmentsResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/assessments?reviewPeriodId=${reviewPeriodToDelete.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(remainingAssessmentsResponse.statusCode).toBe(200);
+    expect(assessmentsListResponseSchema.parse(remainingAssessmentsResponse.json()).items).toHaveLength(0);
+
+    const deletedReviewPeriodResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+    });
+    expect(deletedReviewPeriodResponse.statusCode).toBe(200);
+    expect(deletedReviewPeriodResponse.body).not.toContain(reviewPeriodToDelete.id);
   });
 
   it("clears ready-to-start assessments for the active review period", async () => {

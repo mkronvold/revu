@@ -30,6 +30,7 @@ import {
   createReviewPeriodRequestSchema,
   deleteAssignmentResponseSchema,
   deleteEmployeeResponseSchema,
+  deleteReviewPeriodResponseSchema,
   employeeResponseSchema,
   employeesListResponseSchema,
   exportStubResponseSchema,
@@ -518,6 +519,16 @@ export function updateReviewPeriod(token: string, reviewPeriodId: string, payloa
     withAuthorization(token, {
       method: 'PATCH',
       body: JSON.stringify(updateReviewPeriodRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function deleteReviewPeriod(token: string, reviewPeriodId: string) {
+  return request(
+    `/review-periods/${reviewPeriodId}`,
+    deleteReviewPeriodResponseSchema,
+    withAuthorization(token, {
+      method: 'DELETE',
     }),
   );
 }

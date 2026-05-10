@@ -117,6 +117,7 @@ export const authPermissionSchema = z.enum([
   "employees:password:reset",
   "reviewPeriods:create",
   "reviewPeriods:update",
+  "reviewPeriods:delete",
   "reviewPeriods:archive",
   "questionSets:create",
   "questionSets:update",
@@ -219,6 +220,15 @@ const editableReviewPeriodStatusSchema = z.enum(["active", "inactive"]);
 export const deleteEmployeeResponseSchema = z.object({
   employeeId: idSchema,
   deleted: z.literal(true),
+});
+
+export const deleteReviewPeriodResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  label: z.string().min(1),
+  deleted: z.literal(true),
+  questionSetCount: z.number().int().nonnegative(),
+  assessmentCount: z.number().int().nonnegative(),
+  assignmentCount: z.number().int().nonnegative(),
 });
 
 export const setEmployeePasswordRequestSchema = z.object({
@@ -568,6 +578,7 @@ export type AuthUpdateProfileResponse = z.infer<typeof authUpdateProfileResponse
 export type CreateEmployeeRequest = z.infer<typeof createEmployeeRequestSchema>;
 export type UpdateEmployeeRequest = z.infer<typeof updateEmployeeRequestSchema>;
 export type DeleteEmployeeResponse = z.infer<typeof deleteEmployeeResponseSchema>;
+export type DeleteReviewPeriodResponse = z.infer<typeof deleteReviewPeriodResponseSchema>;
 export type SetEmployeePasswordRequest = z.infer<typeof setEmployeePasswordRequestSchema>;
 export type SetEmployeePasswordResponse = z.infer<typeof setEmployeePasswordResponseSchema>;
 export type ResetEmployeePasswordRequest = z.infer<typeof resetEmployeePasswordRequestSchema>;

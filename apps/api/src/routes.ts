@@ -36,6 +36,7 @@ import {
   createReviewPeriodRequestSchema,
   deleteAssignmentResponseSchema,
   deleteEmployeeResponseSchema,
+  deleteReviewPeriodResponseSchema,
   domainRulesExample,
   employeeResponseSchema,
   employeesListResponseSchema,
@@ -741,6 +742,17 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return reviewPeriodResponseSchema.parse({
         item: await store.updateReviewPeriod(reviewPeriodId, body),
       });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.delete("/review-periods/:id", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["reviewPeriods:delete"]);
+      const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
+      return deleteReviewPeriodResponseSchema.parse(await store.deleteReviewPeriod(reviewPeriodId));
     } catch (error) {
       return sendError(reply, error);
     }

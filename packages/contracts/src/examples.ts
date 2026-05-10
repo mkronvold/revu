@@ -439,6 +439,7 @@ export const adminLoginExample: AuthLoginResponse = {
       "employees:password:reset",
       "reviewPeriods:create",
       "reviewPeriods:update",
+      "reviewPeriods:delete",
       "reviewPeriods:archive",
       "questionSets:create",
       "questionSets:update",

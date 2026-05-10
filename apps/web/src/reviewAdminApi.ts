@@ -21,6 +21,7 @@ import {
   createQuestionSet,
   createReviewPeriod,
   deleteAssignment,
+  deleteReviewPeriod,
   exportLocalUsers,
   exportAssignments,
   exportQuestionSets,
@@ -35,7 +36,7 @@ import {
   updateReviewPeriod,
 } from './api';
 import { questionSetStatusEnabled } from './runtimeConfig';
-import type { QuestionSetDraft, ReviewAdminSnapshot, ReviewPeriodDraft } from './reviewAdmin';
+import type { QuestionSetDraft, ReviewAdminSnapshot, ReviewPeriodDraft, ReviewPeriodSummary } from './reviewAdmin';
 
 export type TransferFormat = 'json' | 'csv';
 
@@ -258,6 +259,10 @@ function findEmployee(employees: Employee[], employeeId: string) {
   return employee;
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDraft): Promise<{
   notice: string;
   reviewPeriod: ReviewPeriod;
@@ -279,6 +284,37 @@ export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDr
   return {
     reviewPeriod: response.item,
     notice: draft.id ? 'Saved review period changes to the API.' : 'Created the review period in the API.',
+  };
+}
+
+export function buildDeleteReviewPeriodConfirmation(reviewPeriod: ReviewPeriod, summary: ReviewPeriodSummary) {
+  const lines = [
+    `Remove ${reviewPeriod.label}?`,
+    '',
+    'This permanently deletes:',
+    '- 1 review period',
+    `- ${pluralize(summary.questionSetCount, 'question set')}`,
+    `- ${pluralize(summary.assessmentCount, 'assessment')}`,
+    `- ${pluralize(summary.assignmentCount, 'assignment')} tied to this period`,
+  ];
+
+  if (reviewPeriod.status === 'active') {
+    lines.push('', 'This is the active review period.');
+  }
+
+  lines.push('', 'This cannot be undone.');
+  return lines.join('\n');
+}
+
+export async function deleteReviewPeriodFromApi(token: string, reviewPeriod: ReviewPeriod): Promise<{
+  notice: string;
+  reviewPeriodId: string;
+}> {
+  const response = await deleteReviewPeriod(token, reviewPeriod.id);
+
+  return {
+    reviewPeriodId: response.reviewPeriodId,
+    notice: `Removed ${response.label}. Deleted ${pluralize(response.questionSetCount, 'question set')}, ${pluralize(response.assessmentCount, 'assessment')}, and ${pluralize(response.assignmentCount, 'assignment')} tied to that period.`,
   };
 }
 

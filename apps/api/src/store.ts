@@ -255,6 +255,7 @@ const permissionsByRole: Record<Employee["role"], AuthPermission[]> = {
     "employees:password:reset",
     "reviewPeriods:create",
     "reviewPeriods:update",
+    "reviewPeriods:delete",
     "reviewPeriods:archive",
     "questionSets:create",
     "questionSets:update",
@@ -2442,6 +2443,67 @@ export class ApiStore {
         }
 
         return this.toReviewPeriod(updatedReviewPeriod);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async deleteReviewPeriod(reviewPeriodId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
+        const countResult = await client.query<{
+          question_set_count: string;
+          assessment_count: string;
+          assignment_count: string;
+        }>(
+          `
+            SELECT
+              (SELECT COUNT(*)::text FROM question_sets WHERE review_period_id = $1) AS question_set_count,
+              (SELECT COUNT(*)::text FROM assessments WHERE review_period_id = $1) AS assessment_count,
+              (SELECT COUNT(*)::text FROM review_period_assignments WHERE review_period_id = $1) AS assignment_count
+          `,
+          [reviewPeriodId],
+        );
+        const counts = countResult.rows[0];
+        if (!counts) {
+          throw new ApiError(500, "Review period deletion summary failed");
+        }
+
+        if (reviewPeriod.status === "archived") {
+          await client.query(
+            `
+              UPDATE review_periods
+              SET status = 'inactive',
+                  archived_at = NULL,
+                  archived_by_employee_id = NULL
+              WHERE id = $1
+            `,
+            [reviewPeriodId],
+          );
+        }
+
+        await client.query("DELETE FROM assessments WHERE review_period_id = $1", [reviewPeriodId]);
+        await client.query("DELETE FROM review_period_assignments WHERE review_period_id = $1", [reviewPeriodId]);
+        await client.query("DELETE FROM question_sets WHERE review_period_id = $1", [reviewPeriodId]);
+
+        const deleteResult = await client.query("DELETE FROM review_periods WHERE id = $1", [reviewPeriodId]);
+        if ((deleteResult.rowCount ?? 0) !== 1) {
+          throw new ApiError(404, "Review period not found");
+        }
+
+        return {
+          reviewPeriodId,
+          label: reviewPeriod.label,
+          deleted: true as const,
+          questionSetCount: Number(counts.question_set_count ?? "0"),
+          assessmentCount: Number(counts.assessment_count ?? "0"),
+          assignmentCount: Number(counts.assignment_count ?? "0"),
+        };
       });
     } catch (error) {
       if (error instanceof ApiError) {

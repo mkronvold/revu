@@ -34,6 +34,7 @@ vi.mock('./api', () => {
     createReviewPeriod: vi.fn(),
     deleteAssignment: vi.fn(),
     deleteEmployee: vi.fn(),
+    deleteReviewPeriod: vi.fn(),
     deleteStoredBackup: vi.fn(),
     downloadStoredBackup: vi.fn(),
     exportBackup: vi.fn(),
@@ -87,6 +88,7 @@ import {
   createStoredBackup,
   createQuestionSet,
   deleteEmployee,
+  deleteReviewPeriod,
   deleteStoredBackup,
   downloadStoredBackup,
   exportLocalUsers,
@@ -619,6 +621,76 @@ describe('questions screen', () => {
     expect(container.textContent).toContain('Assessment Due Date');
     expect(container.textContent).toContain('Review Due Date');
     expect(container.textContent).not.toContain('Due date');
+  });
+
+  it('removes a review period with a confirmation summary from the review period page', async () => {
+    window.history.replaceState(null, '', '/review-period');
+
+    const initialSnapshot = cloneQuestionSlice();
+    const reviewPeriodToDelete = initialSnapshot.reviewPeriods[0]!;
+    const removedQuestionSetCount = initialSnapshot.questionSets.filter(
+      (questionSet) => questionSet.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+    const removedAssessmentCount = initialSnapshot.assessments.filter(
+      (assessment) => assessment.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+    const removedAssignmentCount = initialSnapshot.assignments.filter(
+      (assignment) => assignment.reviewPeriodId === reviewPeriodToDelete.id,
+    ).length;
+    const refreshedSnapshot = structuredClone(initialSnapshot);
+    refreshedSnapshot.reviewPeriods = refreshedSnapshot.reviewPeriods.filter((period) => period.id !== reviewPeriodToDelete.id);
+    refreshedSnapshot.questionSets = refreshedSnapshot.questionSets.filter(
+      (questionSet) => questionSet.reviewPeriodId !== reviewPeriodToDelete.id,
+    );
+    refreshedSnapshot.assessments = refreshedSnapshot.assessments.filter(
+      (assessment) => assessment.reviewPeriodId !== reviewPeriodToDelete.id,
+    );
+    refreshedSnapshot.assignments = refreshedSnapshot.assignments.filter(
+      (assignment) => assignment.reviewPeriodId !== reviewPeriodToDelete.id,
+    );
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValueOnce(refreshedSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(deleteReviewPeriod).mockResolvedValue({
+      reviewPeriodId: reviewPeriodToDelete.id,
+      label: reviewPeriodToDelete.label,
+      deleted: true,
+      questionSetCount: removedQuestionSetCount,
+      assessmentCount: removedAssessmentCount,
+      assignmentCount: removedAssignmentCount,
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Review period management') ?? false);
+
+    const removePeriodButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Remove period',
+    );
+    expect(removePeriodButton).toBeTruthy();
+
+    await act(async () => {
+      removePeriodButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    const confirmationMessage = confirmSpy.mock.calls[0]?.[0] ?? '';
+    expect(confirmationMessage).toContain('This permanently deletes:');
+    expect(confirmationMessage).toContain(`- ${removedQuestionSetCount} question set`);
+    expect(confirmationMessage).toContain(`- ${removedAssessmentCount} assessment`);
+    expect(confirmationMessage).toContain(`- ${removedAssignmentCount} assignment`);
+    expect(deleteReviewPeriod).toHaveBeenCalledWith('session-token', reviewPeriodToDelete.id);
+    await waitFor(() => container.textContent?.includes(`Removed ${reviewPeriodToDelete.label}.`) ?? false);
   });
 
   it('keeps the make active button live and to the left of the picker for inactive review periods', async () => {

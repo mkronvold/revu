@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added Review Period page removal controls so admins can delete a period after a confirmation summary that spells out how many question sets, assessments, and assignments will be removed with it
 - Replaced File Management's direct backup-now and restore cards with a Show backups dialog that lists stored backup files and supports immediate snapshot creation, upload, download, restore, and delete actions from one place
 - Added a new admin-only `Review Period` page above File Management, moved review-period lifecycle controls there, and removed add/edit period actions from Questions so that page keeps question-category work separate from review-period management
 - Combined File Management review-period lifecycle actions into one always-open card that includes archive, inactive-period management, and archived-period restore controls
