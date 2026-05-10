@@ -2176,6 +2176,7 @@ describe('dashboard screen', () => {
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
     expect(container.textContent).toContain('Self assessment form');
+    expect(container.textContent).not.toContain('2026 Self Questions');
     expect(container.textContent).toContain('Save for later');
     expect(Array.from(container.querySelectorAll('.assessment-editor-category h4')).map((heading) => heading.textContent)).toEqual([
       'Growth',

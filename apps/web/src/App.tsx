@@ -4301,8 +4301,8 @@ function App() {
             <div className="section-heading">
               <div>
                 <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
-                <h3 id="assessment-dialog-title">{selectedAssessmentEditor.questionSetTitle}</h3>
-                <p className="muted-copy">{selectedAssessmentEditor.title}</p>
+                <h3 id="assessment-dialog-title">{selectedAssessmentEditor.title}</h3>
+                <p className="muted-copy">{selectedAssessmentEditor.reviewPeriodLabel}</p>
               </div>
               <div className="dialog-header-actions">
                 <span className="pill">{selectedAssessmentEditor.statusLabel}</span>

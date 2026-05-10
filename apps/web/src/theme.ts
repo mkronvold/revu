@@ -335,6 +335,8 @@ const themedSurfaceSelectors = [
   '.question-set-question-list',
   '.question-set-question',
   '.question-set-dialog-table',
+  '.assessment-editor-intro',
+  '.assessment-editor-question',
 ];
 
 const themedMutedTextSelectors = [
@@ -464,8 +466,18 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   }
 
   [data-revu-theme='${theme}'] .employee-row-summary,
-  [data-revu-theme='${theme}'] .review-queue-item {
+  [data-revu-theme='${theme}'] .review-queue-item,
+  [data-revu-theme='${theme}'] .assessment-question-option {
     background: ${palette.inputBackground};
+  }
+
+  [data-revu-theme='${theme}'] .assessment-question-option {
+    color: ${palette.surfaceText};
+    border-color: ${palette.inputBorder};
+  }
+
+  [data-revu-theme='${theme}'] .assessment-question-option-label {
+    color: ${palette.surfaceText};
   }
 
   [data-revu-theme='${theme}'] .section-toggle:hover,
@@ -562,6 +574,11 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
   }
 
   [data-revu-theme='${theme}'] .admin-list-item-active {
+    border-color: ${palette.activeBorder};
+    background: ${palette.activeBackground};
+  }
+
+  [data-revu-theme='${theme}'] .assessment-question-option-selected {
     border-color: ${palette.activeBorder};
     background: ${palette.activeBackground};
   }

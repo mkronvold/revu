@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Removed question-set titles from the dashboard assessment forms, kept uncategorized questions headerless there, and moved the assessment editor surfaces back onto the shared theme palette instead of hard-coded light backgrounds
 - Updated `autoupdate.sh` so its wait loop polls for keyboard input and pressing `r` triggers an immediate update check instead of waiting for the full interval
 - Added `VITE_ENABLE_QUESTION_SET_STATUS` to hide question-set status by default, remove that status from the Questions UI when disabled, and auto-treat saved/copied question sets as active without deleting the underlying status code path
 - Added a `Make active` action for inactive review periods on Questions, and added a confirmed `Delete set` reset inside the question-set editor that clears a set back to a blank question set with no questions
