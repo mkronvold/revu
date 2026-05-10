@@ -178,6 +178,12 @@ type AssessmentRecord = {
   employeeManagerId: string | null;
 };
 
+type NotStartedAssessmentRow = {
+  id: string;
+  employee_id: string;
+  assessor_employee_id: string;
+};
+
 type AuthSessionRow = {
   id: string;
   employee_id: string;
@@ -981,6 +987,82 @@ export class ApiStore {
       assignmentManagerId: row.assignment_manager_employee_id,
       employeeManagerId: row.employee_manager_employee_id,
     } satisfies AssessmentRecord));
+  }
+
+  private async loadNotStartedAssessments(client: DbClient, reviewPeriodId: string) {
+    const result = await client.query<NotStartedAssessmentRow>(
+      `
+        SELECT
+          assessment.id,
+          assessment.employee_id,
+          assessment.assessor_employee_id
+        FROM assessments assessment
+        LEFT JOIN assessment_responses response ON response.assessment_id = assessment.id
+        WHERE assessment.review_period_id = $1
+          AND assessment.archive_state = 'active'
+          AND assessment.review_state = 'new'
+        GROUP BY assessment.id, assessment.employee_id, assessment.assessor_employee_id
+        HAVING COUNT(response.id) = 0
+      `,
+      [reviewPeriodId],
+    );
+
+    return result.rows;
+  }
+
+  private async deleteAssessmentsById(client: DbClient, assessmentIds: string[]) {
+    if (assessmentIds.length === 0) {
+      return 0;
+    }
+
+    const result = await client.query(
+      `
+        DELETE FROM assessments
+        WHERE id = ANY($1::uuid[])
+      `,
+      [assessmentIds],
+    );
+
+    return result.rowCount ?? 0;
+  }
+
+  private async removeUnexpectedNotStartedAssessments(
+    client: DbClient,
+    reviewPeriodId: string,
+    expectedAssessmentKeys: Set<string>,
+  ) {
+    const staleAssessmentIds = (await this.loadNotStartedAssessments(client, reviewPeriodId))
+      .filter((assessment) => !expectedAssessmentKeys.has(`${assessment.employee_id}:${assessment.assessor_employee_id}`))
+      .map((assessment) => assessment.id);
+
+    return this.deleteAssessmentsById(client, staleAssessmentIds);
+  }
+
+  private async removeEmployeeNotStartedAssessments(client: DbClient, employeeId: string) {
+    const result = await client.query<{ id: string }>(
+      `
+        DELETE FROM assessments
+        WHERE id IN (
+          SELECT assessment.id
+          FROM assessments assessment
+          JOIN review_periods review_period ON review_period.id = assessment.review_period_id
+          LEFT JOIN assessment_responses response ON response.assessment_id = assessment.id
+          WHERE assessment.archive_state = 'active'
+            AND assessment.review_state = 'new'
+            AND review_period.status = 'active'
+            AND (
+              assessment.employee_id = $1
+              OR assessment.assessor_employee_id = $1
+            )
+          GROUP BY assessment.id
+          HAVING COUNT(response.id) = 0
+        )
+        RETURNING id
+      `,
+      [employeeId],
+    );
+
+    return result.rowCount ?? result.rows.length;
   }
 
   private async assessmentOrThrow(client: DbClient, assessmentId: string) {
@@ -1954,6 +2036,10 @@ export class ApiStore {
           throw new ApiError(404, "Employee not found");
         }
 
+        if (existing.status !== "inactive" && nextEmployee.status === "inactive") {
+          await this.removeEmployeeNotStartedAssessments(client, employeeId);
+        }
+
         return this.toEmployeeAdmin(updatedEmployee);
       });
     } catch (error) {
@@ -2353,6 +2439,18 @@ export class ApiStore {
         const employeeRows = await this.loadEmployeeRows(client);
         const employees = employeeRows.map((row) => this.toEmployee(row)).filter((employee) => employee.status === "active");
         const activeEmployeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+        const expectedAssessmentKeys = new Set<string>();
+        for (const employee of employees) {
+          expectedAssessmentKeys.add(`${employee.id}:${employee.id}`);
+          for (const assessorId of new Set([employee.assessor1Id, employee.assessor2Id].filter((value): value is string => value !== null))) {
+            if (assessorId !== employee.id && activeEmployeesById.has(assessorId)) {
+              expectedAssessmentKeys.add(`${employee.id}:${assessorId}`);
+            }
+          }
+        }
+
+        await this.removeUnexpectedNotStartedAssessments(client, reviewPeriodId, expectedAssessmentKeys);
+
         const assignments = await this.loadAssignments(client, { reviewPeriodId });
         const assignmentByKey = new Map(assignments.map((assignment) => [`${assignment.employeeId}:${assignment.assessorId}`, assignment] as const));
         const existingAssessments = await this.loadAssessmentRecords(client, { reviewPeriodId });
@@ -2493,30 +2591,15 @@ export class ApiStore {
       return await withTransaction(async (client) => {
         const reviewPeriod = this.toReviewPeriod(await this.reviewPeriodOrThrow(client, reviewPeriodId));
         if (reviewPeriod.status !== "active") {
-          throw new ApiError(409, "Ready to start assessments can only be cleared for the active review period");
+          throw new ApiError(409, "Not started assessments can only be cleared for the active review period");
         }
-
-        const result = await client.query<{ id: string }>(
-          `
-            DELETE FROM assessments
-            WHERE id IN (
-              SELECT assessment.id
-              FROM assessments assessment
-              LEFT JOIN assessment_responses response ON response.assessment_id = assessment.id
-              WHERE assessment.review_period_id = $1
-                AND assessment.archive_state = 'active'
-                AND assessment.review_state = 'new'
-              GROUP BY assessment.id
-              HAVING COUNT(response.id) = 0
-            )
-            RETURNING id
-          `,
-          [reviewPeriodId],
-        );
 
         return {
           reviewPeriodId,
-          clearedAssessments: result.rowCount ?? result.rows.length,
+          clearedAssessments: await this.deleteAssessmentsById(
+            client,
+            (await this.loadNotStartedAssessments(client, reviewPeriodId)).map((assessment) => assessment.id),
+          ),
         };
       });
     } catch (error) {

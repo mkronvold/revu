@@ -1056,13 +1056,13 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Review status');
     expect(container.textContent).toContain('Submitted');
     expect(container.textContent).toContain('In review');
-    expect(container.textContent).toContain('Clear Ready to start assessments');
+    expect(container.textContent).toContain('Clear not started assessments');
     expect(container.textContent).toContain('Sync assessments to assignments');
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const clearButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Clear Ready to start assessments',
+      (button) => button.textContent === 'Clear not started assessments',
     ) as HTMLButtonElement | undefined;
 
     await act(async () => {
@@ -1070,7 +1070,7 @@ describe('workflow entry', () => {
       await flushRender();
     });
 
-    expect(confirmSpy).toHaveBeenCalledWith('Clear all Ready to start assessments from the active review period?');
+    expect(confirmSpy).toHaveBeenCalledWith('Clear all not started assessments from the active review period?');
     expect(clearReadyToStartAssessments).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     await waitFor(() => container.textContent?.includes('No assessments exist for the active review period yet.') ?? false);
   });

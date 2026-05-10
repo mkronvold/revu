@@ -2567,7 +2567,7 @@ function App() {
       return;
     }
 
-    if (!window.confirm('Clear all Ready to start assessments from the active review period?')) {
+    if (!window.confirm('Clear all not started assessments from the active review period?')) {
       return;
     }
 
@@ -2578,7 +2578,7 @@ function App() {
       const result = await clearReadyAssessmentsForReviewPeriod(sessionToken, reviewPeriodId);
       await refreshFoundationSnapshot();
       setAdminNotice(
-        `Cleared ${result.clearedAssessments} ready to start ${result.clearedAssessments === 1 ? 'assessment' : 'assessments'} from the active review period.`,
+        `Cleared ${result.clearedAssessments} not started ${result.clearedAssessments === 1 ? 'assessment' : 'assessments'} from the active review period.`,
       );
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -4416,7 +4416,7 @@ function App() {
                 disabled={isSavingReviewAdmin}
                 onClick={() => void handleClearReadyAssessments(activeAssessmentReviewPeriod.id)}
               >
-                Clear Ready to start assessments
+                Clear not started assessments
               </button>
               <button
                 type="button"

@@ -413,6 +413,215 @@ describe("review periods, question sets, and assignments admin API", () => {
     expect(assessmentsListResponseSchema.parse(assessmentsAfterClearResponse.json()).items).toHaveLength(0);
   });
 
+  it("syncs only active employee-assessor pairs and removes stale not-started assessments", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+
+    const createdReviewPeriodResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        key: "2029",
+        label: "2029 Annual Review",
+        startDate: "2029-01-01",
+        dueDate: "2029-03-07",
+        assessmentDueDate: "2029-02-21",
+        reviewDueDate: "2029-02-28",
+        status: "active",
+      },
+    });
+    expect(createdReviewPeriodResponse.statusCode).toBe(201);
+    const createdReviewPeriod = reviewPeriodResponseSchema.parse(createdReviewPeriodResponse.json()).item;
+
+    for (const questionSetPayload of [
+      {
+        target: "self",
+        title: "2029 Self Questions",
+        prompt: "I delivered against my commitments.",
+      },
+      {
+        target: "peer",
+        title: "2029 Peer Questions",
+        prompt: "They delivered against their commitments.",
+      },
+    ] as const) {
+      const questionSetResponse = await app.inject({
+        method: "POST",
+        url: `/api/v1/review-periods/${createdReviewPeriod.id}/question-sets`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+        payload: {
+          target: questionSetPayload.target,
+          title: questionSetPayload.title,
+          headerMarkdown: "Reflect on the review period.",
+          footerMarkdown: "Thank you.",
+          questions: [
+            {
+              order: 1,
+              type: "subjective",
+              category: "Impact",
+              prompt: questionSetPayload.prompt,
+            },
+          ],
+        },
+      });
+      expect(questionSetResponse.statusCode).toBe(201);
+      const questionSet = questionSetResponseSchema.parse(questionSetResponse.json()).item;
+
+      const activateQuestionSetResponse = await app.inject({
+        method: "POST",
+        url: `/api/v1/question-sets/${questionSet.id}/activate`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+      });
+      expect(activateQuestionSetResponse.statusCode).toBe(200);
+    }
+
+    const createEmployee = async (payload: {
+      username: string;
+      fullName: string;
+      email: string;
+      assessor1Id?: string | null;
+      assessor2Id?: string | null;
+    }) => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/employees",
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+        payload: {
+          username: payload.username,
+          fullName: payload.fullName,
+          email: payload.email,
+          role: "employee",
+          status: "active",
+          assessor1Id: payload.assessor1Id ?? null,
+          assessor2Id: payload.assessor2Id ?? null,
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      return employeeResponseSchema.parse(response.json()).item;
+    };
+
+    const listAssessmentKeys = async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/assessments?reviewPeriodId=${createdReviewPeriod.id}`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      return assessmentsListResponseSchema.parse(response.json()).items.map(
+        (assessment) => `${assessment.employeeId}:${assessment.assessorId}`,
+      );
+    };
+
+    const syncAssessments = async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/review-periods/${createdReviewPeriod.id}/sync-assessments`,
+        headers: {
+          authorization: `Bearer ${session.token}`,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      return syncAssessmentsResponseSchema.parse(response.json());
+    };
+
+    const assessorOne = await createEmployee({
+      username: "assessor.one",
+      fullName: "Assessor One",
+      email: "assessor.one@example.com",
+    });
+    const assessorTwo = await createEmployee({
+      username: "assessor.two",
+      fullName: "Assessor Two",
+      email: "assessor.two@example.com",
+    });
+    const subject = await createEmployee({
+      username: "subject.employee",
+      fullName: "Subject Employee",
+      email: "subject.employee@example.com",
+      assessor1Id: assessorOne.id,
+      assessor2Id: assessorTwo.id,
+    });
+
+    await syncAssessments();
+    let assessmentKeys = await listAssessmentKeys();
+    expect(assessmentKeys).toContain(`${subject.id}:${subject.id}`);
+    expect(assessmentKeys).toContain(`${subject.id}:${assessorOne.id}`);
+    expect(assessmentKeys).toContain(`${subject.id}:${assessorTwo.id}`);
+
+    const removeSecondAssessorResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${subject.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        assessor2Id: null,
+      },
+    });
+    expect(removeSecondAssessorResponse.statusCode).toBe(200);
+
+    await syncAssessments();
+    assessmentKeys = await listAssessmentKeys();
+    expect(assessmentKeys).toContain(`${subject.id}:${subject.id}`);
+    expect(assessmentKeys).toContain(`${subject.id}:${assessorOne.id}`);
+    expect(assessmentKeys).not.toContain(`${subject.id}:${assessorTwo.id}`);
+
+    const deactivateAssessorResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${assessorOne.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        status: "inactive",
+      },
+    });
+    expect(deactivateAssessorResponse.statusCode).toBe(200);
+
+    assessmentKeys = await listAssessmentKeys();
+    expect(assessmentKeys).not.toContain(`${subject.id}:${assessorOne.id}`);
+    expect(assessmentKeys).not.toContain(`${assessorOne.id}:${assessorOne.id}`);
+
+    const deactivateSubjectResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${subject.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        assessor1Id: null,
+        status: "inactive",
+      },
+    });
+    expect(deactivateSubjectResponse.statusCode).toBe(200);
+
+    assessmentKeys = await listAssessmentKeys();
+    expect(assessmentKeys).not.toContain(`${subject.id}:${subject.id}`);
+
+    await syncAssessments();
+    assessmentKeys = await listAssessmentKeys();
+    expect(
+      assessmentKeys.some(
+        (key) =>
+          key.startsWith(`${subject.id}:`)
+          || key.endsWith(`:${subject.id}`)
+          || key.startsWith(`${assessorOne.id}:`)
+          || key.endsWith(`:${assessorOne.id}`),
+      ),
+    ).toBe(false);
+  });
+
   it("archives and unarchives review periods while enforcing archive-only mutations", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);
