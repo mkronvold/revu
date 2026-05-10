@@ -6,8 +6,6 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { questionCategorySuggestionsId } from './questionPresentation';
-
 vi.mock('./api', () => {
   class ApiClientError extends Error {
     constructor(
@@ -237,6 +235,18 @@ describe('questions screen', () => {
   });
 
   it('renders markdown, opens the question-set dialog from the card, and edits questions in a nested dialog', async () => {
+    const questionSlice = cloneQuestionSlice();
+    questionSlice.questionSets[0] = {
+      ...questionSlice.questionSets[0]!,
+      questions: questionSlice.questionSets[0]!.questions.map((question, index) =>
+        index === 0
+          ? {
+              ...question,
+              category: '',
+            }
+          : question,
+      ),
+    };
     const session: AuthSession = {
       ...adminLoginExample.session,
       permissions: [
@@ -249,7 +259,7 @@ describe('questions screen', () => {
     };
 
     vi.mocked(me).mockResolvedValue({ session });
-    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(getFoundation).mockResolvedValue(questionSlice);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
@@ -296,12 +306,6 @@ describe('questions screen', () => {
     );
     expect(fieldOrder).toEqual(['Title', 'Status', 'Header markdown', 'Footer markdown']);
 
-    const suggestionValues = Array.from(
-      container.querySelectorAll(`#${questionCategorySuggestionsId} option`),
-      (option) => option.getAttribute('value'),
-    );
-    expect(suggestionValues).toEqual(['Growth', 'Impact', 'Teamwork']);
-
     const questionRow = editor?.querySelector('.question-set-dialog-row-button');
     expect(questionRow).toBeTruthy();
 
@@ -313,9 +317,46 @@ describe('questions screen', () => {
     const questionEditor = container.querySelector('.question-edit-dialog');
     expect(questionEditor).toBeTruthy();
 
-    const categoryInput = questionEditor?.querySelector('.question-category-field input');
-    expect(categoryInput?.getAttribute('list')).toBe(questionCategorySuggestionsId);
+    const categorySelect = questionEditor?.querySelector('select[aria-label="Question category"]') as HTMLSelectElement | null;
+    expect(categorySelect).toBeTruthy();
+    expect(categorySelect?.value).toBe('');
+    expect(Array.from(categorySelect?.options ?? []).map((option) => option.textContent)).toEqual([
+      'No category',
+      'Growth',
+      'Impact',
+      'Teamwork',
+      'New category…',
+    ]);
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('short written self-rating');
+
+    await act(async () => {
+      setFieldValue(categorySelect!, '__new-question-category__');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const newCategoryDialog = container.querySelector('.question-category-dialog');
+    expect(newCategoryDialog).toBeTruthy();
+
+    const newCategoryInput = newCategoryDialog?.querySelector('input[aria-label="New category name"]') as HTMLInputElement | null;
+    expect(newCategoryInput).toBeTruthy();
+    await act(async () => {
+      setFieldValue(newCategoryInput!, 'Strategy');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const saveCategoryButton = Array.from(newCategoryDialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Save category',
+    );
+    expect(saveCategoryButton).toBeTruthy();
+    await act(async () => {
+      saveCategoryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const updatedCategorySelect = container.querySelector('select[aria-label="Question category"]') as HTMLSelectElement | null;
+    expect(updatedCategorySelect?.value).toBe('Strategy');
 
     const responseTypeField = questionEditor?.querySelector('.question-response-type-field select') as HTMLSelectElement | null;
     expect(responseTypeField).toBeTruthy();
@@ -326,6 +367,66 @@ describe('questions screen', () => {
     await flushRender();
 
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('longer free-form response');
+  });
+
+  it('warns before closing a dirty question-set dialog without saving', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const questionSetCard = container.querySelector('.question-set-card');
+    expect(questionSetCard).toBeTruthy();
+
+    await act(async () => {
+      questionSetCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const editor = container.querySelector('.question-set-dialog');
+    expect(editor).toBeTruthy();
+
+    const titleInput = Array.from(editor?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Title'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    expect(titleInput).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(titleInput!, 'Updated Self questions');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const closeButton = Array.from(editor?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Close');
+    expect(closeButton).toBeTruthy();
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('Close this question set without saving your changes?');
+    expect(container.querySelector('.question-set-dialog')).toBeTruthy();
+
+    confirmSpy.mockReturnValue(true);
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('.question-set-dialog')).toBeNull();
   });
 
   it('keeps archived question-set dialogs read-only and dismissible from the backdrop', async () => {

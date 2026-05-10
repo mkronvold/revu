@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Reworked the question editor to use category pulldowns with a nested new-category dialog, warn before closing unsaved question-set edits, expand the Question field, and align the question editor controls consistently
 - Widened the question-set edit dialog to use the full shared modal width budget while leaving other modal sizing unchanged
 - Added a sidebar collapse toggle that preserves navigation controls and shifted the main web dialogs to percentage-based widths that widen further when the sidebar is collapsed
 - Replaced the sidebar workflow markdown card with a main Workflow nav item, added persisted workflow visibility controls in File Management, and renamed the backup status section to Automatic backups

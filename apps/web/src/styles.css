@@ -1482,12 +1482,8 @@ button.employee-row:focus-visible {
   font-weight: 600;
 }
 
-.question-prompt-field textarea {
-  min-height: 5.5rem;
-}
-
 .question-set-dialog {
-  width: min(90%, var(--modal-available-width));
+  width: var(--modal-available-width);
   max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
@@ -1575,8 +1571,38 @@ button.employee-row:focus-visible {
   overflow: auto;
 }
 
+.question-category-field,
+.question-prompt-field,
+.question-response-type-field {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: start;
+  align-items: start;
+  text-align: left;
+}
+
+.question-category-field select,
+.question-prompt-field textarea,
+.question-response-type-field select {
+  width: 100%;
+}
+
+.question-prompt-field textarea {
+  min-height: min(42vh, 18rem);
+  resize: vertical;
+}
+
+.question-response-type-field {
+  align-content: start;
+}
+
 .question-response-helper {
   margin: 0;
+}
+
+.question-category-dialog {
+  width: min(42%, var(--modal-available-width));
+  max-width: var(--modal-available-width);
 }
 
 .assignment-table {

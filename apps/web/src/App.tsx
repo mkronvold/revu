@@ -75,7 +75,6 @@ import {
 import {
   buildQuestionCategorySuggestions,
   MarkdownContent,
-  questionCategorySuggestionsId,
 } from './questionPresentation';
 import {
   buildExportNotice,
@@ -116,6 +115,7 @@ const workflowStorageKey = 'revu-workflow-markdown';
 const workflowVisibilityStorageKey = 'revu-workflow-visibility';
 const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
 const lastResponseTimeoutMs = 120000;
+const newQuestionCategoryOptionValue = '__new-question-category__';
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
 
@@ -124,6 +124,10 @@ const questionTypeHelperCopy: Record<QuestionSetQuestionDraft['type'], string> =
   ranking: 'Use a comparable scored answer so peers can rank performance on the same scale.',
   narrative: 'Use a longer free-form response when nuance matters more than a score.',
 };
+
+function serializeQuestionSetDraft(draft: QuestionSetDraft) {
+  return JSON.stringify(draft);
+}
 
 type EmployeeDraft = {
   id: string | null;
@@ -422,7 +426,11 @@ function App() {
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
+  const [questionSetInitialDraft, setQuestionSetInitialDraft] = useState<string | null>(null);
   const [editingQuestionDraftId, setEditingQuestionDraftId] = useState<string | null>(null);
+  const [isNewQuestionCategoryDialogOpen, setIsNewQuestionCategoryDialogOpen] = useState(false);
+  const [newQuestionCategoryDraft, setNewQuestionCategoryDraft] = useState('');
+  const [newQuestionCategoryError, setNewQuestionCategoryError] = useState('');
   const [questionCategories, setQuestionCategories] = useState<string[]>([]);
   const [workflowContent, setWorkflowContent] = useState<string>(() => getStoredWorkflowMarkdown());
   const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(() => getStoredWorkflowVisibility());
@@ -679,6 +687,17 @@ function App() {
     () => questionSetDraft?.questions.find((question) => question.id === editingQuestionDraftId) ?? null,
     [editingQuestionDraftId, questionSetDraft],
   );
+  const questionCategoryOptions = useMemo(() => {
+    const categories = new Set(questionCategorySuggestions);
+    if (editingQuestionDraft?.category) {
+      categories.add(editingQuestionDraft.category);
+    }
+
+    return Array.from(categories)
+      .map((category) => category.trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+  }, [editingQuestionDraft?.category, questionCategorySuggestions]);
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -771,7 +790,7 @@ function App() {
       setReviewAdmin(null);
       setSelectedReviewPeriodId(null);
       setReviewPeriodDraft(null);
-      closeQuestionSetDialog();
+      closeQuestionSetDialog({ force: true });
       setQuestionCategories([]);
       setAdminNotice('');
       return;
@@ -1895,19 +1914,45 @@ function App() {
       return;
     }
 
-    setQuestionSetDraft(toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined));
+    const nextDraft = toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined);
+    setQuestionSetDraft(nextDraft);
+    setQuestionSetInitialDraft(serializeQuestionSetDraft(nextDraft));
     setEditingQuestionDraftId(null);
+    setIsNewQuestionCategoryDialogOpen(false);
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
     setReviewPeriodDraft(null);
     setAdminNotice('');
   };
 
-  const closeQuestionSetDialog = () => {
+  const closeQuestionSetDialog = (options?: { force?: boolean }) => {
+    const isDirty =
+      questionSetDraft &&
+      questionSetInitialDraft &&
+      selectedReviewPeriod?.status !== 'archived' &&
+      serializeQuestionSetDraft(questionSetDraft) !== questionSetInitialDraft;
+
+    if (!options?.force && isDirty) {
+      const confirmed = window.confirm('Close this question set without saving your changes?');
+      if (!confirmed) {
+        return false;
+      }
+    }
+
     setQuestionSetDraft(null);
+    setQuestionSetInitialDraft(null);
     setEditingQuestionDraftId(null);
+    setIsNewQuestionCategoryDialogOpen(false);
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
+    return true;
   };
 
   const closeQuestionEditorDialog = () => {
     setEditingQuestionDraftId(null);
+    setIsNewQuestionCategoryDialogOpen(false);
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
   };
 
   const updateQuestionSetDraftField = <Field extends keyof QuestionSetDraft,>(
@@ -1982,6 +2027,51 @@ function App() {
     setEditingQuestionDraftId(nextQuestionId);
   };
 
+  const openNewQuestionCategoryDialog = () => {
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
+    setIsNewQuestionCategoryDialogOpen(true);
+  };
+
+  const closeNewQuestionCategoryDialog = () => {
+    setIsNewQuestionCategoryDialogOpen(false);
+    setNewQuestionCategoryDraft('');
+    setNewQuestionCategoryError('');
+  };
+
+  const handleQuestionCategoryChange = (value: string) => {
+    if (!editingQuestionDraft) {
+      return;
+    }
+
+    if (value === newQuestionCategoryOptionValue) {
+      openNewQuestionCategoryDialog();
+      return;
+    }
+
+    updateQuestionDraftField(editingQuestionDraft.id, 'category', value);
+  };
+
+  const saveNewQuestionCategory = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingQuestionDraft) {
+      return;
+    }
+
+    const trimmedCategory = newQuestionCategoryDraft.trim();
+    if (!trimmedCategory) {
+      setNewQuestionCategoryError('Enter a category name.');
+      return;
+    }
+
+    const existingCategory =
+      questionCategoryOptions.find((category) => category.toLowerCase() === trimmedCategory.toLowerCase()) ?? trimmedCategory;
+
+    updateQuestionDraftField(editingQuestionDraft.id, 'category', existingCategory);
+    closeNewQuestionCategoryDialog();
+  };
+
   const saveQuestionDraft = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -2008,7 +2098,7 @@ function App() {
       void refreshQuestionCategorySuggestions().catch((error) => {
         setAppError(getErrorMessage(error));
       });
-      closeQuestionSetDialog();
+      closeQuestionSetDialog({ force: true });
       setAdminNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -2267,8 +2357,10 @@ function App() {
               <select
                 value={selectedReviewPeriod.id}
                 onChange={(event) => {
+                  if (!closeQuestionSetDialog()) {
+                    return;
+                  }
                   setSelectedReviewPeriodId(event.target.value);
-                  closeQuestionSetDialog();
                 }}
               >
                 {reviewAdmin.reviewPeriods.map((reviewPeriod) => (
@@ -2374,7 +2466,7 @@ function App() {
 
   const renderQuestionSetDialog = () =>
     pathname === '/questions' && questionSetDraft && selectedReviewPeriod ? (
-      <div className="modal-backdrop" role="presentation" onClick={closeQuestionSetDialog}>
+      <div className="modal-backdrop" role="presentation" onClick={() => void closeQuestionSetDialog()}>
         <section
           aria-modal="true"
           className="card modal-card question-set-dialog"
@@ -2392,7 +2484,7 @@ function App() {
             </div>
             <div className="action-row">
               {selectedReviewPeriod.status === 'archived' ? <span className="pill">Read only</span> : null}
-              <button type="button" className="secondary-button" onClick={closeQuestionSetDialog}>
+              <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
                 Close
               </button>
             </div>
@@ -2403,11 +2495,6 @@ function App() {
           ) : null}
 
           <form className="stack-form" onSubmit={saveQuestionDraft}>
-            <datalist id={questionCategorySuggestionsId}>
-              {questionCategorySuggestions.map((category) => (
-                <option key={category} value={category} />
-              ))}
-            </datalist>
             <div className="question-set-dialog-fields">
               <label>
                 Title
@@ -2451,7 +2538,7 @@ function App() {
             <section className="subcard question-set-dialog-table">
               <div className="question-set-dialog-table-header" aria-hidden="true">
                 <span>Order</span>
-                <span>Prompt</span>
+                <span>Question</span>
                 <span>Details</span>
               </div>
               <div className="question-set-dialog-table-body">
@@ -2509,7 +2596,7 @@ function App() {
                   Save question set
                 </button>
               )}
-              <button type="button" className="secondary-button" onClick={closeQuestionSetDialog}>
+              <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
                 {selectedReviewPeriod.status === 'archived' ? 'Close' : 'Cancel'}
               </button>
             </div>
@@ -2543,18 +2630,25 @@ function App() {
 
           <label className="question-category-field">
             Category
-            <input
-              list={questionCategorySuggestionsId}
+            <select
+              aria-label="Question category"
               value={editingQuestionDraft.category}
               disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
-              onChange={(event) => updateQuestionDraftField(editingQuestionDraft.id, 'category', event.target.value)}
-              placeholder="Impact"
-            />
+              onChange={(event) => handleQuestionCategoryChange(event.target.value)}
+            >
+              <option value="">No category</option>
+              {questionCategoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+              <option value={newQuestionCategoryOptionValue}>New category…</option>
+            </select>
           </label>
           <label className="question-prompt-field">
-            Prompt
+            Question
             <textarea
-              rows={5}
+              rows={10}
               value={editingQuestionDraft.prompt}
               disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
               onChange={(event) => updateQuestionDraftField(editingQuestionDraft.id, 'prompt', event.target.value)}
@@ -2593,6 +2687,51 @@ function App() {
               {selectedReviewPeriod?.status === 'archived' ? 'Close' : 'Done'}
             </button>
           </div>
+        </section>
+      </div>
+    ) : null;
+
+  const renderNewQuestionCategoryDialog = () =>
+    pathname === '/questions' && questionSetDraft && editingQuestionDraft && isNewQuestionCategoryDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeNewQuestionCategoryDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card question-category-dialog"
+          role="dialog"
+          aria-labelledby="question-category-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Category</p>
+              <h3 id="question-category-dialog-title">New category</h3>
+            </div>
+            <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+              Close
+            </button>
+          </div>
+          <form className="stack-form" onSubmit={saveNewQuestionCategory}>
+            <label>
+              Category name
+              <input
+                aria-label="New category name"
+                value={newQuestionCategoryDraft}
+                onChange={(event) => {
+                  setNewQuestionCategoryDraft(event.target.value);
+                  if (newQuestionCategoryError) {
+                    setNewQuestionCategoryError('');
+                  }
+                }}
+              />
+            </label>
+            {newQuestionCategoryError ? <p className="form-error">{newQuestionCategoryError}</p> : null}
+            <div className="action-row">
+              <button type="submit">Save category</button>
+              <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+                Cancel
+              </button>
+            </div>
+          </form>
         </section>
       </div>
     ) : null;
@@ -4204,6 +4343,8 @@ function App() {
         {renderQuestionSetDialog()}
 
         {renderQuestionEditorDialog()}
+
+        {renderNewQuestionCategoryDialog()}
 
         {renderEmployeeDialog()}
 
