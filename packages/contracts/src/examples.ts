@@ -10,6 +10,7 @@ import type {
   QuestionSetsListResponse,
   ReviewPeriodsListResponse,
 } from "./api.js";
+import { defaultWorkflowMarkdown, defaultWorkflowVisibility } from "./domain.js";
 
 const timestamps = {
   created: "2026-01-01T00:00:00.000Z",
@@ -382,6 +383,11 @@ export const apiIndexExample: ApiIndexResponse = {
       path: "/api/v1/foundation",
       description: "Combined snapshot used during the initial build phase.",
     },
+    {
+      name: "workflow-settings",
+      path: "/api/v1/workflow-settings",
+      description: "Shared workflow markdown and sidebar visibility.",
+    },
   ],
 };
 
@@ -406,6 +412,10 @@ export const foundationSnapshotExample: FoundationSnapshot = {
   questionSets: questionSetsListExample.items,
   assignments: assignmentsListExample.items,
   assessments: assessmentsListExample.items,
+  workflow: {
+    markdown: defaultWorkflowMarkdown,
+    visibility: defaultWorkflowVisibility,
+  },
 };
 
 export const adminLoginExample: AuthLoginResponse = {
@@ -440,6 +450,7 @@ export const adminLoginExample: AuthLoginResponse = {
       "assessments:accept",
       "assessments:review",
       "assessments:reassign",
+      "workflow:update",
     ],
     user: adaAdminEmployee,
   },

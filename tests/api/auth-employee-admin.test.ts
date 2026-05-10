@@ -8,10 +8,12 @@ import {
   deleteEmployeeResponseSchema,
   employeeResponseSchema,
   employeesListResponseSchema,
+  foundationSnapshotSchema,
   localUsersExportResponseSchema,
   localUsersImportResponseSchema,
   resetEmployeePasswordResponseSchema,
   setEmployeePasswordResponseSchema,
+  workflowSettingsResponseSchema,
 } from "@revu/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -168,13 +170,15 @@ describe("auth and employee admin API", () => {
       },
       payload: {
         managerId: "11111111-1111-4111-8111-111111111111",
-        assessorId: "33333333-3333-4333-8333-333333333333",
+        assessor1Id: "22222222-2222-4222-8222-222222222222",
+        assessor2Id: "33333333-3333-4333-8333-333333333333",
       },
     });
     expect(managerUpdateResponse.statusCode).toBe(200);
     const managerUpdatedEmployee = employeeResponseSchema.parse(managerUpdateResponse.json()).item;
     expect(managerUpdatedEmployee.managerId).toBe("11111111-1111-4111-8111-111111111111");
-    expect(managerUpdatedEmployee.assessorId).toBe("33333333-3333-4333-8333-333333333333");
+    expect(managerUpdatedEmployee.assessor1Id).toBe("22222222-2222-4222-8222-222222222222");
+    expect(managerUpdatedEmployee.assessor2Id).toBe("33333333-3333-4333-8333-333333333333");
 
     const forbiddenManagerRoleChange = await app.inject({
       method: "PATCH",
@@ -202,7 +206,8 @@ describe("auth and employee admin API", () => {
         role: "employee",
         status: "active",
         managerId: "22222222-2222-4222-8222-222222222222",
-        assessorId: "44444444-4444-4444-8444-444444444444",
+        assessor1Id: "22222222-2222-4222-8222-222222222222",
+        assessor2Id: "44444444-4444-4444-8444-444444444444",
         password: "OnboardPass123!",
       },
     });
@@ -228,7 +233,8 @@ describe("auth and employee admin API", () => {
         role: "employee",
         status: "active",
         managerId: "22222222-2222-4222-8222-222222222222",
-        assessorId: "44444444-4444-4444-8444-444444444444",
+        assessor1Id: "22222222-2222-4222-8222-222222222222",
+        assessor2Id: "44444444-4444-4444-8444-444444444444",
       },
     });
     expect(duplicateCaseResponse.statusCode).toBe(409);
@@ -365,7 +371,8 @@ describe("auth and employee admin API", () => {
         role: "employee",
         status: "active",
         managerId: "22222222-2222-4222-8222-222222222222",
-        assessorId: "44444444-4444-4444-8444-444444444444",
+        assessor1Id: "22222222-2222-4222-8222-222222222222",
+        assessor2Id: "44444444-4444-4444-8444-444444444444",
       },
     });
     expect(recreateDeletedEmployeeResponse.statusCode).toBe(201);
@@ -398,7 +405,8 @@ describe("auth and employee admin API", () => {
     expect(exportedEmployee).toBeDefined();
     expect(exportedEmployee).toMatchObject({
       managerUsername: "manny.manager",
-      assessorUsername: "pat.peer",
+      assessor1Username: "manny.manager",
+      assessor2Username: "pat.peer",
       passwordResetRequired: true,
     });
     expect((await login(exportApp, "elliot.employee", "EmployeePass123!")).statusCode).toBe(401);
@@ -437,7 +445,8 @@ describe("auth and employee admin API", () => {
             role: "employee",
             status: "active",
             managerUsername: "manny.manager",
-            assessorUsername: "pat.peer",
+            assessor1Username: "manny.manager",
+            assessor2Username: "pat.peer",
             password: "ImportedPass123!",
             passwordResetRequired: true,
           },
@@ -448,7 +457,8 @@ describe("auth and employee admin API", () => {
             role: "employee",
             status: "active",
             managerUsername: "manny.manager",
-            assessorUsername: "pat.peer",
+            assessor1Username: "manny.manager",
+            assessor2Username: "pat.peer",
             password: "TransferPass123!",
             passwordResetRequired: false,
           },
@@ -526,7 +536,8 @@ describe("auth and employee admin API", () => {
             role: "employee",
             status: "active",
             managerUsername: "manny.manager",
-            assessorUsername: "pat.peer",
+            assessor1Username: "manny.manager",
+            assessor2Username: "pat.peer",
             password: "",
             credentialKind: "password-hash",
             passwordResetRequired: false,
@@ -537,6 +548,55 @@ describe("auth and employee admin API", () => {
 
     expect(importResponse.statusCode).toBe(400);
     expect(importResponse.body).toContain("Password hash must use a supported stored-password format");
+  });
+
+  it("persists workflow settings through the admin API and serves them from foundation", async () => {
+    const app = await createApp();
+    const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
+    const managerLogin = authLoginResponseSchema.parse((await login(app, "manny.manager", "ManagerPass123!")).json());
+
+    const forbiddenResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/workflow-settings",
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        markdown: "## Hidden workflow",
+        visibility: "admin only",
+      },
+    });
+    expect(forbiddenResponse.statusCode).toBe(403);
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/workflow-settings",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        markdown: "## Shared workflow\n- Synced across browsers",
+        visibility: "managers",
+      },
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(workflowSettingsResponseSchema.parse(updateResponse.json()).item).toEqual({
+      markdown: "## Shared workflow\n- Synced across browsers",
+      visibility: "managers",
+    });
+
+    const foundationResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(foundationResponse.statusCode).toBe(200);
+    expect(foundationSnapshotSchema.parse(foundationResponse.json()).workflow).toEqual({
+      markdown: "## Shared workflow\n- Synced across browsers",
+      visibility: "managers",
+    });
   });
 
   it("captures auth schema invariants in the migration", () => {

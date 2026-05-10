@@ -65,6 +65,7 @@ vi.mock('./api', () => {
     updateQuestionCategories: vi.fn(),
     updateQuestionSet: vi.fn(),
     updateReviewPeriod: vi.fn(),
+    updateWorkflowSettings: vi.fn(),
   };
 });
 
@@ -85,6 +86,7 @@ import {
   importQuestionSets,
   listEmployees,
   listQuestionCategories,
+  login,
   me,
   resetEmployeePassword,
   restoreBackup,
@@ -92,6 +94,7 @@ import {
   updateEmployee,
   updateOwnProfile,
   updateQuestionCategories,
+  updateWorkflowSettings,
 } from './api';
 
 function cloneQuestionSlice() {
@@ -273,11 +276,61 @@ describe('questions screen', () => {
     await waitFor(() => container.textContent?.includes('Sign into Revu') ?? false);
 
     const eyebrowLink = container.querySelector('a.eyebrow-link') as HTMLAnchorElement | null;
+    const usernameInput = container.querySelector('input') as HTMLInputElement | null;
     expect(eyebrowLink).toBeTruthy();
     expect(eyebrowLink?.getAttribute('href')).toBe('https://github.com/mkronvold/revu');
+    expect(usernameInput?.value).toBe('');
     expect(container.textContent).toContain('Sign into Revu');
     expect(container.textContent).not.toContain('Use the API-backed local username and password flow');
     expect(container.textContent).not.toContain('Seeded API accounts');
+  });
+
+  it('prefills the sign-in username from local storage and saves the last successful username', async () => {
+    vi.mocked(getApiIndex).mockResolvedValue({
+      name: 'revu-api',
+      version: '0.1.0',
+      seededAccountsAvailable: false,
+      resources: [],
+    });
+    vi.mocked(login).mockResolvedValue(adminLoginExample);
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.localStorage.setItem('revu-login-username', 'Last.User');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Sign into Revu') ?? false);
+
+    const usernameInput = container.querySelector('input[type="text"], input:not([type])') as HTMLInputElement | null;
+    const passwordInput = container.querySelector('input[type="password"]') as HTMLInputElement | null;
+    const signInButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Sign in');
+
+    expect(usernameInput?.value).toBe('Last.User');
+    expect(passwordInput?.value).toBe('');
+
+    await act(async () => {
+      if (usernameInput) {
+        setFieldValue(usernameInput, 'Pat.Peer');
+      }
+      if (passwordInput) {
+        setFieldValue(passwordInput, 'PeerPass123!');
+      }
+      signInButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/dashboard');
+
+    expect(login).toHaveBeenCalledWith({
+      username: 'Pat.Peer',
+      password: 'PeerPass123!',
+    });
+    expect(window.localStorage.getItem('revu-login-username')).toBe('Pat.Peer');
   });
 
   it('renders markdown, opens the question-set dialog from the card, and edits questions in a nested dialog', async () => {
@@ -702,9 +755,13 @@ describe('workflow entry', () => {
 
   it('keeps direct workflow access working while hiding the nav item from employees when visibility is managers', async () => {
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
-    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
-
-    window.localStorage.setItem('revu-workflow-visibility', 'managers');
+    vi.mocked(getFoundation).mockResolvedValue({
+      ...cloneQuestionSlice(),
+      workflow: {
+        ...foundationSnapshotExample.workflow,
+        visibility: 'managers',
+      },
+    });
     window.sessionStorage.setItem('revu-session-token', 'session-token');
     window.history.pushState(null, '', '/workflow');
 
@@ -727,6 +784,12 @@ describe('workflow entry', () => {
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(updateWorkflowSettings).mockResolvedValue({
+      item: {
+        markdown: '## Updated workflow\n- **Bold** item\n- Second item',
+        visibility: 'managers',
+      },
+    });
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
@@ -780,6 +843,35 @@ describe('workflow entry', () => {
     });
 
     expect(container.querySelector('.workflow-editor-dialog')).toBeNull();
+  });
+
+  it('loads workflow settings from the foundation snapshot instead of browser local storage', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue({
+      ...cloneQuestionSlice(),
+      workflow: {
+        markdown: '## Shared workflow\n- Pulled from the API',
+        visibility: 'admin only',
+      },
+    });
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.localStorage.setItem('revu-workflow-markdown', '## Stale local workflow');
+    window.localStorage.setItem('revu-workflow-visibility', 'managers');
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/workflow');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Shared workflow') ?? false);
+
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Shared workflow');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: admin only');
+    expect(container.textContent).not.toContain('Stale local workflow');
   });
 
   it('toggles the sidebar width without removing navigation or utility controls', async () => {
@@ -882,6 +974,7 @@ describe('file management screen', () => {
   it('renders consolidated transfer cards, archive controls, and backup restore tools', async () => {
     const backup = createBackupExample();
     const questionSnapshot = cloneQuestionSlice();
+    let currentFoundationSnapshot = structuredClone(questionSnapshot);
     const selectedReviewPeriod = questionSnapshot.reviewPeriods[0]!;
     const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const session: AuthSession = {
@@ -898,7 +991,7 @@ describe('file management screen', () => {
     };
 
     vi.mocked(me).mockResolvedValue({ session });
-    vi.mocked(getFoundation).mockResolvedValue(questionSnapshot);
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundationSnapshot));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
@@ -963,17 +1056,41 @@ describe('file management screen', () => {
       supportedFormats: ['json', 'csv'],
     });
     vi.mocked(exportBackup).mockResolvedValue(backup);
-    vi.mocked(restoreBackup).mockResolvedValue({
-      mode: 'replace',
-      target: 'questions',
-      restoredAt: '2026-06-03T08:15:00.000Z',
-      counts: {
-        users: backup.users.itemCount,
-        reviewPeriods: backup.reviewData.reviewPeriods.length,
-        questionSets: backup.reviewData.questionSets.length,
-        assignments: backup.reviewData.assignments.length,
-        assessments: backup.reviewData.assessments.length,
-      },
+    vi.mocked(restoreBackup).mockImplementation(async () => {
+      currentFoundationSnapshot = {
+        ...currentFoundationSnapshot,
+        reviewPeriods: structuredClone(backup.reviewData.reviewPeriods),
+        questionSets: structuredClone(backup.reviewData.questionSets),
+        assignments: structuredClone(backup.reviewData.assignments),
+        assessments: structuredClone(backup.reviewData.assessments),
+        workflow: structuredClone(backup.reviewData.workflow),
+      };
+
+      return {
+        mode: 'replace',
+        target: 'questions',
+        restoredAt: '2026-06-03T08:15:00.000Z',
+        counts: {
+          users: backup.users.itemCount,
+          reviewPeriods: backup.reviewData.reviewPeriods.length,
+          questionSets: backup.reviewData.questionSets.length,
+          assignments: backup.reviewData.assignments.length,
+          assessments: backup.reviewData.assessments.length,
+        },
+      };
+    });
+    vi.mocked(updateWorkflowSettings).mockImplementation(async () => {
+      currentFoundationSnapshot = {
+        ...currentFoundationSnapshot,
+        workflow: {
+          markdown: '## Updated workflow\n- **Bold** item\n- Second item',
+          visibility: 'managers',
+        },
+      };
+
+      return {
+        item: currentFoundationSnapshot.workflow,
+      };
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1062,9 +1179,10 @@ describe('file management screen', () => {
     });
 
     await waitFor(() => container.textContent?.includes('Updated the workflow settings.') ?? false);
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Updated workflow');
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: managers');
-    expect(window.localStorage.getItem('revu-workflow-visibility')).toBe('managers');
+    expect(updateWorkflowSettings).toHaveBeenCalledWith('session-token', {
+      markdown: '## Updated workflow\n- **Bold** item\n- Second item',
+      visibility: 'managers',
+    });
 
     await act(async () => {
       window.history.pushState(null, '', '/file-management');
@@ -1220,8 +1338,8 @@ describe('file management screen', () => {
     });
 
     await waitFor(() => window.location.pathname === '/workflow');
-    expect(container.textContent).toContain('Updated workflow');
-    expect(container.querySelector('.workflow-page-markdown')?.innerHTML).toContain('<strong>Bold</strong>');
+    expect(container.textContent).toContain('New Review Period begins');
+    expect(container.textContent).toContain('Sidebar visibility: all');
   });
 
   it('saves automatic backup schedule, retention, and enablement settings', async () => {

@@ -299,7 +299,7 @@ describe("assessment authoring and review API", () => {
     expect(reassignment.assignment?.managerId).toBe("11111111-1111-4111-8111-111111111111");
     expect(reassignment.assignment?.assessorId).toBe("11111111-1111-4111-8111-111111111111");
     expect(reassignment.employee.managerId).toBe("11111111-1111-4111-8111-111111111111");
-    expect(reassignment.employee.assessorId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(reassignment.employee.assessor2Id).toBe("11111111-1111-4111-8111-111111111111");
     expect(reassignment.assessment.assessorId).toBe("33333333-3333-4333-8333-333333333333");
 
     const elliotVisibleAssessmentsResponse = await app.inject({

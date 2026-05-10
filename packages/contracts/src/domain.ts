@@ -15,6 +15,7 @@ export const reviewPeriodStatusSchema = z.enum(["active", "inactive", "archived"
 export const questionTargetSchema = z.enum(["self", "peer"]);
 export const questionTypeSchema = z.enum(["subjective", "ranking", "narrative"]);
 export const questionSetStatusSchema = z.enum(["draft", "active"]);
+export const workflowVisibilitySchema = z.enum(["all", "managers", "admin only"]);
 export const assessmentReviewStateSchema = z.enum([
   "new",
   "draft",
@@ -26,6 +27,14 @@ export const assessmentArchiveStateSchema = z.enum(["active", "archived"]);
 export const localUsersExportModeSchema = z.enum(["rotate-passcodes", "preserve-passwords"]);
 export const localUserCredentialKindSchema = z.enum(["password", "password-hash", "unset"]);
 export const questionCategoryNameSchema = z.string().trim().min(1);
+export const defaultWorkflowMarkdown = `### New \`Review Period\` begins
+- HR Admin generates a \`Review Period\` and \`Question Sets\` for Self-assessment and Peer-assessment
+- Managers assign peers to assess employees
+- All Employees complete and submit Self-Assessments and Peer-Assessments assigned to them
+- Managers accept and review submitted Assessments and add their comments
+- Completed Reviews are finalized by HR Admin
+- When the \`Review Period\` is complete, HR Admin archives them.`;
+export const defaultWorkflowVisibility = "all" as const;
 const bcryptHashSchema = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 const scryptHashSchema = /^[0-9a-f]{32}:[0-9a-f]{128}$/i;
 
@@ -126,6 +135,11 @@ export const reviewPeriodSchema = z.object({
   updatedAt: isoTimestampSchema,
 });
 
+export const workflowSettingsSchema = z.object({
+  markdown: z.string(),
+  visibility: workflowVisibilitySchema,
+});
+
 export const questionSchema = z.object({
   id: idSchema,
   order: z.number().int().positive(),
@@ -192,6 +206,7 @@ export type ReviewPeriodStatus = z.infer<typeof reviewPeriodStatusSchema>;
 export type QuestionTarget = z.infer<typeof questionTargetSchema>;
 export type QuestionType = z.infer<typeof questionTypeSchema>;
 export type QuestionSetStatus = z.infer<typeof questionSetStatusSchema>;
+export type WorkflowVisibility = z.infer<typeof workflowVisibilitySchema>;
 export type AssessmentReviewState = z.infer<typeof assessmentReviewStateSchema>;
 export type AssessmentArchiveState = z.infer<typeof assessmentArchiveStateSchema>;
 export type Employee = z.infer<typeof employeeSchema>;
@@ -202,6 +217,7 @@ export type LocalUserCredentialKind = z.infer<typeof localUserCredentialKindSche
 export type LocalUserTransferItem = z.infer<typeof localUserTransferItemSchema>;
 export type QuestionCategoryName = z.infer<typeof questionCategoryNameSchema>;
 export type ReviewPeriod = z.infer<typeof reviewPeriodSchema>;
+export type WorkflowSettings = z.infer<typeof workflowSettingsSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type QuestionSet = z.infer<typeof questionSetSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;

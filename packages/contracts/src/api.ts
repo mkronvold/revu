@@ -6,6 +6,8 @@ import {
   assessmentResponseSchema,
   assessmentSchema,
   assignmentSchema,
+  defaultWorkflowMarkdown,
+  defaultWorkflowVisibility,
   employeeAdminSchema,
   employeeSchema,
   employeeStatusSchema,
@@ -19,6 +21,7 @@ import {
   questionSetSchema,
   reviewPeriodSchema,
   usernameSchema,
+  workflowSettingsSchema,
 } from "./domain.js";
 
 export const apiResourceSchema = z.object({
@@ -100,6 +103,7 @@ export const foundationSnapshotSchema = z.object({
   questionSets: z.array(questionSetSchema),
   assignments: z.array(assignmentSchema),
   assessments: z.array(assessmentSchema),
+  workflow: workflowSettingsSchema,
 });
 
 export const authPermissionSchema = z.enum([
@@ -128,6 +132,7 @@ export const authPermissionSchema = z.enum([
   "assessments:accept",
   "assessments:review",
   "assessments:reassign",
+  "workflow:update",
   "backups:read",
   "backups:create",
   "backups:restore",
@@ -415,12 +420,22 @@ export const updateQuestionCategoriesRequestSchema = z.object({
   items: z.array(questionCategoryNameSchema),
 });
 
+export const updateWorkflowSettingsRequestSchema = workflowSettingsSchema;
+
+export const workflowSettingsResponseSchema = z.object({
+  item: workflowSettingsSchema,
+});
+
 export const backupReviewDataSchema = foundationSnapshotSchema
   .omit({
     employees: true,
   })
   .extend({
     questionCategories: z.array(questionCategoryNameSchema).default([]),
+    workflow: workflowSettingsSchema.default({
+      markdown: defaultWorkflowMarkdown,
+      visibility: defaultWorkflowVisibility,
+    }),
   });
 
 export const backupSnapshotSchema = z.object({
@@ -543,6 +558,8 @@ export type ImportStubRequest = z.infer<typeof importStubRequestSchema>;
 export type ImportStubResponse = z.infer<typeof importStubResponseSchema>;
 export type QuestionCategoriesListResponse = z.infer<typeof questionCategoriesListResponseSchema>;
 export type UpdateQuestionCategoriesRequest = z.infer<typeof updateQuestionCategoriesRequestSchema>;
+export type UpdateWorkflowSettingsRequest = z.infer<typeof updateWorkflowSettingsRequestSchema>;
+export type WorkflowSettingsResponse = z.infer<typeof workflowSettingsResponseSchema>;
 export type BackupReviewData = z.infer<typeof backupReviewDataSchema>;
 export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
 export type BackupExportQuery = z.infer<typeof backupExportQuerySchema>;

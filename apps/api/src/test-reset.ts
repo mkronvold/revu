@@ -3,6 +3,8 @@ import { randomBytes, scryptSync } from "node:crypto";
 import {
   assessmentsListExample,
   assignmentsListExample,
+  defaultWorkflowMarkdown,
+  defaultWorkflowVisibility,
   employeesListExample,
   questionSetsListExample,
   reviewPeriodsListExample,
@@ -276,6 +278,23 @@ async function insertAssessments(client: PoolClient) {
   }
 }
 
+async function insertWorkflowSettings(client: PoolClient) {
+  await client.query(
+    `
+      INSERT INTO workflow_settings (
+        id,
+        markdown,
+        visibility
+      ) VALUES (TRUE, $1, $2)
+      ON CONFLICT (id) DO UPDATE
+      SET markdown = EXCLUDED.markdown,
+          visibility = EXCLUDED.visibility,
+          updated_at = NOW()
+    `,
+    [defaultWorkflowMarkdown, defaultWorkflowVisibility],
+  );
+}
+
 export async function resetDemoData() {
   const pool = getPool();
   const client = await pool.connect();
@@ -291,6 +310,17 @@ export async function resetDemoData() {
         )
       `,
     );
+    await client.query(
+      `
+        CREATE TABLE IF NOT EXISTS workflow_settings (
+          id boolean PRIMARY KEY DEFAULT TRUE CHECK (id),
+          markdown text NOT NULL,
+          visibility text NOT NULL CHECK (visibility IN ('all', 'managers', 'admin only')),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `,
+    );
     await client.query("SET LOCAL session_replication_role = replica");
     await client.query(
       `
@@ -300,6 +330,7 @@ export async function resetDemoData() {
           assessments,
           review_period_assignments,
           question_categories,
+          workflow_settings,
           question_set_questions,
           question_sets,
           review_periods,
@@ -312,6 +343,7 @@ export async function resetDemoData() {
     await insertReviewPeriods(client);
     await insertQuestionSets(client);
     await insertQuestionCategories(client);
+    await insertWorkflowSettings(client);
     await insertAssignments(client);
     await insertAssessments(client);
     await client.query("COMMIT");

@@ -24,6 +24,7 @@ import {
   updateBackupStatus,
   updateOwnProfile,
   updateQuestionCategories,
+  updateWorkflowSettings,
 } from './api';
 
 describe('web api client', () => {
@@ -123,6 +124,17 @@ describe('web api client', () => {
           }),
           { status: 200 },
         ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            item: {
+              markdown: '## Shared workflow\n- Pulled from API',
+              visibility: 'managers',
+            },
+          }),
+          { status: 200 },
+        ),
       );
 
     await getFoundation('session-token');
@@ -140,6 +152,10 @@ describe('web api client', () => {
     await reassignAssessment('session-token', foundationSnapshotExample.assessments[1]!.id, {
       managerId: foundationSnapshotExample.employees[0]!.id,
       assessorId: foundationSnapshotExample.employees[2]!.id,
+    });
+    await updateWorkflowSettings('session-token', {
+      markdown: '## Shared workflow\n- Pulled from API',
+      visibility: 'managers',
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -172,6 +188,17 @@ describe('web api client', () => {
       `${apiBaseUrl}/assessments/${foundationSnapshotExample.assessments[1]!.id}/reassign`,
       expect.objectContaining({
         method: 'POST',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      `${apiBaseUrl}/workflow-settings`,
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+          'content-type': 'application/json',
+        }),
       }),
     );
   });

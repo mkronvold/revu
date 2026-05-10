@@ -1,7 +1,9 @@
+import { defaultWorkflowMarkdown, type WorkflowVisibility as SharedWorkflowVisibility } from '@revu/contracts';
+
 export type Audience = 'Employee' | 'Manager' | 'Admin';
 export type NavGroup = 'Workspace' | 'Administration';
 export type AppRole = 'employee' | 'manager' | 'admin';
-export type WorkflowVisibility = 'all' | 'managers' | 'admin only';
+export type WorkflowVisibility = SharedWorkflowVisibility;
 
 export type AppSection = {
   id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assessments' | 'fileManagement' | 'workflow';
@@ -22,13 +24,7 @@ export const routeLegend = {
   reviews: 'Reviews are manager and admin actions taken after an assessment is accepted.',
 } as const;
 
-export const workflowMarkdown = `### New \`Review Period\` begins
-- HR Admin generates a \`Review Period\` and \`Question Sets\` for Self-assessment and Peer-assessment
-- Managers assign peers to assess employees
-- All Employees complete and submit Self-Assessments and Peer-Assessments assigned to them
-- Managers accept and review submitted Assessments and add their comments
-- Completed Reviews are finalized by HR Admin
-- When the \`Review Period\` is complete, HR Admin archives them.`;
+export const workflowMarkdown = defaultWorkflowMarkdown;
 
 export const appSections: AppSection[] = [
   {

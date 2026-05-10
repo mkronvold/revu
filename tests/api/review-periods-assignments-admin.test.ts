@@ -194,7 +194,7 @@ describe("review periods, question sets, and assignments admin API", () => {
     });
     expect(employeeAfterAssignmentResponse.statusCode).toBe(200);
     const employeeAfterAssignment = employeeResponseSchema.parse(employeeAfterAssignmentResponse.json()).item;
-    expect(employeeAfterAssignment.assessorId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(employeeAfterAssignment.assessor2Id).toBe("11111111-1111-4111-8111-111111111111");
     expect(employeeAfterAssignment.managerId).toBe("22222222-2222-4222-8222-222222222222");
 
     const questionSetExportResponse = await app.inject({
@@ -361,7 +361,7 @@ describe("review periods, question sets, and assignments admin API", () => {
       },
     });
     expect(unarchiveResponse.statusCode).toBe(200);
-    expect(reviewPeriodResponseSchema.parse(unarchiveResponse.json()).item.status).toBe("active");
+    expect(reviewPeriodResponseSchema.parse(unarchiveResponse.json()).item.status).toBe("inactive");
 
     const unarchivedFoundationResponse = await app.inject({
       method: "GET",

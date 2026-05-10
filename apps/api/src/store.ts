@@ -49,7 +49,10 @@ import type {
   UpdateQuestionCategoriesRequest,
   UpdateQuestionSetRequest,
   UpdateReviewPeriodRequest,
+  UpdateWorkflowSettingsRequest,
+  WorkflowSettings,
 } from "@revu/contracts";
+import { defaultWorkflowMarkdown, defaultWorkflowVisibility } from "@revu/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import { getPool, withTransaction } from "./db.js";
@@ -98,6 +101,11 @@ type ReviewPeriodRow = {
   archived_by_employee_id: string | null;
   created_at: Date | string;
   updated_at: Date | string;
+};
+
+type WorkflowSettingsRow = {
+  markdown: string;
+  visibility: WorkflowSettings["visibility"];
 };
 
 type QuestionSetRow = {
@@ -251,6 +259,7 @@ const permissionsByRole: Record<Employee["role"], AuthPermission[]> = {
     "assessments:accept",
     "assessments:review",
     "assessments:reassign",
+    "workflow:update",
     "backups:read",
     "backups:create",
     "backups:restore",
@@ -3168,6 +3177,75 @@ export class ApiStore {
     });
   }
 
+  private async ensureWorkflowSettingsTable(client: DbClient) {
+    await client.query(
+      `
+        CREATE TABLE IF NOT EXISTS workflow_settings (
+          id boolean PRIMARY KEY DEFAULT TRUE CHECK (id),
+          markdown text NOT NULL,
+          visibility text NOT NULL CHECK (visibility IN ('all', 'managers', 'admin only')),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `,
+    );
+
+    await client.query(
+      `
+        INSERT INTO workflow_settings (id, markdown, visibility)
+        VALUES (TRUE, $1, $2)
+        ON CONFLICT (id) DO NOTHING
+      `,
+      [defaultWorkflowMarkdown, defaultWorkflowVisibility],
+    );
+  }
+
+  private toWorkflowSettings(row: WorkflowSettingsRow): WorkflowSettings {
+    return {
+      markdown: row.markdown,
+      visibility: row.visibility,
+    };
+  }
+
+  async getWorkflowSettings(client: DbClient = this.pool): Promise<WorkflowSettings> {
+    await this.ensureWorkflowSettingsTable(client);
+    const result = await client.query<WorkflowSettingsRow>(
+      `
+        SELECT markdown, visibility
+        FROM workflow_settings
+        WHERE id = TRUE
+      `,
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new ApiError(500, "Workflow settings are unavailable");
+    }
+
+    return this.toWorkflowSettings(row);
+  }
+
+  private async replaceWorkflowSettings(client: DbClient, input: WorkflowSettings) {
+    await this.ensureWorkflowSettingsTable(client);
+    await client.query(
+      `
+        UPDATE workflow_settings
+        SET markdown = $1,
+            visibility = $2,
+            updated_at = NOW()
+        WHERE id = TRUE
+      `,
+      [input.markdown, input.visibility],
+    );
+  }
+
+  async updateWorkflowSettings(input: UpdateWorkflowSettingsRequest): Promise<WorkflowSettings> {
+    return withTransaction(async (client) => {
+      await this.replaceWorkflowSettings(client, input);
+      return this.getWorkflowSettings(client);
+    });
+  }
+
   async getBackupStatus(): Promise<BackupStatusResponse> {
     const config = this.getBackupStatusConfig();
 
@@ -3198,13 +3276,14 @@ export class ApiStore {
   }
 
   async createBackup(mode: LocalUsersExportMode = "preserve-passwords"): Promise<BackupSnapshot> {
-    const [users, reviewPeriods, questionSets, questionCategories, assignments, assessments] = await Promise.all([
+    const [users, reviewPeriods, questionSets, questionCategories, assignments, assessments, workflow] = await Promise.all([
       this.exportLocalUsers("json", mode),
       this.listReviewPeriods(),
       this.listQuestionSets(),
       this.listQuestionCategories(),
       this.listAssignments(),
       this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
+      this.getWorkflowSettings(),
     ]);
 
     const backup = {
@@ -3221,6 +3300,7 @@ export class ApiStore {
         questionCategories,
         assignments,
         assessments,
+        workflow,
       },
     };
 
@@ -3820,6 +3900,7 @@ export class ApiStore {
     await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
     await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
     await this.insertQuestionCategories(client, reviewData.questionCategories);
+    await this.replaceWorkflowSettings(client, reviewData.workflow);
   }
 
   private async replaceReviewData(client: DbClient, reviewData: BackupReviewData) {
@@ -3840,6 +3921,7 @@ export class ApiStore {
     await this.insertQuestionCategories(client, reviewData.questionCategories);
     await this.insertAssignmentsSnapshot(client, reviewData.assignments);
     await this.insertAssessmentsSnapshot(client, reviewData.assessments);
+    await this.replaceWorkflowSettings(client, reviewData.workflow);
   }
 
   async restoreBackup(scope: BackupRestoreScope, backup: BackupSnapshot): Promise<BackupRestoreResponse> {
@@ -4230,12 +4312,13 @@ export class ApiStore {
   }
 
   async foundationSnapshot(session?: AuthSession) {
-    const [employees, reviewPeriods, questionSets, assignments, assessments] = await Promise.all([
+    const [employees, reviewPeriods, questionSets, assignments, assessments, workflow] = await Promise.all([
       this.listEmployees(),
       this.listReviewPeriods(),
       this.listQuestionSets(),
       this.listAssignments(),
       session ? this.listAssessments(session) : this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
+      this.getWorkflowSettings(),
     ]);
 
     return {
@@ -4244,6 +4327,7 @@ export class ApiStore {
       questionSets,
       assignments,
       assessments,
+      workflow,
     };
   }
 }

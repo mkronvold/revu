@@ -12,7 +12,7 @@ import type {
   QuestionTarget,
   ReviewPeriod,
 } from '@revu/contracts';
-import { backupSnapshotSchema } from '@revu/contracts';
+import { backupSnapshotSchema, defaultWorkflowVisibility } from '@revu/contracts';
 import { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -39,6 +39,7 @@ import {
   updateBackupStatus,
   updateEmployee,
   updateQuestionCategories,
+  updateWorkflowSettings,
 } from './api';
 import { buildDashboardSnapshot } from './dashboard';
 import {
@@ -121,9 +122,8 @@ const companyName = configuredCompanyName ? configuredCompanyName : null;
 const revuRepositoryUrl = 'https://github.com/mkronvold/revu';
 const buildRevision = getRuntimeRevision();
 const sessionStorageKey = 'revu-session-token';
+const loginUsernameStorageKey = 'revu-login-username';
 const themeStorageKey = 'revu-theme-preference';
-const workflowStorageKey = 'revu-workflow-markdown';
-const workflowVisibilityStorageKey = 'revu-workflow-visibility';
 const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
 const lastResponseTimeoutMs = 120000;
 const newQuestionCategoryOptionValue = '__new-question-category__';
@@ -258,21 +258,12 @@ function buildLocalUserExportConfirmation(format: TransferFormat, mode: LocalUse
     : `Exporting local users in preserve-passwords mode will leave passwords and active sessions untouched. Continue with the ${format.toUpperCase()} export?`;
 }
 
-function getStoredWorkflowMarkdown() {
-  const storedWorkflow = window.localStorage.getItem(workflowStorageKey);
-  return storedWorkflow ?? workflowMarkdown;
-}
-
-function normalizeStoredWorkflowVisibility(value: string | null): WorkflowVisibility {
-  return value === 'managers' || value === 'admin only' ? value : 'all';
-}
-
-function getStoredWorkflowVisibility(): WorkflowVisibility {
-  return normalizeStoredWorkflowVisibility(window.localStorage.getItem(workflowVisibilityStorageKey));
-}
-
 function getStoredSidebarCollapsed() {
   return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+}
+
+function getStoredLoginUsername() {
+  return window.localStorage.getItem(loginUsernameStorageKey) ?? '';
 }
 
 type BackupRestoreAction = {
@@ -300,16 +291,16 @@ const backupRestoreActions: BackupRestoreAction[] = [
   {
     target: 'questions',
     title: 'Restore questions',
-    description: 'Replace review periods and question sets from the uploaded backup.',
+    description: 'Replace workflow settings, review periods, and question sets from the uploaded backup.',
     warning:
-      'Restore questions uses replace semantics. It replaces review periods and question sets only, and it will fail unless assignments and assessments are already cleared.',
+      'Restore questions uses replace semantics. It replaces workflow settings, review periods, and question sets only, and it will fail unless assignments and assessments are already cleared.',
   },
   {
     target: 'reviews',
     title: 'Restore reviews',
-    description: 'Replace review periods, question sets, assignments, and assessments from the uploaded backup.',
+    description: 'Replace workflow settings, review periods, question sets, assignments, and assessments from the uploaded backup.',
     warning:
-      'Restore reviews uses replace semantics. It overwrites current review periods, question sets, assignments, assessments, and review events with the uploaded backup.',
+      'Restore reviews uses replace semantics. It overwrites current workflow settings, review periods, question sets, assignments, assessments, and review events with the uploaded backup.',
   },
 ];
 
@@ -363,14 +354,14 @@ function buildBackupRestoreNotice(
   }
 
   if (target === 'questions') {
-    return `Restored questions from ${fileName} with replace semantics. Loaded ${counts.reviewPeriods} review periods and ${counts.questionSets} question sets.`;
+    return `Restored questions from ${fileName} with replace semantics. Loaded workflow settings plus ${counts.reviewPeriods} review periods and ${counts.questionSets} question sets.`;
   }
 
   if (target === 'reviews') {
-    return `Restored reviews from ${fileName} with replace semantics. Loaded ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
+    return `Restored reviews from ${fileName} with replace semantics. Loaded workflow settings plus ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
   }
 
-  return `Restored the full backup from ${fileName} with replace semantics. Loaded ${counts.users} users, ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
+  return `Restored the full backup from ${fileName} with replace semantics. Loaded ${counts.users} users, workflow settings, ${counts.reviewPeriods} review periods, ${counts.questionSets} question sets, ${counts.assignments} assignments, and ${counts.assessments} assessments.`;
 }
 
 function buildBackupSessionNotice(target: BackupRestoreScope, mode: LocalUsersExportMode) {
@@ -456,8 +447,8 @@ function App() {
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [passwordStatus, setPasswordStatus] = useState('');
   const [passwordDraft, setPasswordDraft] = useState('');
-  const [loginUsername, setLoginUsername] = useState('ada.admin');
-  const [loginPassword, setLoginPassword] = useState('AdminPass123!');
+  const [loginUsername, setLoginUsername] = useState(() => getStoredLoginUsername());
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
   const [currentPasswordDraft, setCurrentPasswordDraft] = useState('');
@@ -473,6 +464,7 @@ function App() {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isLoadingBackupStatus, setIsLoadingBackupStatus] = useState(false);
   const [isSavingBackupSettings, setIsSavingBackupSettings] = useState(false);
+  const [isSavingWorkflowSettings, setIsSavingWorkflowSettings] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -504,8 +496,8 @@ function App() {
   const [isQuestionCategoriesDialogOpen, setIsQuestionCategoriesDialogOpen] = useState(false);
   const [questionCategoriesDraft, setQuestionCategoriesDraft] = useState<string[]>([]);
   const [questionCategoriesDialogError, setQuestionCategoriesDialogError] = useState('');
-  const [workflowContent, setWorkflowContent] = useState<string>(() => getStoredWorkflowMarkdown());
-  const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(() => getStoredWorkflowVisibility());
+  const [workflowContent, setWorkflowContent] = useState<string>(workflowMarkdown);
+  const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(defaultWorkflowVisibility);
   const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
   const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
   const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
@@ -559,14 +551,6 @@ function App() {
     window.localStorage.setItem(themeStorageKey, themePreference);
     document.documentElement.style.colorScheme = getThemeColorScheme(themePreference);
   }, [themePreference]);
-
-  useEffect(() => {
-    window.localStorage.setItem(workflowStorageKey, workflowContent);
-  }, [workflowContent]);
-
-  useEffect(() => {
-    window.localStorage.setItem(workflowVisibilityStorageKey, workflowVisibility);
-  }, [workflowVisibility]);
 
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(isSidebarCollapsed));
@@ -973,7 +957,15 @@ function App() {
       setSelectedAssessmentId(null);
       setSelectedReviewAssessmentId(null);
       setWorkflowNotice('');
+      setWorkflowContent(workflowMarkdown);
+      setWorkflowVisibility(defaultWorkflowVisibility);
+      setIsSavingWorkflowSettings(false);
+      closeWorkflowEditor({ force: true });
+      return;
     }
+
+    setWorkflowContent(foundation.workflow.markdown);
+    setWorkflowVisibility(foundation.workflow.visibility);
   }, [foundation]);
 
   useEffect(() => {
@@ -1460,15 +1452,37 @@ function App() {
     return true;
   };
 
-  const saveWorkflowContent = () => {
-    if (workflowDraft === null || workflowVisibilityDraft === null) {
+  const saveWorkflowContent = async () => {
+    if (workflowDraft === null || workflowVisibilityDraft === null || !sessionToken) {
       return;
     }
 
-    setWorkflowContent(workflowDraft);
-    setWorkflowVisibility(workflowVisibilityDraft);
-    closeWorkflowEditor({ force: true });
-    setAdminNotice('Updated the workflow settings.');
+    setIsSavingWorkflowSettings(true);
+    setAppError('');
+
+    try {
+      const response = await updateWorkflowSettings(sessionToken, {
+        markdown: workflowDraft,
+        visibility: workflowVisibilityDraft,
+      });
+
+      setWorkflowContent(response.item.markdown);
+      setWorkflowVisibility(response.item.visibility);
+      setFoundation((currentFoundation) =>
+        currentFoundation
+          ? {
+              ...currentFoundation,
+              workflow: response.item,
+            }
+          : currentFoundation,
+      );
+      closeWorkflowEditor({ force: true });
+      setAdminNotice('Updated the workflow settings.');
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingWorkflowSettings(false);
+    }
   };
 
   const openEmployeeDialog = (employeeId: string) => {
@@ -1635,14 +1649,17 @@ function App() {
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmittingLogin(true);
+    const normalizedLoginUsername = loginUsername.trim();
 
     try {
       const response = await login({
-        username: loginUsername.trim(),
+        username: normalizedLoginUsername,
         password: loginPassword,
       });
 
+      window.localStorage.setItem(loginUsernameStorageKey, normalizedLoginUsername);
       window.sessionStorage.setItem(sessionStorageKey, response.session.token);
+      setLoginUsername(normalizedLoginUsername);
       setSessionToken(response.session.token);
       setSession(response.session);
       setAuthNotice(
@@ -5388,7 +5405,15 @@ function App() {
         ) : null}
 
         {isAdmin && workflowDraft !== null && workflowVisibilityDraft !== null ? (
-          <div className="modal-backdrop" role="presentation" onClick={() => void closeWorkflowEditor()}>
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              if (!isSavingWorkflowSettings) {
+                void closeWorkflowEditor();
+              }
+            }}
+          >
             <section
               aria-modal="true"
               className="card modal-card workflow-editor-dialog"
@@ -5401,7 +5426,12 @@ function App() {
                   <p className="section-label">Workflow</p>
                   <h3 id="workflow-editor-title">Edit workflow markdown</h3>
                 </div>
-                <button type="button" className="secondary-button" onClick={() => void closeWorkflowEditor()}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void closeWorkflowEditor()}
+                  disabled={isSavingWorkflowSettings}
+                >
                   Close
                 </button>
               </div>
@@ -5412,6 +5442,7 @@ function App() {
                     <select
                       aria-label="Workflow visibility"
                       value={workflowVisibilityDraft}
+                      disabled={isSavingWorkflowSettings}
                       onChange={(event) => setWorkflowVisibilityDraft(event.target.value as WorkflowVisibility)}
                     >
                       <option value="all">all</option>
@@ -5425,6 +5456,7 @@ function App() {
                       aria-label="Workflow markdown"
                       rows={18}
                       value={workflowDraft}
+                      disabled={isSavingWorkflowSettings}
                       onChange={(event) => setWorkflowDraft(event.target.value)}
                     />
                   </label>
@@ -5435,10 +5467,15 @@ function App() {
                 </section>
               </div>
               <div className="action-row">
-                <button type="button" onClick={saveWorkflowContent}>
-                  Save workflow
+                <button type="button" onClick={() => void saveWorkflowContent()} disabled={isSavingWorkflowSettings}>
+                  {isSavingWorkflowSettings ? 'Saving workflow…' : 'Save workflow'}
                 </button>
-                <button type="button" className="secondary-button" onClick={() => void closeWorkflowEditor()}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void closeWorkflowEditor()}
+                  disabled={isSavingWorkflowSettings}
+                >
                   Cancel
                 </button>
               </div>

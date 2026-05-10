@@ -51,6 +51,8 @@ import {
   updateEmployeeRequestSchema,
   updateQuestionSetRequestSchema,
   updateReviewPeriodRequestSchema,
+  updateWorkflowSettingsRequestSchema,
+  workflowSettingsResponseSchema,
   type AcceptAssessmentRequest,
   type AssessmentsListQuery,
   type AuthLoginRequest,
@@ -79,6 +81,7 @@ import {
   type UpdateQuestionCategoriesRequest,
   type UpdateQuestionSetRequest,
   type UpdateReviewPeriodRequest,
+  type UpdateWorkflowSettingsRequest,
 } from '@revu/contracts';
 import { z } from 'zod';
 
@@ -256,6 +259,17 @@ export function updateOwnProfile(token: string, payload: AuthUpdateProfileReques
 
 export function getFoundation(token: string) {
   return request('/foundation', foundationSnapshotSchema, withAuthorization(token));
+}
+
+export function updateWorkflowSettings(token: string, payload: UpdateWorkflowSettingsRequest) {
+  return request(
+    '/workflow-settings',
+    workflowSettingsResponseSchema,
+    withAuthorization(token, {
+      method: 'PATCH',
+      body: JSON.stringify(updateWorkflowSettingsRequestSchema.parse(payload)),
+    }),
+  );
 }
 
 export function listEmployees(token: string) {

@@ -64,6 +64,8 @@ import {
   updateQuestionCategoriesRequestSchema,
   updateQuestionSetRequestSchema,
   updateReviewPeriodRequestSchema,
+  updateWorkflowSettingsRequestSchema,
+  workflowSettingsResponseSchema,
   type AuthPermission,
   type AuthSession,
   type BackupRestoreRequest,
@@ -422,6 +424,19 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const session = await requireSession(request, store);
       return foundationSnapshotSchema.parse(await store.foundationSnapshot(session));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/workflow-settings", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["workflow:update"]);
+      const body = parseWithSchema(updateWorkflowSettingsRequestSchema, request.body);
+      return workflowSettingsResponseSchema.parse({
+        item: await store.updateWorkflowSettings(body),
+      });
     } catch (error) {
       return sendError(reply, error);
     }

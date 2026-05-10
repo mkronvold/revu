@@ -109,6 +109,8 @@ describe("API/domain foundation", () => {
         .filter((assessment) => archivedPeriodIds.has(assessment.reviewPeriodId))
         .every((assessment) => assessment.archiveState === "archived" && assessment.isReadOnly),
     ).toBe(true);
+    expect(snapshot.workflow.visibility).toBe("all");
+    expect(snapshot.workflow.markdown).toContain("Managers accept and review submitted Assessments");
   });
 
   it("requires auth for the foundation snapshot and filters assessments by viewer visibility", async () => {
