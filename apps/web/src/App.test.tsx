@@ -1415,7 +1415,7 @@ describe('workflow entry', () => {
     expect(container.querySelector('.theme-card')).toBeTruthy();
   });
 
-  it('shows the assessment queue controls on the admin assessments page', async () => {
+  it('shows the assessment list controls on the admin assessments page and filters live', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation)
       .mockResolvedValueOnce(cloneQuestionSlice())
@@ -1438,11 +1438,11 @@ describe('workflow entry', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
     const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
     expect(navLinkLabels).toContain('Assessments');
-    expect(container.textContent).toContain('Assessment Queue');
+    expect(container.textContent).toContain('Assessment List');
     expect(container.textContent).not.toContain('All assessments');
     expect(container.textContent).toContain('2026 Annual Review');
     expect(container.textContent).toContain('Assessment status');
@@ -1452,6 +1452,22 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Clear not started assessments');
     expect(container.textContent).toContain('Sync assessments to assignments');
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);
+
+    const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    expect(searchInput).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(searchInput!, 'Submitted');
+      await flushRender();
+    });
+
+    expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(1);
+    expect(container.querySelector('.assessment-row-card')?.textContent).toContain('Submitted');
+
+    await act(async () => {
+      setFieldValue(searchInput!, '');
+      await flushRender();
+    });
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const clearButton = Array.from(container.querySelectorAll('button')).find(

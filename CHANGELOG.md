@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Renamed the admin Assessments page from **Assessment Queue** to **Assessment List** and added a live search box to filter the list
 - Added a live employee-directory search box and renamed the employee detail action to **Make Inactive** so it matches the existing inactive-status behavior
 - Added Review Period page removal controls so admins can delete a period after a confirmation summary that spells out how many question sets, assessments, and assignments will be removed with it
 - Replaced File Management's direct backup-now and restore cards with a Show backups dialog that lists stored backup files and supports immediate snapshot creation, upload, download, restore, and delete actions from one place

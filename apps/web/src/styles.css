@@ -1573,6 +1573,14 @@ button.employee-row:focus-visible {
   width: 100%;
 }
 
+.admin-list-search {
+  min-width: min(100%, 20rem);
+}
+
+.admin-list-search input {
+  width: 100%;
+}
+
 .review-period-card {
   gap: 0.85rem;
 }

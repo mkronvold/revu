@@ -614,6 +614,7 @@ function App() {
   const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
   const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
   const [workflowNotice, setWorkflowNotice] = useState('');
@@ -884,6 +885,23 @@ function App() {
         : [],
     [activeAssessmentReviewPeriod, assessmentWorkflow, workflowEmployees],
   );
+  const filteredAdminAssessmentRows = useMemo(() => {
+    const normalizedQuery = assessmentSearchQuery.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return adminAssessmentRows;
+    }
+
+    return adminAssessmentRows.filter((item) =>
+      [
+        item.subjectName,
+        item.title,
+        item.targetLabel,
+        item.assessorLabel,
+        item.assessmentStatusLabel,
+        item.reviewStatusLabel,
+      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
+    );
+  }, [adminAssessmentRows, assessmentSearchQuery]);
   const reviewAssessmentIds = useMemo(
     () => reviewQueues.map((item) => item.assessmentId),
     [reviewQueues],
@@ -1746,6 +1764,7 @@ function App() {
     setPasswordDraft('');
     setPasswordStatus('');
     setTemporaryPassword(null);
+    setAssessmentSearchQuery('');
     setIsSavingAssessmentWorkflow(false);
     setSelectedAssessmentId(null);
     setAssessmentResponsesDraft({});
@@ -4827,10 +4846,10 @@ function App() {
       <section className="card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Assessment Queue</p>
+            <p className="section-label">Assessment List</p>
             <p className="muted-copy">
               {activeAssessmentReviewPeriod
-                ? `${activeAssessmentReviewPeriod.label} • ${adminAssessmentRows.length} ${adminAssessmentRows.length === 1 ? 'assessment' : 'assessments'}`
+                ? `${activeAssessmentReviewPeriod.label} • ${filteredAdminAssessmentRows.length} ${filteredAdminAssessmentRows.length === 1 ? 'assessment' : 'assessments'}`
                 : 'No active review period right now.'}
             </p>
           </div>
@@ -4884,9 +4903,23 @@ function App() {
         ) : null}
 
         {activeAssessmentReviewPeriod ? (
-          adminAssessmentRows.length ? (
-            <div className="employee-roster-table-scroll" role="region" aria-label="Assessment Queue assessments">
-              <div className="assessments-table" aria-label="Assessment Queue assessments">
+          <div className="action-row">
+            <label className="inline-field admin-list-search">
+              <span>Search</span>
+              <input
+                type="search"
+                value={assessmentSearchQuery}
+                onChange={(event) => setAssessmentSearchQuery(event.target.value)}
+                placeholder="Search assessments"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {activeAssessmentReviewPeriod ? (
+          filteredAdminAssessmentRows.length ? (
+            <div className="employee-roster-table-scroll" role="region" aria-label="Assessment List assessments">
+              <div className="assessments-table" aria-label="Assessment List assessments">
                 <div className="assessments-header">
                   <span>Name</span>
                   <span>Assessment type</span>
@@ -4894,7 +4927,7 @@ function App() {
                   <span>Assessment status</span>
                   <span>Review status</span>
                 </div>
-                {adminAssessmentRows.map((item) => (
+                {filteredAdminAssessmentRows.map((item) => (
                   <div className="assessment-row-card" key={item.assessmentId}>
                     <div className="assessment-row">
                       <span className="employee-row-cell assessment-row-primary">
@@ -4912,6 +4945,8 @@ function App() {
                 ))}
               </div>
             </div>
+          ) : assessmentSearchQuery.trim() ? (
+            <p className="muted-copy">No assessments match this search.</p>
           ) : (
             <p className="muted-copy">No assessments exist for the active review period yet.</p>
           )
