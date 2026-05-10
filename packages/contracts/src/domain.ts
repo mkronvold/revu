@@ -7,7 +7,7 @@ export const usernameSchema = z
   .string()
   .min(3)
   .max(64)
-  .regex(/^[a-z0-9._-]+$/, "Username must contain only lowercase letters, numbers, dots, underscores, or dashes");
+  .regex(/^[A-Za-z0-9._-]+$/, "Username must contain only letters, numbers, dots, underscores, or dashes");
 
 export const appRoleSchema = z.enum(["employee", "manager", "admin"]);
 export const employeeStatusSchema = z.enum(["active", "inactive"]);

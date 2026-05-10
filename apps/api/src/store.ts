@@ -190,6 +190,10 @@ type UniqueReviewPeriodKeyRow = {
   key_exists: boolean;
 };
 
+type ExistingConstraintRow = {
+  exists: boolean;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly statusCode: number,
@@ -316,6 +320,7 @@ function mapDatabaseError(error: unknown) {
   if (error.code === "23505") {
     switch (error.constraint) {
       case "employees_username_unique_idx":
+      case "employees_username_unique_ci_idx":
         return new ApiError(409, "Username already exists");
       case "employees_email_key":
         return new ApiError(409, "Email already exists");
@@ -327,6 +332,15 @@ function mapDatabaseError(error: unknown) {
         return new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
       case "uq_question_order_per_set":
         return new ApiError(400, "Question order must be unique within a question set");
+      default:
+        return null;
+    }
+  }
+
+  if (error.code === "23514") {
+    switch (error.constraint) {
+      case "employees_username_format":
+        return new ApiError(400, "Username must contain only letters, numbers, dots, underscores, or dashes");
       default:
         return null;
     }
@@ -430,6 +444,49 @@ export class ApiStore {
     };
   }
 
+  private normalizeUsername(username: string) {
+    return username.trim().toLocaleLowerCase();
+  }
+
+  private async ensureEmployeeUsernameStorage(client: DbClient) {
+    await client.query(
+      `
+        CREATE UNIQUE INDEX IF NOT EXISTS employees_username_unique_ci_idx
+        ON employees (lower(username))
+      `,
+    );
+
+    const constraintResult = await client.query<ExistingConstraintRow>(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'employees_username_format'
+            AND conrelid = 'employees'::regclass
+            AND pg_get_constraintdef(oid) LIKE '%^[A-Za-z0-9._-]+$%'
+        ) AS exists
+      `,
+    );
+
+    if (constraintResult.rows[0]?.exists) {
+      return;
+    }
+
+    await client.query(
+      `
+        ALTER TABLE employees
+        DROP CONSTRAINT IF EXISTS employees_username_format
+      `,
+    );
+    await client.query(
+      `
+        ALTER TABLE employees
+        ADD CONSTRAINT employees_username_format
+        CHECK (username ~ '^[A-Za-z0-9._-]+$')
+      `,
+    );
+  }
+
   private async loadEmployeeRows(
     client: DbClient,
     filters: { employeeId?: string; usernames?: readonly string[]; employeeIds?: readonly string[] } = {},
@@ -443,8 +500,8 @@ export class ApiStore {
     }
 
     if (filters.usernames && filters.usernames.length > 0) {
-      values.push(filters.usernames);
-      clauses.push(`username = ANY($${values.length}::text[])`);
+      values.push(filters.usernames.map((username) => this.normalizeUsername(username)));
+      clauses.push(`lower(username) = ANY($${values.length}::text[])`);
     }
 
     if (filters.employeeIds && filters.employeeIds.length > 0) {
@@ -930,7 +987,7 @@ export class ApiStore {
           EXISTS(
             SELECT 1
             FROM employees
-            WHERE username = $1
+            WHERE lower(username) = lower($1)
               AND ($2::uuid IS NULL OR id <> $2)
           ) AS username_exists,
           EXISTS(
@@ -1523,6 +1580,7 @@ export class ApiStore {
   async createEmployee(input: CreateEmployeeRequest) {
     try {
       return await withTransaction(async (client) => {
+        await this.ensureEmployeeUsernameStorage(client);
         await this.assertUniqueEmployeeFields(client, input);
 
         const id = randomUUID();
@@ -1612,6 +1670,7 @@ export class ApiStore {
   async updateEmployee(actor: Pick<Employee, "id" | "role">, employeeId: string, updates: UpdateEmployeeRequest) {
     try {
       return await withTransaction(async (client) => {
+        await this.ensureEmployeeUsernameStorage(client);
         const existingRow = await this.employeeOrThrow(client, employeeId);
         const existing = this.toEmployee(existingRow);
 
@@ -2371,28 +2430,32 @@ export class ApiStore {
   async importLocalUsers(format: "json" | "csv", items: LocalUserTransferItem[]): Promise<LocalUsersImportResponse> {
     try {
       return await withTransaction(async (client) => {
+        await this.ensureEmployeeUsernameStorage(client);
         const importedAt = nowIso();
         const seenUsernames = new Set<string>();
         const seenEmails = new Set<string>();
 
         for (const item of items) {
-          if (seenUsernames.has(item.username)) {
+          const normalizedUsername = this.normalizeUsername(item.username);
+          if (seenUsernames.has(normalizedUsername)) {
             throw new ApiError(400, "Imported usernames must be unique");
           }
           if (seenEmails.has(item.email)) {
             throw new ApiError(400, "Imported emails must be unique");
           }
-          seenUsernames.add(item.username);
+          seenUsernames.add(normalizedUsername);
           seenEmails.add(item.email);
         }
 
         const existingRows = await this.loadEmployeeRows(client, { usernames: items.map((item) => item.username) });
-        const existingByUsername = new Map(existingRows.map((employee) => [employee.username, employee]));
+        const existingByUsername = new Map(
+          existingRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+        );
 
         let createdCount = 0;
         let updatedCount = 0;
         for (const item of items) {
-          const existing = existingByUsername.get(item.username);
+          const existing = existingByUsername.get(this.normalizeUsername(item.username));
           if (existing) {
             updatedCount += 1;
             await this.assertUniqueEmployeeFields(client, {
@@ -2455,22 +2518,24 @@ export class ApiStore {
           ),
         );
         const finalRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
-        const finalByUsername = new Map(finalRows.map((employee) => [employee.username, employee]));
+        const finalByUsername = new Map(
+          finalRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+        );
 
         for (const item of items) {
-          const employee = finalByUsername.get(item.username);
+          const employee = finalByUsername.get(this.normalizeUsername(item.username));
           if (!employee) {
             throw new ApiError(500, "Imported employee missing after merge");
           }
 
           const managerId = item.managerUsername === null
             ? null
-            : finalByUsername.get(item.managerUsername)?.id ?? (() => {
+            : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
                 throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
               })();
           const assessorId = item.assessorUsername === null
             ? null
-            : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
+            : finalByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
                 throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
               })();
 
@@ -2500,9 +2565,11 @@ export class ApiStore {
           await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [importedRows.map((employee) => employee.id)]);
         }
 
-        const importedByUsername = new Map(importedRows.map((employee) => [employee.username, employee]));
+        const importedByUsername = new Map(
+          importedRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+        );
         const importedEmployees = items.map((item) => {
-          const employee = importedByUsername.get(item.username);
+          const employee = importedByUsername.get(this.normalizeUsername(item.username));
           if (!employee) {
             throw new ApiError(500, "Imported employee missing after commit");
           }
@@ -3085,29 +3152,31 @@ export class ApiStore {
         seenIds.add(item.id);
       }
 
-      if (seenUsernames.has(item.username)) {
+      const normalizedUsername = this.normalizeUsername(item.username);
+      if (seenUsernames.has(normalizedUsername)) {
         throw new ApiError(400, "Backup usernames must be unique");
       }
       if (seenEmails.has(item.email)) {
         throw new ApiError(400, "Backup emails must be unique");
       }
 
-      seenUsernames.add(item.username);
+      seenUsernames.add(normalizedUsername);
       seenEmails.add(item.email);
     }
   }
 
   private async upsertUsersSnapshot(client: DbClient, items: LocalUserTransferItem[], timestamp: string) {
+    await this.ensureEmployeeUsernameStorage(client);
     this.validateRestoreUsers(items, true);
 
     const itemsById = new Map(items.map((item) => [item.id!, item]));
     const existingRows = await this.loadEmployeeRows(client);
     const existingById = new Map(existingRows.map((row) => [row.id, row]));
-    const existingByUsername = new Map(existingRows.map((row) => [row.username, row]));
+    const existingByUsername = new Map(existingRows.map((row) => [this.normalizeUsername(row.username), row] as const));
 
     for (const item of items) {
       const currentById = existingById.get(item.id!);
-      const currentByUsername = existingByUsername.get(item.username);
+      const currentByUsername = existingByUsername.get(this.normalizeUsername(item.username));
       if (currentByUsername && currentByUsername.id !== item.id) {
         throw new ApiError(409, `Backup user id does not match the existing username: ${item.username}`);
       }
@@ -3200,21 +3269,21 @@ export class ApiStore {
     const finalRows = await this.loadEmployeeRows(client, {
       employeeIds: Array.from(itemsById.keys()),
     });
-    const finalByUsername = new Map(finalRows.map((row) => [row.username, row]));
+    const finalByUsername = new Map(finalRows.map((row) => [this.normalizeUsername(row.username), row] as const));
     for (const item of items) {
-      const employee = finalByUsername.get(item.username);
+      const employee = finalByUsername.get(this.normalizeUsername(item.username));
       if (!employee) {
         throw new ApiError(500, "Restored employee missing after upsert");
       }
 
       const managerId = item.managerUsername === null
         ? null
-        : finalByUsername.get(item.managerUsername)?.id ?? (() => {
+        : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
             throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
           })();
       const assessorId = item.assessorUsername === null
         ? null
-        : finalByUsername.get(item.assessorUsername)?.id ?? (() => {
+        : finalByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
             throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
           })();
 

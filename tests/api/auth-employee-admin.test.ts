@@ -164,7 +164,7 @@ describe("auth and employee admin API", () => {
         authorization: `Bearer ${adminLogin.session.token}`,
       },
       payload: {
-        username: "new.hire",
+        username: "New.Hire",
         fullName: "New Hire",
         email: "new.hire@example.com",
         role: "employee",
@@ -177,11 +177,29 @@ describe("auth and employee admin API", () => {
 
     expect(createResponse.statusCode).toBe(201);
     const createdEmployee = employeeResponseSchema.parse(createResponse.json()).item;
-    expect(createdEmployee.username).toBe("new.hire");
+    expect(createdEmployee.username).toBe("New.Hire");
     expect(createdEmployee.auth.passwordConfigured).toBe(true);
 
     const newHireLogin = await login(app, "new.hire", "OnboardPass123!");
     expect(newHireLogin.statusCode).toBe(200);
+
+    const duplicateCaseResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/employees",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        username: "new.hire",
+        fullName: "Duplicate Case",
+        email: "duplicate.case@example.com",
+        role: "employee",
+        status: "active",
+        managerId: "22222222-2222-4222-8222-222222222222",
+        assessorId: "44444444-4444-4444-8444-444444444444",
+      },
+    });
+    expect(duplicateCaseResponse.statusCode).toBe(409);
 
     const setPasswordResponse = await app.inject({
       method: "POST",
@@ -440,12 +458,19 @@ describe("auth and employee admin API", () => {
   });
 
   it("captures auth schema invariants in the migration", () => {
-    const sql = readFileSync(resolve(process.cwd(), "../../prisma/migrations/002_auth_employee_admin.sql"), "utf8");
+    const authSql = readFileSync(resolve(process.cwd(), "../../prisma/migrations/002_auth_employee_admin.sql"), "utf8");
+    const usernameUpgradeSql = readFileSync(
+      resolve(process.cwd(), "../../prisma/migrations/006_employee_username_case_support.sql"),
+      "utf8",
+    );
 
-    expect(sql).toContain("ADD COLUMN username TEXT");
-    expect(sql).toContain("employees_username_format");
-    expect(sql).toContain("password_reset_required BOOLEAN NOT NULL DEFAULT FALSE");
-    expect(sql).toContain("CREATE TABLE auth_sessions");
-    expect(sql).toContain("auth_sessions_token_hash_unique_idx");
+    expect(authSql).toContain("ADD COLUMN username TEXT");
+    expect(authSql).toContain("employees_username_format");
+    expect(authSql).toContain("password_reset_required BOOLEAN NOT NULL DEFAULT FALSE");
+    expect(authSql).toContain("CREATE TABLE auth_sessions");
+    expect(authSql).toContain("auth_sessions_token_hash_unique_idx");
+    expect(usernameUpgradeSql).toContain("employees_username_unique_ci_idx");
+    expect(usernameUpgradeSql).toContain("lower(username)");
+    expect(usernameUpgradeSql).toContain("^[A-Za-z0-9._-]+$");
   });
 });

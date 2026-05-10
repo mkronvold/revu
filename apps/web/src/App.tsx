@@ -1429,7 +1429,7 @@ function App() {
 
     try {
       const response = await login({
-        username: loginUsername.trim().toLowerCase(),
+        username: loginUsername.trim(),
         password: loginPassword,
       });
 
@@ -1797,7 +1797,7 @@ function App() {
 
     try {
       const commonPayload = {
-        username: draftEmployee.username.trim().toLowerCase(),
+        username: draftEmployee.username.trim(),
         fullName: draftEmployee.fullName.trim(),
         email: draftEmployee.email.trim().toLowerCase(),
         role: draftEmployee.role,
