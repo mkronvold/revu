@@ -2000,6 +2000,11 @@ describe('dashboard screen', () => {
     expect(container.textContent).toContain('Assessment type');
     expect(container.textContent).toContain('Assessor');
     expect(container.textContent).toContain('Status');
+    const dashboardAssessorField = Array.from(container.querySelectorAll('.dashboard-identity-field')).find((field) =>
+      field.textContent?.includes('Assessors'),
+    );
+    expect(dashboardAssessorField?.textContent).not.toContain('Assessor 1:');
+    expect(dashboardAssessorField?.textContent).not.toContain('Assessor 2:');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
 
     const openButton = container.querySelector('.dashboard-queue-item');

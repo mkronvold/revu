@@ -4062,7 +4062,9 @@ function App() {
           </div>
           <div className="dashboard-identity-field">
             <span className="dashboard-identity-label">Assessors</span>
-            <span className="dashboard-identity-value">{sessionUser ? renderAssessorList(sessionUser) : '—'}</span>
+            <span className="dashboard-identity-value">
+              {sessionUser ? renderAssessorList(sessionUser, { showLabels: false }) : '—'}
+            </span>
           </div>
         </div>
       </section>
