@@ -295,14 +295,8 @@ restart_stack() {
   log 'Stopping deployment stack...'
   docker compose down
 
-  log 'Applying database migrations...'
-  bash ./scripts/db-migrate.sh
-
-  log 'Bootstrapping example data when needed...'
-  bash ./scripts/db-seed-if-empty.sh
-
-  log 'Starting deployment stack...'
-  docker compose up -d
+  log 'Restarting deployment stack through up.sh so migrations stay aligned with manual startup.'
+  bash ./up.sh
 }
 
 log "Watching GHCR deployment images every ${interval_minutes} minute(s)."

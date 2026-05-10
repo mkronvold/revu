@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Updated `autoupdate.sh` to restart through `up.sh`, so automatic refreshes apply the same migration and bootstrap path as manual startups
 - Removed the `Assessor 1:` and `Assessor 2:` prefixes from the stacked assessor values in the employee directory column
 - Fixed inactive employee tombstone deletes so review-period assignment and assessment references no longer block deletion; those historical links now stay attached to the hidden tombstone row
 - Added inactive-period question-set copying into the current active review cycle, reshaped the dashboard into an active-period action queue that matches the Reviews table layout, and rebuilt assessment authoring dialogs with grouped category sections plus document-style scale responses
