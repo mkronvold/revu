@@ -94,6 +94,8 @@ import {
   me,
   resetEmployeePassword,
   restoreBackup,
+  saveAssessmentDraft,
+  submitAssessment,
   updateBackupStatus,
   updateEmployee,
   updateOwnProfile,
@@ -631,6 +633,7 @@ describe('questions screen', () => {
 
     const closeButton = Array.from(editor?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Close');
     expect(closeButton).toBeTruthy();
+    expect(Array.from(editor?.querySelectorAll('button') ?? []).filter((button) => button.textContent === 'Cancel')).toHaveLength(1);
 
     await act(async () => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -709,12 +712,12 @@ describe('questions screen', () => {
     expect(footerField?.disabled).toBe(true);
     expect(removeButtons.length).toBeGreaterThan(0);
     expect(removeButtons.every((button) => button.disabled)).toBe(true);
-    expect(addQuestionButton?.disabled).toBe(true);
+    expect(addQuestionButton).toBeUndefined();
     expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Save question set')).toBe(
       false,
     );
     expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Cancel')).toBe(false);
-    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Close')).toBe(true);
+    expect(Array.from(editor?.querySelectorAll('button') ?? []).filter((button) => button.textContent === 'Close')).toHaveLength(1);
 
     await act(async () => {
       container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -724,33 +727,19 @@ describe('questions screen', () => {
     expect(container.querySelector('.question-set-dialog')).toBeNull();
   });
 
-  it('copies inactive question sets into the current review period and opens the copied draft', async () => {
-    const inactiveSnapshot = cloneQuestionSlice();
-    inactiveSnapshot.reviewPeriods[1] = {
-      ...inactiveSnapshot.reviewPeriods[1]!,
-      status: 'inactive',
-      archivedAt: null,
-      archivedByEmployeeId: null,
-    };
-    inactiveSnapshot.questionSets[2] = {
-      ...inactiveSnapshot.questionSets[2]!,
-      isReadOnly: false,
-    };
-    inactiveSnapshot.questionSets[3] = {
-      ...inactiveSnapshot.questionSets[3]!,
-      isReadOnly: false,
-    };
+  it('copies archived question sets into the active review period from the question-set dialog', async () => {
+    const archivedSnapshot = cloneQuestionSlice();
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
-    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(inactiveSnapshot));
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(archivedSnapshot));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
     vi.mocked(createQuestionSet).mockResolvedValue({
       item: {
-        ...inactiveSnapshot.questionSets[2]!,
+        ...archivedSnapshot.questionSets[2]!,
         id: '56565656-5656-4565-8565-565656565656',
-        reviewPeriodId: inactiveSnapshot.reviewPeriods[0]!.id,
+        reviewPeriodId: archivedSnapshot.reviewPeriods[0]!.id,
         isReadOnly: false,
         title: '2026 Self Questions',
       },
@@ -772,8 +761,19 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    const copyButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Copy to current review period',
+    const archivedQuestionSetCard = container.querySelector('.question-set-card');
+    expect(archivedQuestionSetCard).toBeTruthy();
+
+    await act(async () => {
+      archivedQuestionSetCard?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const dialog = container.querySelector('.question-set-dialog');
+    expect(dialog).toBeTruthy();
+
+    const copyButton = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Copy to 2026 Annual Review',
     );
     expect(copyButton).toBeTruthy();
 
@@ -2066,6 +2066,86 @@ describe('dashboard screen', () => {
     });
 
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('uses submit to save draft changes even before an assessment is complete', async () => {
+    const dashboardSnapshot = cloneQuestionSlice();
+    dashboardSnapshot.assessments = dashboardSnapshot.assessments.map((assessment) =>
+      assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        ? {
+            ...assessment,
+            reviewState: 'new',
+            isReadOnly: false,
+            submittedAt: null,
+            acceptedAt: null,
+            acceptedByEmployeeId: null,
+            reviewedAt: null,
+            reviewedByEmployeeId: null,
+            responses: [],
+          }
+        : assessment,
+    );
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
+    vi.mocked(saveAssessmentDraft).mockResolvedValue({
+      item: {
+        ...dashboardSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+        reviewState: 'draft',
+      },
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    const openButton = container.querySelector('.dashboard-queue-item');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    expect(narrativeResponse).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(narrativeResponse!, 'Saving partial progress before completing the form.');
+      await flushRender();
+    });
+
+    const submitButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Submit');
+    expect(submitButton).toBeTruthy();
+    expect(submitButton?.getAttribute('disabled')).toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(saveAssessmentDraft).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
+      responses: [
+        {
+          questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+          order: 1,
+          response: '',
+        },
+        {
+          questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+          order: 2,
+          response: 'Saving partial progress before completing the form.',
+        },
+      ],
+    });
+    expect(submitAssessment).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Assessment saved for later. Complete every response before submitting.');
   });
 });
 

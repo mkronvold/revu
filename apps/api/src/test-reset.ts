@@ -43,6 +43,23 @@ async function ensureReviewPeriodDueDateColumns(client: PoolClient) {
       ADD COLUMN IF NOT EXISTS review_due_date DATE
     `,
   );
+  await client.query(
+    `
+      ALTER TABLE review_periods
+      DROP CONSTRAINT IF EXISTS review_period_deadlines_in_order
+    `,
+  );
+  await client.query(
+    `
+      DO $$
+      BEGIN
+        ALTER TABLE review_periods
+        ADD CONSTRAINT review_period_deadlines_in_order CHECK (assessment_due_date <= review_due_date);
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `,
+  );
 }
 
 async function insertEmployees(client: PoolClient) {

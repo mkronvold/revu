@@ -901,6 +901,27 @@ function App() {
     () => reviewAdmin?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
     [reviewAdmin],
   );
+  const isAssessmentDraftDirty = useMemo(() => {
+    if (!selectedAssessmentEditor) {
+      return false;
+    }
+
+    return selectedAssessmentEditor.questions.some(
+      (question) => (assessmentResponsesDraft[question.questionId] ?? question.response) !== question.response,
+    );
+  }, [assessmentResponsesDraft, selectedAssessmentEditor]);
+  const isAssessmentDraftComplete = useMemo(() => {
+    if (!selectedAssessmentEditor) {
+      return false;
+    }
+
+    return (
+      selectedAssessmentEditor.questions.length > 0 &&
+      selectedAssessmentEditor.questions.every(
+        (question) => (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
+      )
+    );
+  }, [assessmentResponsesDraft, selectedAssessmentEditor]);
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -2379,9 +2400,13 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
+      const { notice } = isAssessmentDraftComplete
+        ? await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft)
+        : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
       await refreshFoundationSnapshot();
-      setWorkflowNotice(notice);
+      setWorkflowNotice(
+        isAssessmentDraftComplete ? notice : 'Assessment saved for later. Complete every response before submitting.',
+      );
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -2516,12 +2541,13 @@ function App() {
       return;
     }
 
-    if (
-      reviewPeriodDraft.startDate > reviewPeriodDraft.assessmentDueDate ||
-      reviewPeriodDraft.assessmentDueDate > reviewPeriodDraft.reviewDueDate ||
-      reviewPeriodDraft.reviewDueDate > reviewPeriodDraft.dueDate
-    ) {
-      setAdminNotice('Review period dates must be ordered as start date, assessment due date, review due date, then end date.');
+    if (reviewPeriodDraft.startDate > reviewPeriodDraft.dueDate) {
+      setAdminNotice('Review period start date must be on or before the end date.');
+      return;
+    }
+
+    if (reviewPeriodDraft.assessmentDueDate > reviewPeriodDraft.reviewDueDate) {
+      setAdminNotice('Assessment due date must be on or before the review due date.');
       return;
     }
 
@@ -2877,7 +2903,9 @@ function App() {
     }
   };
 
-  const handleCopyQuestionSetToCurrentReviewPeriod = async (questionSet: QuestionSet) => {
+  const handleCopyQuestionSetToCurrentReviewPeriod = async (
+    questionSet: Pick<QuestionSetDraft, 'target' | 'title' | 'headerMarkdown' | 'footerMarkdown' | 'questions'>,
+  ) => {
     if (!selectedReviewPeriod || !activeReviewAdminPeriod || !sessionToken) {
       return;
     }
@@ -3016,13 +3044,6 @@ function App() {
   const renderQuestionSetCard = (target: QuestionTarget, questionSet: QuestionSet | null) => {
     const isReadOnly = selectedReviewPeriod?.status === 'archived';
     const canOpenQuestionSet = !isSavingReviewAdmin && (!isReadOnly || Boolean(questionSet));
-    const canCopyQuestionSet =
-      Boolean(
-        selectedReviewPeriod?.status === 'inactive' &&
-          questionSet &&
-          activeReviewAdminPeriod &&
-          activeReviewAdminPeriod.id !== selectedReviewPeriod?.id,
-      ) && !isSavingReviewAdmin;
 
     return (
       <section
@@ -3053,23 +3074,6 @@ function App() {
         </div>
       </dl>
       <MarkdownContent markdown={questionSet?.headerMarkdown || 'No header text yet.'} className="markdown-content" />
-      {canCopyQuestionSet ? (
-        <div className="action-row question-set-card-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={isSavingReviewAdmin}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (questionSet) {
-                void handleCopyQuestionSetToCurrentReviewPeriod(questionSet);
-              }
-            }}
-          >
-            Copy to current review period
-          </button>
-        </div>
-      ) : null}
       <div className="question-set-question-list">
         {questionSet?.questions.map((question) => (
           <article className="question-set-question" key={question.id}>
@@ -3279,22 +3283,22 @@ function App() {
           role="dialog"
           aria-labelledby="question-set-dialog-title"
           onClick={(event) => event.stopPropagation()}
-        >
-          <div className="section-heading">
-            <div>
-              <p className="section-label">
-                {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
-              </p>
-              <h3 id="question-set-dialog-title">{questionSetDraft.title}</h3>
-              <p className="muted-copy">{selectedReviewPeriod.label}</p>
+          >
+            <div className="section-heading">
+              <div>
+                <p className="section-label">
+                  {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
+                </p>
+                <h3 id="question-set-dialog-title">{questionSetDraft.title}</h3>
+                <p className="muted-copy">{selectedReviewPeriod.label}</p>
+              </div>
+              <div className="dialog-header-actions">
+                {selectedReviewPeriod.status === 'archived' ? <span className="pill">Read only</span> : null}
+                <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
+                  Close
+                </button>
+              </div>
             </div>
-            <div className="action-row">
-              {selectedReviewPeriod.status === 'archived' ? <span className="pill">Read only</span> : null}
-              <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
-                Close
-              </button>
-            </div>
-          </div>
 
           {selectedReviewPeriod.status === 'archived' ? (
             <p className="toolbar-note">Archived review periods keep question sets visible, but editing stays disabled.</p>
@@ -3385,27 +3389,51 @@ function App() {
               </div>
             </section>
 
-            <div className="action-row">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                onClick={addQuestionDraft}
-              >
-                Add question
-              </button>
-            </div>
-
-            <div className="action-row">
-              {selectedReviewPeriod.status === 'archived' ? null : (
-                <button type="submit" disabled={isSavingReviewAdmin}>
-                  Save question set
-                </button>
-              )}
-              <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
-                {selectedReviewPeriod.status === 'archived' ? 'Close' : 'Cancel'}
-              </button>
-            </div>
+            {(
+              ((selectedReviewPeriod.status === 'inactive' || selectedReviewPeriod.status === 'archived') &&
+                questionSetDraft.id &&
+                activeReviewAdminPeriod &&
+                activeReviewAdminPeriod.id !== selectedReviewPeriod.id) ||
+              selectedReviewPeriod.status !== 'archived'
+            ) ? (
+              <div className="dialog-footer">
+                <div className="dialog-footer-start">
+                  {selectedReviewPeriod.status === 'archived' ? null : (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSavingReviewAdmin}
+                      onClick={addQuestionDraft}
+                    >
+                      Add question
+                    </button>
+                  )}
+                  {(selectedReviewPeriod.status === 'inactive' || selectedReviewPeriod.status === 'archived') &&
+                  questionSetDraft.id &&
+                  activeReviewAdminPeriod &&
+                  activeReviewAdminPeriod.id !== selectedReviewPeriod.id ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSavingReviewAdmin}
+                      onClick={() => void handleCopyQuestionSetToCurrentReviewPeriod(questionSetDraft)}
+                    >
+                      {`Copy to ${activeReviewAdminPeriod.label}`}
+                    </button>
+                  ) : null}
+                </div>
+                {selectedReviewPeriod.status === 'archived' ? null : (
+                  <div className="dialog-footer-end">
+                    <button type="submit" disabled={isSavingReviewAdmin}>
+                      Save question set
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </form>
         </section>
       </div>
@@ -3489,11 +3517,6 @@ function App() {
               className="markdown-content question-prompt-markdown"
             />
           </section>
-          <div className="action-row">
-            <button type="button" onClick={closeQuestionEditorDialog}>
-              {selectedReviewPeriod?.status === 'archived' ? 'Close' : 'Done'}
-            </button>
-          </div>
         </section>
       </div>
     ) : null;
@@ -3532,11 +3555,13 @@ function App() {
               />
             </label>
             {newQuestionCategoryError ? <p className="form-error">{newQuestionCategoryError}</p> : null}
-            <div className="action-row">
-              <button type="submit">Save category</button>
-              <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
-                Cancel
-              </button>
+            <div className="dialog-footer">
+              <div className="dialog-footer-end">
+                <button type="submit">Save category</button>
+                <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         </section>
@@ -3589,19 +3614,21 @@ function App() {
                 <p className="muted-copy">No persistent categories yet. Add one below.</p>
               )}
             </div>
-            <div className="action-row question-categories-editor-actions">
-              <button type="button" className="secondary-button" onClick={addQuestionCategoryDraft}>
-                Add category
-              </button>
-            </div>
             {questionCategoriesDialogError ? <p className="form-error">{questionCategoriesDialogError}</p> : null}
-            <div className="action-row">
-              <button type="submit" disabled={isSavingReviewAdmin}>
-                Save categories
-              </button>
-              <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
-                Cancel
-              </button>
+            <div className="dialog-footer">
+              <div className="dialog-footer-start">
+                <button type="button" className="secondary-button" onClick={addQuestionCategoryDraft}>
+                  Add category
+                </button>
+              </div>
+              <div className="dialog-footer-end">
+                <button type="submit" disabled={isSavingReviewAdmin}>
+                  Save categories
+                </button>
+                <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         </section>
@@ -4190,19 +4217,19 @@ function App() {
           aria-labelledby="assessment-dialog-title"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="section-heading">
-            <div>
-              <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
-              <h3 id="assessment-dialog-title">{selectedAssessmentEditor.questionSetTitle}</h3>
-              <p className="muted-copy">{selectedAssessmentEditor.title}</p>
+            <div className="section-heading">
+              <div>
+                <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
+                <h3 id="assessment-dialog-title">{selectedAssessmentEditor.questionSetTitle}</h3>
+                <p className="muted-copy">{selectedAssessmentEditor.title}</p>
+              </div>
+              <div className="dialog-header-actions">
+                <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
+                <button type="button" className="secondary-button" onClick={closeAssessmentDialog}>
+                  Close
+                </button>
+              </div>
             </div>
-            <div className="action-row">
-              <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
-              <button type="button" className="secondary-button" onClick={closeAssessmentDialog}>
-                Close
-              </button>
-            </div>
-          </div>
           <section className="assessment-editor-intro">
             <p className="review-dialog-copy">{selectedAssessmentEditor.detail}</p>
             <dl className="detail-grid compact-detail-grid assessment-editor-meta">
@@ -4319,21 +4346,23 @@ function App() {
               className="markdown-content muted-copy assessment-editor-copy"
             />
           ) : null}
-          <div className="action-row">
-            <button
-              type="button"
-              disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
-              onClick={() => void handleSaveAssessmentForLater()}
-            >
-              Save for later
-            </button>
-            <button
-              type="button"
-              disabled={!selectedAssessmentEditor.canSubmit || isSavingAssessmentWorkflow}
-              onClick={() => void handleSubmitAssessment()}
-            >
-              Submit
-            </button>
+          <div className="dialog-footer">
+            <div className="dialog-footer-end">
+              <button
+                type="button"
+                disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
+                onClick={() => void handleSaveAssessmentForLater()}
+              >
+                Save for later
+              </button>
+              <button
+                type="button"
+                disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
+                onClick={() => void handleSubmitAssessment()}
+              >
+                Submit
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -4506,18 +4535,18 @@ function App() {
           aria-labelledby="review-dialog-title"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="section-heading">
-            <div>
-              <p className="section-label">Assessment review</p>
-              <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
+            <div className="section-heading">
+              <div>
+                <p className="section-label">Assessment review</p>
+                <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
+              </div>
+              <div className="dialog-header-actions">
+                <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
+                <button type="button" className="secondary-button" onClick={closeReviewDialog}>
+                  Close
+                </button>
+              </div>
             </div>
-            <div className="action-row">
-              <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
-              <button type="button" className="secondary-button" onClick={closeReviewDialog}>
-                Close
-              </button>
-            </div>
-          </div>
 
           <section className="review-dialog-section">
             <p className="review-dialog-copy">{selectedReviewPanel.detail}</p>
@@ -4603,47 +4632,49 @@ function App() {
                   onChange={(event) => setReviewNotesDraft(event.target.value)}
                 />
               </label>
-              <div className="action-row review-notes-actions">
-                <button
-                  type="button"
-                  disabled={!selectedReviewPanel.canAccept || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                  onClick={() => void handleAcceptReview()}
-                >
-                  Accept
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!selectedReviewPanel.canRejectToDraft || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                  onClick={() => void handleRejectReview()}
-                >
-                  Reject to draft
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={
-                    !selectedReviewPanel.canMarkReviewed ||
-                    selectedReviewPanel.isArchived ||
-                    isSavingAssessmentWorkflow ||
-                    !reviewNotesDraft.trim()
-                  }
-                  onClick={() => void handleSaveReviewNotes()}
-                >
-                  Save notes
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    !selectedReviewPanel.canMarkReviewed ||
-                    selectedReviewPanel.isArchived ||
-                    isSavingAssessmentWorkflow ||
-                    !reviewNotesDraft.trim()
-                  }
-                  onClick={() => void handleCompleteReview()}
-                >
-                  Mark reviewed
-                </button>
+              <div className="dialog-footer">
+                <div className="dialog-footer-end review-notes-actions">
+                  <button
+                    type="button"
+                    disabled={!selectedReviewPanel.canAccept || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                    onClick={() => void handleAcceptReview()}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!selectedReviewPanel.canRejectToDraft || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                    onClick={() => void handleRejectReview()}
+                  >
+                    Reject to draft
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={
+                      !selectedReviewPanel.canMarkReviewed ||
+                      selectedReviewPanel.isArchived ||
+                      isSavingAssessmentWorkflow ||
+                      !reviewNotesDraft.trim()
+                    }
+                    onClick={() => void handleSaveReviewNotes()}
+                  >
+                    Save notes
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !selectedReviewPanel.canMarkReviewed ||
+                      selectedReviewPanel.isArchived ||
+                      isSavingAssessmentWorkflow ||
+                      !reviewNotesDraft.trim()
+                    }
+                    onClick={() => void handleCompleteReview()}
+                  >
+                    Mark reviewed
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -5092,28 +5123,32 @@ function App() {
                 </label>
               ) : null}
               {formError ? <p className="form-error">{formError}</p> : null}
-              <div className="action-row">
-                <button type="submit" disabled={isSavingEmployee || isDeletingEmployee}>
-                  {isSavingEmployee ? 'Saving…' : 'Save employee'}
-                </button>
-                {isAdmin && draftEmployee.id ? (
+              <div className="dialog-footer">
+                <div className="dialog-footer-start">
+                  {isAdmin && draftEmployee.id ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void handleDeleteEmployee()}
+                      disabled={isSavingEmployee || isDeletingEmployee}
+                    >
+                      {isDeletingEmployee ? 'Deleting…' : 'Delete Employee'}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="dialog-footer-end">
+                  <button type="submit" disabled={isSavingEmployee || isDeletingEmployee}>
+                    {isSavingEmployee ? 'Saving…' : 'Save employee'}
+                  </button>
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => void handleDeleteEmployee()}
+                    onClick={closeEmployeeDialog}
                     disabled={isSavingEmployee || isDeletingEmployee}
                   >
-                    {isDeletingEmployee ? 'Deleting…' : 'Delete Employee'}
+                    Cancel
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={closeEmployeeDialog}
-                  disabled={isSavingEmployee || isDeletingEmployee}
-                >
-                  Cancel
-                </button>
+                </div>
               </div>
             </form>
           </section>
@@ -5132,17 +5167,17 @@ function App() {
           aria-labelledby="employee-dialog-title"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="section-heading">
-            <div>
-              <p className="section-label">Employee detail</p>
-              <h3 id="employee-dialog-title">{detailEmployee?.fullName ?? 'Employee record'}</h3>
-            </div>
-            <div className="action-row">
-              <span className={`pill employee-status-pill employee-status-pill-${detailEmployee?.status ?? 'active'}`}>
-                {detailEmployee?.status ?? 'active'}
-              </span>
-              <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
-                Close
+            <div className="section-heading">
+              <div>
+                <p className="section-label">Employee detail</p>
+                <h3 id="employee-dialog-title">{detailEmployee?.fullName ?? 'Employee record'}</h3>
+              </div>
+              <div className="dialog-header-actions">
+                <span className={`pill employee-status-pill employee-status-pill-${detailEmployee?.status ?? 'active'}`}>
+                  {detailEmployee?.status ?? 'active'}
+                </span>
+                <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                  Close
               </button>
             </div>
           </div>
@@ -5191,29 +5226,31 @@ function App() {
                   </dd>
                 </div>
               </dl>
-              <div className="action-row">
-                {canManageEmployees && canEditSelectedEmployee ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (detailEmployee) {
-                        startEditingEmployee(detailEmployee);
-                      }
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : null}
-                {isAdmin ? (
-                  <button type="button" className="secondary-button" onClick={() => openPasswordDialog(detailEmployee.id)}>
-                    Manage password
-                  </button>
-                ) : null}
-                {isAdmin && detailEmployee.status === 'active' ? (
-                  <button type="button" className="secondary-button" onClick={() => void markEmployeeInactive()}>
-                    Remove
-                  </button>
-                ) : null}
+              <div className="dialog-footer">
+                <div className="dialog-footer-start">
+                  {canManageEmployees && canEditSelectedEmployee ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (detailEmployee) {
+                          startEditingEmployee(detailEmployee);
+                        }
+                      }}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                  {isAdmin ? (
+                    <button type="button" className="secondary-button" onClick={() => openPasswordDialog(detailEmployee.id)}>
+                      Manage password
+                    </button>
+                  ) : null}
+                  {isAdmin && detailEmployee.status === 'active' ? (
+                    <button type="button" className="secondary-button" onClick={() => void markEmployeeInactive()}>
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </>
           ) : (
@@ -5295,13 +5332,15 @@ function App() {
               </div>
             </section>
             {profileError ? <p className="form-error">{profileError}</p> : null}
-            <div className="action-row">
-              <button type="submit" disabled={isSavingProfile}>
-                {isSavingProfile ? 'Saving…' : 'Save profile'}
-              </button>
-              <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
-                Cancel
-              </button>
+            <div className="dialog-footer">
+              <div className="dialog-footer-end">
+                <button type="submit" disabled={isSavingProfile}>
+                  {isSavingProfile ? 'Saving…' : 'Save profile'}
+                </button>
+                <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         </section>
@@ -5703,18 +5742,20 @@ function App() {
                       placeholder="Enter a new password"
                     />
                   </label>
-                  <div className="action-row">
-                    <button type="button" onClick={saveKnownPassword} disabled={!passwordDraft.trim() || isUpdatingPassword}>
-                      {isUpdatingPassword ? 'Updating…' : 'Set Password'}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={handleResetPassword}
-                      disabled={isUpdatingPassword}
-                    >
-                      Generate one-time passcode
-                    </button>
+                  <div className="dialog-footer">
+                    <div className="dialog-footer-end">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={handleResetPassword}
+                        disabled={isUpdatingPassword}
+                      >
+                        Generate one-time passcode
+                      </button>
+                      <button type="button" onClick={saveKnownPassword} disabled={!passwordDraft.trim() || isUpdatingPassword}>
+                        {isUpdatingPassword ? 'Updating…' : 'Set Password'}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -5786,18 +5827,20 @@ function App() {
                   <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
                 </section>
               </div>
-              <div className="action-row">
-                <button type="button" onClick={() => void saveWorkflowContent()} disabled={isSavingWorkflowSettings}>
-                  {isSavingWorkflowSettings ? 'Saving workflow…' : 'Save workflow'}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void closeWorkflowEditor()}
-                  disabled={isSavingWorkflowSettings}
-                >
-                  Cancel
-                </button>
+              <div className="dialog-footer">
+                <div className="dialog-footer-end">
+                  <button type="button" onClick={() => void saveWorkflowContent()} disabled={isSavingWorkflowSettings}>
+                    {isSavingWorkflowSettings ? 'Saving workflow…' : 'Save workflow'}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void closeWorkflowEditor()}
+                    disabled={isSavingWorkflowSettings}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </section>
           </div>

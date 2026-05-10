@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Moved question-set copying into the edit dialog, now show it for archived periods too, rename the action to the active review period label, standardize modal action placement around a universal upper-right Close button, let assessment Submit save partial draft changes when needed, and relax review-period deadline validation so assessment/review due dates can fall outside the review window
+- Removed the bottom dismiss button from the Questions question-set editor so the dialog closes only from the header control or backdrop
 - Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard and review queues
 - Tightened assessment syncing so inactive employees and inactive assessors no longer get new assessments, stale not-started pairings are removed during sync, employee deactivation clears active not-started assessments immediately, and the Assessments action now says `Clear not started assessments`
 - Deleting an employee now removes assessments where they were the review subject while preserving completed peer feedback they authored for other employees, which remains linked to the tombstone and renders as `deleted user`

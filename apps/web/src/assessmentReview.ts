@@ -573,7 +573,7 @@ export function getAssessmentEditor(
     isReadOnly: Boolean(readOnly),
     isComplete,
     canSave: !readOnly && assessment.reviewState !== 'submitted',
-    canSubmit: !readOnly && assessment.reviewState !== 'submitted' && isComplete,
+    canSubmit: !readOnly && assessment.reviewState !== 'submitted',
     questions: getAssessmentQuestionRows(snapshot, assessment),
   };
 }

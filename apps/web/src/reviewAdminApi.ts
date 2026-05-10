@@ -321,7 +321,9 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
 
 export async function copyQuestionSetToReviewPeriodInApi(
   token: string,
-  sourceQuestionSet: QuestionSet,
+  sourceQuestionSet: Pick<QuestionSet, 'target' | 'title' | 'headerMarkdown' | 'footerMarkdown'> & {
+    questions: Array<Pick<QuestionSet['questions'][number], 'order' | 'type' | 'category' | 'prompt'>>;
+  },
   sourceReviewPeriod: ReviewPeriod,
   targetReviewPeriod: ReviewPeriod,
 ): Promise<{

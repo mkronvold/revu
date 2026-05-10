@@ -87,6 +87,27 @@ describe("review periods, question sets, and assignments admin API", () => {
     expect(updatedReviewPeriodResponse.statusCode).toBe(200);
     expect(reviewPeriodResponseSchema.parse(updatedReviewPeriodResponse.json()).item.label).toBe("2027 Performance Review");
 
+    const relaxedDeadlineUpdateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/review-periods/${createdReviewPeriod.id}`,
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        startDate: "2027-01-10",
+        dueDate: "2027-01-20",
+        assessmentDueDate: "2027-01-05",
+        reviewDueDate: "2027-02-01",
+      },
+    });
+    expect(relaxedDeadlineUpdateResponse.statusCode).toBe(200);
+    expect(reviewPeriodResponseSchema.parse(relaxedDeadlineUpdateResponse.json()).item).toMatchObject({
+      startDate: "2027-01-10",
+      dueDate: "2027-01-20",
+      assessmentDueDate: "2027-01-05",
+      reviewDueDate: "2027-02-01",
+    });
+
     const firstSelfQuestionSetResponse = await app.inject({
       method: "POST",
       url: `/api/v1/review-periods/${createdReviewPeriod.id}/question-sets`,

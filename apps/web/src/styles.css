@@ -1113,6 +1113,33 @@ button.employee-row:focus-visible {
   flex-wrap: wrap;
 }
 
+.dialog-header-actions,
+.dialog-footer,
+.dialog-footer-start,
+.dialog-footer-end {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dialog-header-actions,
+.dialog-footer-end {
+  justify-content: flex-end;
+}
+
+.dialog-footer {
+  justify-content: space-between;
+}
+
+.dialog-footer-start {
+  justify-content: flex-start;
+}
+
+.dialog-footer-end {
+  margin-left: auto;
+}
+
 .section-toggle {
   display: flex;
   width: 100%;

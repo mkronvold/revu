@@ -1294,12 +1294,12 @@ export class ApiStore {
       throw new ApiError(409, "Review period key already exists");
     }
 
-    if (
-      candidate.startDate > candidate.assessmentDueDate ||
-      candidate.assessmentDueDate > candidate.reviewDueDate ||
-      candidate.reviewDueDate > candidate.dueDate
-    ) {
-      throw new ApiError(400, "Review period dates must be ordered as start date, assessment due date, review due date, then end date");
+    if (candidate.startDate > candidate.dueDate) {
+      throw new ApiError(400, "Review period start date must be on or before the end date");
+    }
+
+    if (candidate.assessmentDueDate > candidate.reviewDueDate) {
+      throw new ApiError(400, "Assessment due date must be on or before the review due date");
     }
 
     if (candidate.status === "archived") {
