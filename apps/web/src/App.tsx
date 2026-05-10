@@ -2823,8 +2823,8 @@ function App() {
             </button>
           </div>
 
-          <label className="question-category-field">
-            Category
+          <label className="question-edit-field question-category-field">
+            <span className="question-edit-field-label">Category</span>
             <select
               aria-label="Question category"
               value={editingQuestionDraft.category}
@@ -2840,8 +2840,8 @@ function App() {
               <option value={newQuestionCategoryOptionValue}>New category…</option>
             </select>
           </label>
-          <label className="question-prompt-field">
-            Question
+          <label className="question-edit-field question-prompt-field">
+            <span className="question-edit-field-label">Question</span>
             <textarea
               rows={10}
               value={editingQuestionDraft.prompt}
@@ -2849,10 +2849,11 @@ function App() {
               onChange={(event) => updateQuestionDraftField(editingQuestionDraft.id, 'prompt', event.target.value)}
             />
           </label>
-          <div className="question-edit-response-group">
-            <label className="question-response-type-field">
-              Response type
+          <label className="question-edit-field question-response-type-field">
+            <span className="question-edit-field-label">Response type</span>
+            <div className="question-edit-response-group">
               <select
+                aria-label="Response type"
                 value={editingQuestionDraft.type}
                 disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
                 onChange={(event) =>
@@ -2867,9 +2868,9 @@ function App() {
                 <option value="ranking">ranking</option>
                 <option value="narrative">narrative</option>
               </select>
-            </label>
-            {renderQuestionTypeHelper(editingQuestionDraft.type)}
-          </div>
+              {renderQuestionTypeHelper(editingQuestionDraft.type)}
+            </div>
+          </label>
           <section className="subcard question-edit-preview">
             <p className="section-label">Preview</p>
             <MarkdownContent

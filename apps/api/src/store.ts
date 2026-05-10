@@ -2902,11 +2902,15 @@ export class ApiStore {
     }
   }
 
-  private normalizeQuestionCategories(categories: string[]) {
+  private normalizeQuestionCategories(categories: Array<string | null | undefined>) {
     const seen = new Set<string>();
     const normalized: string[] = [];
 
     for (const category of categories) {
+      if (typeof category !== "string") {
+        continue;
+      }
+
       const trimmedCategory = category.trim();
       if (!trimmedCategory) {
         continue;
@@ -2924,7 +2928,7 @@ export class ApiStore {
     return normalized.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
   }
 
-  private async insertQuestionCategories(client: DbClient, categories: string[]) {
+  private async insertQuestionCategories(client: DbClient, categories: Array<string | null | undefined>) {
     const normalizedCategories = this.normalizeQuestionCategories(categories);
 
     for (const category of normalizedCategories) {

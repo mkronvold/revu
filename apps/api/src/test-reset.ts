@@ -167,7 +167,7 @@ async function insertQuestionCategories(client: PoolClient) {
     new Set(
       questionSetsListExample.items.flatMap((questionSet) =>
         questionSet.questions
-          .map((question) => question.category.trim())
+          .map((question) => question.category?.trim() ?? "")
           .filter((category) => category.length > 0),
       ),
     ),
