@@ -1096,13 +1096,15 @@ export class ApiStore {
   }
 
   private async activeQuestionSetOrThrow(reviewPeriodId: string, target: Assessment["target"], client: DbClient) {
-    const [questionSet] = await this.loadQuestionSets(client, {
-      reviewPeriodId,
-      status: "active",
-      target,
+    const [questionSet] = [...await this.loadQuestionSets(client, { reviewPeriodId, target })].sort((left, right) => {
+      if (left.status !== right.status) {
+        return left.status === "active" ? -1 : 1;
+      }
+
+      return right.updatedAt.localeCompare(left.updatedAt);
     });
 
-    if (!questionSet) {
+    if (!questionSet || (this.questionSetStatusEnabled() && questionSet.status !== "active")) {
       throw new ApiError(409, `No active ${target} question set is available for this review period`);
     }
 
@@ -1578,6 +1580,10 @@ export class ApiStore {
     }
 
     return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+  }
+
+  private questionSetStatusEnabled() {
+    return this.parseBooleanEnv(process.env.VITE_ENABLE_QUESTION_SET_STATUS);
   }
 
   private parseNumberEnv(value: string | undefined) {
@@ -2648,6 +2654,19 @@ export class ApiStore {
 
         const timestamp = nowIso();
         const questionSetId = randomUUID();
+        const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? "draft" : "active";
+        if (nextStatus === "active") {
+          await client.query(
+            `
+              UPDATE question_sets
+              SET status = 'draft'
+              WHERE review_period_id = $1
+                AND target = $2
+                AND status = 'active'
+            `,
+            [reviewPeriodId, input.target],
+          );
+        }
         await client.query(
           `
             INSERT INTO question_sets (
@@ -2664,15 +2683,15 @@ export class ApiStore {
               $1,
               $2,
               $3,
-              'draft',
               $4,
               $5,
               $6,
-              $7::timestamptz,
-              $7::timestamptz
+              $7,
+              $8::timestamptz,
+              $8::timestamptz
             )
           `,
-          [questionSetId, reviewPeriodId, input.target, input.title, input.headerMarkdown, input.footerMarkdown, timestamp],
+          [questionSetId, reviewPeriodId, input.target, nextStatus, input.title, input.headerMarkdown, input.footerMarkdown, timestamp],
         );
 
         for (const question of input.questions) {
@@ -2711,6 +2730,9 @@ export class ApiStore {
           ...questionSet,
           ...updates,
         };
+        const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled()
+          ? updates.status ?? questionSet.status
+          : "active";
 
         await client.query(
           `
@@ -2726,7 +2748,7 @@ export class ApiStore {
             nextQuestionSet.title,
             nextQuestionSet.headerMarkdown,
             nextQuestionSet.footerMarkdown,
-            updates.status ?? questionSet.status,
+            nextStatus,
           ],
         );
 
@@ -2793,7 +2815,7 @@ export class ApiStore {
           await this.insertQuestionCategories(client, updates.questions.map((question) => question.category));
         }
 
-        if (updates.status === "active") {
+        if (nextStatus === "active") {
           await client.query(
             `
               UPDATE question_sets

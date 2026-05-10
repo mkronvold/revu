@@ -1,7 +1,8 @@
 # Changelog
 
 ## Unreleased
-- Added a `Make active` action for inactive review periods on Questions, and added a confirmed `Delete set` reset inside the question-set editor that clears a set back to a blank draft with no questions
+- Added `VITE_ENABLE_QUESTION_SET_STATUS` to hide question-set status by default, remove that status from the Questions UI when disabled, and auto-treat saved/copied question sets as active without deleting the underlying status code path
+- Added a `Make active` action for inactive review periods on Questions, and added a confirmed `Delete set` reset inside the question-set editor that clears a set back to a blank question set with no questions
 - Moved question-set copying into the edit dialog, now show it for archived periods too, rename the action to the active review period label, standardize modal action placement around a universal upper-right Close button, let assessment Submit save partial draft changes when needed, and relax review-period deadline validation so assessment/review due dates can fall outside the review window
 - Removed the bottom dismiss button from the Questions question-set editor so the dialog closes only from the header control or backdrop
 - Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard and review queues

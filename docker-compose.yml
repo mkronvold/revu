@@ -39,6 +39,7 @@ services:
       BACKUP_AUTOMATIC_ENABLED: ${BACKUP_AUTOMATIC_ENABLED:-false}
       BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-daily}
       BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
+      VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
     expose:
       - "4000"
     volumes:
@@ -109,6 +110,7 @@ services:
     restart: unless-stopped
     environment:
       VITE_COMPANY_NAME: ${VITE_COMPANY_NAME:-Your Company}
+      VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
     ports:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:

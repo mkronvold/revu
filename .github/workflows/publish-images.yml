@@ -71,6 +71,7 @@ jobs:
             build_args: |-
               VITE_API_BASE_URL=/api/v1
               VITE_COMPANY_NAME=Your Company
+              VITE_ENABLE_QUESTION_SET_STATUS=false
               APP_REVISION=${{ github.sha }}
     steps:
       - name: Check out repository

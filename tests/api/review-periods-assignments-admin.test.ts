@@ -131,6 +131,7 @@ describe("review periods, question sets, and assignments admin API", () => {
     });
     expect(firstSelfQuestionSetResponse.statusCode).toBe(201);
     const firstSelfQuestionSet = questionSetResponseSchema.parse(firstSelfQuestionSetResponse.json()).item;
+    expect(firstSelfQuestionSet.status).toBe("active");
 
     const secondSelfQuestionSetResponse = await app.inject({
       method: "POST",
@@ -155,6 +156,7 @@ describe("review periods, question sets, and assignments admin API", () => {
     });
     expect(secondSelfQuestionSetResponse.statusCode).toBe(201);
     const secondSelfQuestionSet = questionSetResponseSchema.parse(secondSelfQuestionSetResponse.json()).item;
+    expect(secondSelfQuestionSet.status).toBe("active");
 
     const activateFirstResponse = await app.inject({
       method: "POST",

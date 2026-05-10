@@ -111,7 +111,7 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
-import { getRuntimeCompanyName, getRuntimeRevision } from './runtimeConfig';
+import { getRuntimeCompanyName, getRuntimeRevision, questionSetStatusEnabled } from './runtimeConfig';
 import {
   getNextThemePreference,
   getThemeColorScheme,
@@ -174,7 +174,7 @@ function createBlankQuestionSetDraft(draft: QuestionSetDraft): QuestionSetDraft 
   return {
     ...draft,
     title: '',
-    status: 'draft',
+    status: questionSetStatusEnabled ? 'draft' : 'active',
     headerMarkdown: '',
     footerMarkdown: '',
     questions: [],
@@ -2636,7 +2636,8 @@ function App() {
       return;
     }
 
-    const nextDraft = toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined);
+    const nextDraftBase = toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined);
+    const nextDraft = questionSetStatusEnabled ? nextDraftBase : { ...nextDraftBase, status: 'active' as const };
     setQuestionSetDraft(nextDraft);
     setQuestionSetInitialDraft(serializeQuestionSetDraft(nextDraft));
     setEditingQuestionDraftId(null);
@@ -3001,7 +3002,7 @@ function App() {
       return;
     }
 
-    if (!window.confirm('Delete this question set and reset it to a blank draft?')) {
+    if (!window.confirm('Delete this question set and reset it to a blank question set?')) {
       return;
     }
 
@@ -3010,7 +3011,7 @@ function App() {
     setIsNewQuestionCategoryDialogOpen(false);
     setNewQuestionCategoryDraft('');
     setNewQuestionCategoryError('');
-    setAdminNotice('Question set reset to a blank draft. Save it to keep the change.');
+    setAdminNotice('Question set reset to a blank question set. Save it to keep the change.');
   };
 
   const handleAssignmentExport = async (format: TransferFormat) => {
@@ -3122,13 +3123,15 @@ function App() {
       </div>
       <dl className="detail-grid compact-detail-grid">
         <div>
-          <dt>Status</dt>
-          <dd>{questionSet?.status ?? 'draft'}</dd>
-        </div>
-        <div>
           <dt>Questions</dt>
           <dd>{questionSet?.questions.length ?? 0}</dd>
         </div>
+        {questionSetStatusEnabled ? (
+          <div>
+            <dt>Status</dt>
+            <dd>{questionSet?.status ?? 'draft'}</dd>
+          </div>
+        ) : null}
       </dl>
       <MarkdownContent markdown={questionSet?.headerMarkdown || 'No header text yet.'} className="markdown-content" />
       <div className="question-set-question-list">
@@ -3380,17 +3383,19 @@ function App() {
                   onChange={(event) => updateQuestionSetDraftField('title', event.target.value)}
                 />
               </label>
-              <label>
-                Status
-                <select
-                  value={questionSetDraft.status}
-                  disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                  onChange={(event) => updateQuestionSetDraftField('status', event.target.value as QuestionSetDraft['status'])}
-                >
-                  <option value="draft">draft</option>
-                  <option value="active">active</option>
-                </select>
-              </label>
+              {questionSetStatusEnabled ? (
+                <label>
+                  Status
+                  <select
+                    value={questionSetDraft.status}
+                    disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+                    onChange={(event) => updateQuestionSetDraftField('status', event.target.value as QuestionSetDraft['status'])}
+                  >
+                    <option value="draft">draft</option>
+                    <option value="active">active</option>
+                  </select>
+                </label>
+              ) : null}
               <label>
                 Header markdown
                 <textarea

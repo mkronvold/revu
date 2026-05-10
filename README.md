@@ -48,7 +48,7 @@ Revu is an API-first TypeScript monorepo for employee assessments, manager/admin
    - API on `http://localhost:4000` by default
    - Web on `http://localhost:3000` by default
 
-   The dev compose override binds those ports to `127.0.0.1` so they stay local to the machine instead of being exposed on every interface. Override those defaults by copying `.env.example` to `.env` and editing the values there. `VITE_COMPANY_NAME` controls the company label shown next to the workspace title. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
+   The dev compose override binds those ports to `127.0.0.1` so they stay local to the machine instead of being exposed on every interface. Override those defaults by copying `.env.example` to `.env` and editing the values there. `VITE_COMPANY_NAME` controls the company label shown next to the workspace title, and `VITE_ENABLE_QUESTION_SET_STATUS=false` hides question-set status controls and treats saved sets as active by default. The default web dev flow now uses same-origin `/api/v1` requests with a Vite proxy to the API container.
 
 5. Apply SQL migrations to the local Postgres container when you need a real schema instance:
 
@@ -112,7 +112,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
    ./down.sh
    ```
 
-     This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` is applied at container startup, and the generated runtime config is served without browser caching, so changing it in `.env` takes effect after restarting the web container and refreshing the page. The same runtime config also carries the published image revision, which the sidebar shows in a compact Build card.
+     This uses `docker-compose.yml` as the deployment definition, keeps PostgreSQL and the API internal to the Compose network, and serves the web UI on `http://localhost:3000`. The database is reachable inside Compose as `revu-postgres`, the frontend is reachable as `revu-web` on both the default network and the external `nginxproxy_proxy-net` network, and the API stays internal as `revu-api` on the default network only. The published web image proxies `/api/*` requests to the `api` service inside Compose, so Nginx Proxy Manager only needs to target `revu-web:3000`. `VITE_COMPANY_NAME` and `VITE_ENABLE_QUESTION_SET_STATUS` are applied at container startup, and the generated runtime config is served without browser caching, so changing them in `.env` takes effect after restarting the web container and refreshing the page. The same runtime config also carries the published image revision, which the sidebar shows in a compact Build card.
 
 ## Backup runtime
 

@@ -48,10 +48,9 @@ describe('review admin API orchestration', () => {
     vi.resetAllMocks();
   });
 
-  it('creates and activates a new question set when the draft is saved as active', async () => {
+  it('creates and activates a new question set when question-set status is disabled', async () => {
     const draft = toQuestionSetDraft('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'self');
     draft.title = '2026 Self Questions v2';
-    draft.status = 'active';
     draft.questions[0]!.prompt = 'What impact did you have this cycle?';
 
     vi.mocked(createQuestionSet).mockResolvedValue({
@@ -110,7 +109,7 @@ describe('review admin API orchestration', () => {
     expect(result.notice).toContain('activated');
   });
 
-  it('copies an inactive review-period question set into the current review period as a draft', async () => {
+  it('copies an inactive review-period question set into the current review period as active', async () => {
     const sourceReviewPeriod = foundationSnapshotExample.reviewPeriods[1]!;
     const targetReviewPeriod = foundationSnapshotExample.reviewPeriods[0]!;
     const sourceQuestionSet = foundationSnapshotExample.questionSets[2]!;
@@ -121,6 +120,16 @@ describe('review admin API orchestration', () => {
         id: '56565656-5656-4565-8565-565656565656',
         reviewPeriodId: targetReviewPeriod.id,
         isReadOnly: false,
+        title: '2026 Self Questions',
+      },
+    });
+    vi.mocked(activateQuestionSet).mockResolvedValue({
+      item: {
+        ...sourceQuestionSet,
+        id: '56565656-5656-4565-8565-565656565656',
+        reviewPeriodId: targetReviewPeriod.id,
+        isReadOnly: false,
+        status: 'active',
         title: '2026 Self Questions',
       },
     });
@@ -147,7 +156,8 @@ describe('review admin API orchestration', () => {
       ],
     });
     expect(result.questionSet.reviewPeriodId).toBe(targetReviewPeriod.id);
-    expect(result.notice).toContain('as a draft');
+    expect(result.questionSet.status).toBe('active');
+    expect(result.notice).toContain('made it active');
   });
 
   it('removes assignments through the API and clears the synced employee assessor', async () => {

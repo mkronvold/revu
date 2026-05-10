@@ -34,6 +34,7 @@ import {
   updateQuestionSet,
   updateReviewPeriod,
 } from './api';
+import { questionSetStatusEnabled } from './runtimeConfig';
 import type { QuestionSetDraft, ReviewAdminSnapshot, ReviewPeriodDraft } from './reviewAdmin';
 
 export type TransferFormat = 'json' | 'csv';
@@ -285,6 +286,7 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
   notice: string;
   questionSet: QuestionSet;
 }> {
+  const nextStatus = questionSetStatusEnabled ? draft.status : 'active';
   const payload = {
     title: draft.title.trim(),
     headerMarkdown: draft.headerMarkdown,
@@ -295,7 +297,7 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
   if (draft.id) {
     const response = await updateQuestionSet(token, draft.id, {
       ...payload,
-      status: draft.status,
+      status: nextStatus,
     });
 
     return {
@@ -308,12 +310,15 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
     target: draft.target,
     ...payload,
   });
-  const questionSet = draft.status === 'active' ? (await activateQuestionSet(token, created.item.id)).item : created.item;
+  const questionSet =
+    nextStatus === 'active' && created.item.status !== 'active'
+      ? (await activateQuestionSet(token, created.item.id)).item
+      : created.item;
 
   return {
     questionSet,
     notice:
-      draft.status === 'active'
+      nextStatus === 'active'
         ? `Created and activated the ${draft.target} question set in the API.`
         : `Created the ${draft.target} question set in the API.`,
   };
@@ -330,7 +335,7 @@ export async function copyQuestionSetToReviewPeriodInApi(
   notice: string;
   questionSet: QuestionSet;
 }> {
-  const response = await createQuestionSet(token, targetReviewPeriod.id, {
+  const created = await createQuestionSet(token, targetReviewPeriod.id, {
     target: sourceQuestionSet.target,
     title: replaceReviewPeriodText(sourceQuestionSet.title, sourceReviewPeriod, targetReviewPeriod),
     headerMarkdown: replaceReviewPeriodText(sourceQuestionSet.headerMarkdown, sourceReviewPeriod, targetReviewPeriod),
@@ -345,10 +350,16 @@ export async function copyQuestionSetToReviewPeriodInApi(
         prompt: question.prompt,
       })),
   });
+  const questionSet =
+    !questionSetStatusEnabled && created.item.status !== 'active'
+      ? (await activateQuestionSet(token, created.item.id)).item
+      : created.item;
 
   return {
-    questionSet: response.item,
-    notice: `Copied the ${sourceQuestionSet.target} question set to ${targetReviewPeriod.label} as a draft.`,
+    questionSet,
+    notice: questionSetStatusEnabled
+      ? `Copied the ${sourceQuestionSet.target} question set to ${targetReviewPeriod.label} as a draft.`
+      : `Copied the ${sourceQuestionSet.target} question set to ${targetReviewPeriod.label} and made it active.`,
   };
 }
 

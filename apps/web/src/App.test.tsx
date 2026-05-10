@@ -73,6 +73,7 @@ vi.mock('./api', () => {
 
 import App from './App';
 import {
+  activateQuestionSet,
   acceptAssessment,
   changePassword,
   checkApiHealth,
@@ -413,7 +414,7 @@ describe('questions screen', () => {
     const fieldOrder = Array.from(editor?.querySelectorAll('.question-set-dialog-fields > label') ?? []).map(
       (field) => field.childNodes[0]?.textContent?.trim(),
     );
-    expect(fieldOrder).toEqual(['Title', 'Status', 'Header markdown', 'Footer markdown']);
+    expect(fieldOrder).toEqual(['Title', 'Header markdown', 'Footer markdown']);
 
     const questionRow = editor?.querySelector('.question-set-dialog-row-button');
     expect(questionRow).toBeTruthy();
@@ -759,18 +760,14 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    expect(confirmSpy).toHaveBeenCalledWith('Delete this question set and reset it to a blank draft?');
+    expect(confirmSpy).toHaveBeenCalledWith('Delete this question set and reset it to a blank question set?');
 
     const titleInput = Array.from(container.querySelectorAll('.question-set-dialog label'))
       .find((label) => label.textContent?.includes('Title'))
       ?.querySelector('input') as HTMLInputElement | null;
-    const statusField = Array.from(container.querySelectorAll('.question-set-dialog label'))
-      .find((label) => label.textContent?.includes('Status'))
-      ?.querySelector('select') as HTMLSelectElement | null;
-
     expect(container.querySelector('.question-set-dialog')?.textContent).toContain('New self question set');
     expect(titleInput?.value).toBe('');
-    expect(statusField?.value).toBe('draft');
+    expect(Array.from(container.querySelectorAll('.question-set-dialog label')).some((label) => label.textContent?.includes('Status'))).toBe(false);
     expect(container.querySelectorAll('.question-set-dialog .question-set-dialog-row')).toHaveLength(0);
   });
 
@@ -811,9 +808,6 @@ describe('questions screen', () => {
     const titleInput = Array.from(editor?.querySelectorAll('label') ?? [])
       .find((label) => label.textContent?.includes('Title'))
       ?.querySelector('input') as HTMLInputElement | null;
-    const statusField = Array.from(editor?.querySelectorAll('label') ?? [])
-      .find((label) => label.textContent?.includes('Status'))
-      ?.querySelector('select') as HTMLSelectElement | null;
     const headerField = Array.from(editor?.querySelectorAll('label') ?? [])
       .find((label) => label.textContent?.includes('Header markdown'))
       ?.querySelector('textarea') as HTMLTextAreaElement | null;
@@ -828,9 +822,9 @@ describe('questions screen', () => {
     );
 
     expect(titleInput?.disabled).toBe(true);
-    expect(statusField?.disabled).toBe(true);
     expect(headerField?.disabled).toBe(true);
     expect(footerField?.disabled).toBe(true);
+    expect(Array.from(editor?.querySelectorAll('label') ?? []).some((label) => label.textContent?.includes('Status'))).toBe(false);
     expect(removeButtons.length).toBeGreaterThan(0);
     expect(removeButtons.every((button) => button.disabled)).toBe(true);
     expect(addQuestionButton).toBeUndefined();
@@ -862,6 +856,16 @@ describe('questions screen', () => {
         id: '56565656-5656-4565-8565-565656565656',
         reviewPeriodId: archivedSnapshot.reviewPeriods[0]!.id,
         isReadOnly: false,
+        title: '2026 Self Questions',
+      },
+    });
+    vi.mocked(activateQuestionSet).mockResolvedValue({
+      item: {
+        ...archivedSnapshot.questionSets[2]!,
+        id: '56565656-5656-4565-8565-565656565656',
+        reviewPeriodId: archivedSnapshot.reviewPeriods[0]!.id,
+        isReadOnly: false,
+        status: 'active',
         title: '2026 Self Questions',
       },
     });
