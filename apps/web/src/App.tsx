@@ -3750,28 +3750,8 @@ function App() {
 
   const renderBackups = () => <main className="admin-stack">{renderBackupsContent()}</main>;
 
-  const renderWorkflowManagementCard = () => (
-    <section className="card workflow-management-card">
-      <div className="section-heading">
-        <div>
-          <p className="section-label">Workflow</p>
-          <h3>Review workflow markdown</h3>
-        </div>
-        {isAdmin ? (
-          <button type="button" onClick={openWorkflowEditor}>
-            Edit workflow
-          </button>
-        ) : null}
-      </div>
-      <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p>
-      <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
-    </section>
-  );
-
   const renderFileManagement = () => (
     <main className="admin-stack">
-      {renderWorkflowManagementCard()}
-
       <div className="file-management-card-grid">
         {renderLocalUserTransferCard()}
         {renderQuestionTransferCard()}
@@ -3784,8 +3764,19 @@ function App() {
   const renderWorkflow = () => (
     <main className="content-grid">
       <section className="card card-wide workflow-page-card">
-        <p className="section-label">Review lifecycle</p>
-        <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown" />
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Review lifecycle</p>
+            <h3>Review workflow markdown</h3>
+          </div>
+          {isAdmin ? (
+            <button type="button" onClick={openWorkflowEditor}>
+              Edit workflow
+            </button>
+          ) : null}
+        </div>
+        <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p>
+        <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
       </section>
     </main>
   );

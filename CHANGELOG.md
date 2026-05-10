@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Moved the admin-only Edit workflow control onto the Workflow page and removed the old workflow card from File Management while keeping the shared markdown editor behavior intact
 - Refined question-editor response-type helpers so subjective shows checkbox choices, ranking shows radio choices, and narrative uses the updated written self-rating guidance
 - Reworked the question editor to use category pulldowns with a nested new-category dialog, warn before closing unsaved question-set edits, expand the Question field, and align the question editor controls consistently
 - Widened the question-set edit dialog to use the full shared modal width budget while leaving other modal sizing unchanged

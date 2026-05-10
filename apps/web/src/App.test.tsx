@@ -581,6 +581,7 @@ describe('workflow entry', () => {
     await waitFor(() => window.location.pathname === '/workflow');
 
     expect(container.textContent).toContain('Reference the full review lifecycle');
+    expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
 
@@ -601,6 +602,7 @@ describe('workflow entry', () => {
     const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
     expect(navLinkLabels).not.toContain('Workflow');
     expect(window.location.pathname).toBe('/workflow');
+    expect(container.textContent).not.toContain('Edit workflow');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
 
@@ -783,7 +785,6 @@ describe('file management screen', () => {
     expect(container.textContent).not.toContain('Review period lifecycle');
     expect(container.textContent).not.toContain('Backup and restore');
     expect(container.textContent).not.toContain('Runtime backup configuration');
-    expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Local user transfer files');
     expect(container.textContent).toContain('Question set transfer files');
     expect(container.textContent).toContain('Archive review periods');
@@ -791,14 +792,32 @@ describe('file management screen', () => {
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');
+    expect(container.textContent).not.toContain('Review workflow markdown');
+    expect(container.textContent).not.toContain('Sidebar visibility:');
 
     const editWorkflowButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Edit workflow',
     );
-    expect(editWorkflowButton).toBeTruthy();
+    expect(editWorkflowButton).toBeUndefined();
+
+    const workflowLinkAgain = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
+      (link) => link.textContent === 'Workflow',
+    ) as HTMLAnchorElement | undefined;
+    expect(workflowLinkAgain).toBeTruthy();
 
     await act(async () => {
-      editWorkflowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      workflowLinkAgain?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => window.location.pathname === '/workflow');
+    const workflowEditButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit workflow',
+    );
+    expect(workflowEditButton).toBeTruthy();
+
+    await act(async () => {
+      workflowEditButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
@@ -839,9 +858,17 @@ describe('file management screen', () => {
     });
 
     await waitFor(() => container.textContent?.includes('Updated the workflow settings.') ?? false);
-    expect(container.querySelector('.workflow-management-card')?.textContent).toContain('Updated workflow');
-    expect(container.querySelector('.workflow-management-card')?.textContent).toContain('Sidebar visibility: managers');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Updated workflow');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: managers');
     expect(window.localStorage.getItem('revu-workflow-visibility')).toBe('managers');
+
+    await act(async () => {
+      window.history.pushState(null, '', '/file-management');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
 
     const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
     const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Local user transfer files'));
