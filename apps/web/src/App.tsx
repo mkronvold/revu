@@ -631,11 +631,6 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getStoredSidebarCollapsed());
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
-  const [archivePanelsExpanded, setArchivePanelsExpanded] = useState({
-    active: true,
-    inactive: true,
-    archived: true,
-  });
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
   const [isRefreshAvailable, setIsRefreshAvailable] = useState(false);
   const [apiRecoveryPollCount, setApiRecoveryPollCount] = useState(0);
@@ -1724,11 +1719,6 @@ function App() {
     setWorkflowVisibilityDraft(null);
     setWorkflowInitialDraft(null);
     setAreReviewQueuesExpanded(true);
-    setArchivePanelsExpanded({
-      active: true,
-      inactive: true,
-      archived: true,
-    });
     setPasswordDialogEmployeeId(null);
     setIsRefreshAvailable(false);
     setApiRecoveryPollCount(0);
@@ -3969,152 +3959,114 @@ function App() {
     const archivedReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'archived');
 
     return (
-      <>
-        <section className="card">
-          <div className="section-heading">
+      <section className="card admin-section-card file-management-review-period-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Review periods</p>
+            <h3>Review period lifecycle</h3>
+          </div>
+        </div>
+        <div className="archive-section">
+          <div className="archive-section-heading">
             <div>
               <p className="section-label">Active review periods</p>
-              <h3>Archive review periods</h3>
+              <h4>Archive review periods</h4>
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                setArchivePanelsExpanded((currentState) => ({
-                  ...currentState,
-                  active: !currentState.active,
-                }))
-              }
-            >
-              {archivePanelsExpanded.active ? 'Collapse' : 'Expand'}
-            </button>
           </div>
-          {archivePanelsExpanded.active ? (
-            <div className="archive-list">
-              {activeReviewPeriods.length ? (
-                activeReviewPeriods.map((reviewPeriod) => {
-                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
-                  return (
-                    <article className="archive-row" key={reviewPeriod.id}>
-                      <div>
-                        <strong>{reviewPeriod.label}</strong>
-                        <p className="muted-copy">
-                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} •
-                          {' '}review by {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets •{' '}
-                          {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
-                        </p>
-                      </div>
-                      <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}>
-                        Archive
-                      </button>
-                    </article>
-                  );
-                })
-              ) : (
-                <p className="muted-copy">No active review periods right now.</p>
-              )}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="card">
-          <div className="section-heading">
+          <div className="archive-list">
+            {activeReviewPeriods.length ? (
+              activeReviewPeriods.map((reviewPeriod) => {
+                const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                return (
+                  <article className="archive-row" key={reviewPeriod.id}>
+                    <div>
+                      <strong>{reviewPeriod.label}</strong>
+                      <p className="muted-copy">
+                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} • review by{' '}
+                        {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
+                        assignments • {summary.assessmentCount} assessments
+                      </p>
+                    </div>
+                    <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}>
+                      Archive
+                    </button>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="muted-copy">No active review periods right now.</p>
+            )}
+          </div>
+        </div>
+        <div className="archive-section">
+          <div className="archive-section-heading">
             <div>
               <p className="section-label">Inactive review periods</p>
-              <h3>Manage inactive review periods</h3>
+              <h4>Manage inactive review periods</h4>
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                setArchivePanelsExpanded((currentState) => ({
-                  ...currentState,
-                  inactive: !currentState.inactive,
-                }))
-              }
-            >
-              {archivePanelsExpanded.inactive ? 'Collapse' : 'Expand'}
-            </button>
           </div>
-          {archivePanelsExpanded.inactive ? (
-            <div className="archive-list">
-              {inactiveReviewPeriods.length ? (
-                inactiveReviewPeriods.map((reviewPeriod) => {
-                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
-                  return (
-                    <article className="archive-row" key={reviewPeriod.id}>
-                      <div>
-                        <strong>{reviewPeriod.label}</strong>
-                        <p className="muted-copy">
-                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} •
-                          {' '}review by {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets •{' '}
-                          {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
-                        </p>
-                      </div>
-                      <button type="button" disabled={isSavingReviewAdmin} onClick={() => startEditingReviewPeriod(reviewPeriod)}>
-                        Edit
-                      </button>
-                    </article>
-                  );
-                })
-              ) : (
-                <p className="muted-copy">No inactive review periods right now.</p>
-              )}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="card">
-          <div className="section-heading">
+          <div className="archive-list">
+            {inactiveReviewPeriods.length ? (
+              inactiveReviewPeriods.map((reviewPeriod) => {
+                const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                return (
+                  <article className="archive-row" key={reviewPeriod.id}>
+                    <div>
+                      <strong>{reviewPeriod.label}</strong>
+                      <p className="muted-copy">
+                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} • review by{' '}
+                        {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
+                        assignments • {summary.assessmentCount} assessments
+                      </p>
+                    </div>
+                    <button type="button" disabled={isSavingReviewAdmin} onClick={() => startEditingReviewPeriod(reviewPeriod)}>
+                      Edit
+                    </button>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="muted-copy">No inactive review periods right now.</p>
+            )}
+          </div>
+        </div>
+        <div className="archive-section">
+          <div className="archive-section-heading">
             <div>
               <p className="section-label">Archived review periods</p>
-              <h3>Restore archived review periods</h3>
+              <h4>Restore archived review periods</h4>
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                setArchivePanelsExpanded((currentState) => ({
-                  ...currentState,
-                  archived: !currentState.archived,
-                }))
-              }
-            >
-              {archivePanelsExpanded.archived ? 'Collapse' : 'Expand'}
-            </button>
           </div>
-          {archivePanelsExpanded.archived ? (
-            <div className="archive-list">
-              {archivedReviewPeriods.length ? (
-                archivedReviewPeriods.map((reviewPeriod) => {
-                  const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
-                  return (
-                    <article className="archive-row" key={reviewPeriod.id}>
-                      <div>
-                        <strong>{reviewPeriod.label}</strong>
-                        <p className="muted-copy">
-                          Archived at {reviewPeriod.archivedAt ?? 'unknown'} by {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
-                          {summary.archivedAssessmentCount} archived assessments • {summary.reviewedAssessmentCount} reviewed
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={isSavingReviewAdmin}
-                        onClick={() => void handleArchiveToggle(reviewPeriod.id, false)}
-                      >
-                        Unarchive
-                      </button>
-                    </article>
-                  );
-                })
-              ) : (
-                <p className="muted-copy">No archived review periods yet.</p>
-              )}
-            </div>
-          ) : null}
-        </section>
-      </>
+          <div className="archive-list">
+            {archivedReviewPeriods.length ? (
+              archivedReviewPeriods.map((reviewPeriod) => {
+                const summary = getReviewPeriodSummary(reviewAdmin, reviewPeriod.id);
+                return (
+                  <article className="archive-row" key={reviewPeriod.id}>
+                    <div>
+                      <strong>{reviewPeriod.label}</strong>
+                      <p className="muted-copy">
+                        Archived at {reviewPeriod.archivedAt ?? 'unknown'} by {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
+                        {summary.archivedAssessmentCount} archived assessments • {summary.reviewedAssessmentCount} reviewed
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={isSavingReviewAdmin}
+                      onClick={() => void handleArchiveToggle(reviewPeriod.id, false)}
+                    >
+                      Unarchive
+                    </button>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="muted-copy">No archived review periods yet.</p>
+            )}
+          </div>
+        </div>
+      </section>
     );
   };
 

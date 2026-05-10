@@ -1342,7 +1342,7 @@ describe('file management screen', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders consolidated transfer cards, archive controls, and backup restore tools', async () => {
+  it('renders consolidated transfer cards, a single review-period lifecycle card, and backup restore tools', async () => {
     const backup = createBackupExample();
     const questionSnapshot = cloneQuestionSlice();
     let currentFoundationSnapshot = structuredClone(questionSnapshot);
@@ -1474,18 +1474,23 @@ describe('file management screen', () => {
 
     expect(window.location.pathname).toBe('/file-management');
     expect(container.textContent).not.toContain('Admin workspace');
-    expect(container.textContent).not.toContain('Review period lifecycle');
     expect(container.textContent).not.toContain('Backup and restore');
     expect(container.textContent).not.toContain('Runtime backup configuration');
     expect(container.textContent).toContain('Employee import/export');
     expect(container.textContent).toContain('Question set import/export');
+    expect(container.textContent).toContain('Review period lifecycle');
     expect(container.textContent).toContain('Archive review periods');
+    expect(container.textContent).toContain('Manage inactive review periods');
+    expect(container.textContent).toContain('Restore archived review periods');
     expect(container.textContent).toContain('Automatic backups');
     expect(container.textContent).toContain('Refresh status');
     expect(container.textContent).toContain('Restore all');
     expect(container.textContent).toContain('Restore questions');
+    expect(container.textContent).not.toContain('Collapse');
+    expect(container.textContent).not.toContain('Expand');
     expect(container.textContent).not.toContain('Review workflow markdown');
     expect(container.textContent).not.toContain('Sidebar visibility:');
+    expect(container.querySelectorAll('.file-management-review-period-card')).toHaveLength(1);
 
     const editWorkflowButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Edit workflow',

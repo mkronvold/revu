@@ -684,6 +684,20 @@ button.employee-row:focus-visible {
   gap: 1rem;
 }
 
+.archive-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.archive-section-heading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.archive-section-heading h4 {
+  margin: 0;
+}
+
 .dashboard-queue-stack {
   gap: 0.75rem;
   margin-top: 0.85rem;
@@ -2042,6 +2056,10 @@ button.employee-row:focus-visible {
   padding: 1rem;
   border-radius: 1rem;
   background: #f8fafc;
+}
+
+.archive-row > div {
+  min-width: 0;
 }
 
 .modal-backdrop {
