@@ -2,6 +2,8 @@
 
 Revu is an API-first TypeScript monorepo for employee assessments, manager/admin review workflows, and review-period administration.
 
+See `LCM.md` for the lifecycle-management model covering CVE mitigation, scheduled image refreshes, dependency automation, and host redeploy patterns.
+
 ## Current app state
 
 - API and web foundations are in place for auth, employee admin, review periods, question sets, assignments, assessments, and manager/admin review actions.
@@ -144,9 +146,13 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 ## Container publishing
 
 - Workflow: `.github/workflows/publish-images.yml`
+- Scheduled refresh workflow: `.github/workflows/refresh-images.yml`
+- Dependency automation: `.github/dependabot.yml`
+- Safe dependency automerge: `.github/workflows/automerge-dependencies.yml`
 - Triggers:
   - pull requests run workspace validation plus Docker builds without pushing
   - pushes to `main`, version tags, and manual dispatch publish images to GHCR
+- weekly scheduled refreshes rebuild and republish moving deployment tags for base-image freshness
 - Published images:
   - `ghcr.io/mkronvold/revu-api`
   - `ghcr.io/mkronvold/revu-web`
@@ -163,6 +169,7 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 | `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, pulls images, applies migrations, seeds the example dataset only when the database is empty, and starts the deployment stack. |
 | `./down.sh` | Stops the deployment stack. |
 | `./autoupdate.sh [minutes]` | Ensures the deployment stack is already running (or starts it through `up.sh` first), then checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, applies migrations, seeds the example dataset if the database is empty, and sleeps 30 minutes between checks by default. |
+| `./autoupdate.sh --once` | Runs a single GHCR check-and-redeploy pass so cron or a `systemd` timer can reuse the same logic without running a long-lived watcher. |
 | `./scripts/backup-now.sh [name]` | Runs the backup sidecar on demand and stores a full backup in the retained archive volume. |
 | `./scripts/backup-download-handoff.sh [backup\|latest] [request-id]` | Copies an archived backup into the shared download handoff area. |
 | `./scripts/backup-upload-handoff.sh <file> [request-id]` | Copies an uploaded backup file into the shared upload handoff area. |

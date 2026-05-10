@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 readonly default_interval_minutes=30
+readonly no_updates_exit_code=10
 readonly ghcr_services=(api web)
 readonly manifest_accept_header='application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json'
 readonly docker_config_path="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
@@ -19,17 +20,28 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+one_shot=false
+interval_minutes="$default_interval_minutes"
+
 if (( $# > 1 )); then
-  printf 'Usage: %s [interval-minutes]\n' "$0" >&2
+  printf 'Usage: %s [interval-minutes]\n       %s --once\n' "$0" "$0" >&2
   exit 1
 fi
 
-interval_minutes="${1:-$default_interval_minutes}"
-
-if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || (( interval_minutes <= 0 )); then
-  printf 'Interval must be a positive number of minutes.\n' >&2
-  exit 1
-fi
+case "${1:-}" in
+  '')
+    ;;
+  --once)
+    one_shot=true
+    ;;
+  *)
+    interval_minutes="$1"
+    if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || (( interval_minutes <= 0 )); then
+      printf 'Interval must be a positive number of minutes.\n' >&2
+      exit 1
+    fi
+    ;;
+esac
 
 readonly interval_minutes
 readonly sleep_seconds=$(( interval_minutes * 60 ))
@@ -272,7 +284,7 @@ check_for_updates() {
 
   if (( ${#updated_services[@]} == 0 )); then
     log 'No new GHCR images found.'
-    return 1
+    return "$no_updates_exit_code"
   fi
 
   log "New images detected for: ${updated_services[*]}"
@@ -354,11 +366,29 @@ wait_for_next_check() {
 
 ensure_stack_running
 
+if [[ "$one_shot" == true ]]; then
+  log 'Running a single GHCR update check.'
+  if check_for_updates; then
+    restart_stack
+  else
+    status="$?"
+    if (( status != no_updates_exit_code )); then
+      exit "$status"
+    fi
+  fi
+  exit 0
+fi
+
 log "Watching GHCR deployment images every ${interval_minutes} minute(s). Press r to refresh immediately."
 
 while true; do
   if check_for_updates; then
     restart_stack
+  else
+    status="$?"
+    if (( status != no_updates_exit_code )); then
+      log 'Update check failed. Will retry on the next interval.'
+    fi
   fi
 
   if [[ -t 0 ]]; then
