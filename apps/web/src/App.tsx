@@ -54,6 +54,7 @@ import {
   type WorkflowVisibility,
 } from './navigation';
 import {
+  buildAdminAssessmentRows,
   buildReviewQueues,
   createAssessmentWorkflowSnapshot,
   formatSubjectiveResponse,
@@ -755,6 +756,17 @@ function App() {
         ? buildReviewQueues(sessionUser, assessmentWorkflow, workflowEmployees)
         : [],
     [assessmentWorkflow, sessionUser, workflowEmployees],
+  );
+  const activeAssessmentReviewPeriod = useMemo(
+    () => assessmentWorkflow?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
+    [assessmentWorkflow],
+  );
+  const adminAssessmentRows = useMemo(
+    () =>
+      assessmentWorkflow && activeAssessmentReviewPeriod
+        ? buildAdminAssessmentRows(assessmentWorkflow, workflowEmployees, activeAssessmentReviewPeriod.id)
+        : [],
+    [activeAssessmentReviewPeriod, assessmentWorkflow, workflowEmployees],
   );
   const reviewAssessmentIds = useMemo(
     () => reviewQueues.map((item) => item.assessmentId),
@@ -4074,6 +4086,79 @@ function App() {
     </main>
   );
 
+  const renderAssessments = () => (
+    <main className="admin-stack">
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Active review period</p>
+            <h3>All assessments</h3>
+            <p className="muted-copy">
+              {activeAssessmentReviewPeriod
+                ? `${activeAssessmentReviewPeriod.label} • ${adminAssessmentRows.length} ${adminAssessmentRows.length === 1 ? 'assessment' : 'assessments'}`
+                : 'No active review period right now.'}
+            </p>
+          </div>
+        </div>
+
+        {activeAssessmentReviewPeriod ? (
+          <dl className="detail-grid compact-detail-grid">
+            <div>
+              <dt>Review period</dt>
+              <dd>{activeAssessmentReviewPeriod.label}</dd>
+            </div>
+            <div>
+              <dt>Dates</dt>
+              <dd>
+                {activeAssessmentReviewPeriod.startDate} → {activeAssessmentReviewPeriod.dueDate}
+              </dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{activeAssessmentReviewPeriod.status}</dd>
+            </div>
+          </dl>
+        ) : null}
+
+        {activeAssessmentReviewPeriod ? (
+          adminAssessmentRows.length ? (
+            <div className="employee-roster-table-scroll" role="region" aria-label="Active review period assessments">
+              <div className="assessments-table" aria-label="Active review period assessments">
+                <div className="assessments-header">
+                  <span>Name</span>
+                  <span>Assessment type</span>
+                  <span>Assessor</span>
+                  <span>Assessment status</span>
+                  <span>Review status</span>
+                </div>
+                {adminAssessmentRows.map((item) => (
+                  <div className="assessment-row-card" key={item.assessmentId}>
+                    <div className="assessment-row">
+                      <span className="employee-row-cell assessment-row-primary">
+                        <strong>{item.subjectName}</strong>
+                        <span className="muted-copy employee-row-subcopy">{item.title}</span>
+                      </span>
+                      <span className="employee-row-cell">{item.targetLabel}</span>
+                      <span className="employee-row-cell">{item.assessorLabel}</span>
+                      <span className="employee-row-cell">
+                        <span className="pill">{item.assessmentStatusLabel}</span>
+                      </span>
+                      <span className="employee-row-cell">{item.reviewStatusLabel}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="muted-copy">No assessments exist for the active review period yet.</p>
+          )
+        ) : (
+          <p className="muted-copy">Create or activate a review period first to see assessments here.</p>
+        )}
+      </section>
+    </main>
+  );
+
   const renderReviewDialog = () =>
     selectedReviewPanel ? (
       <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeReviewDialog}>
@@ -5203,6 +5288,8 @@ function App() {
           ? renderDashboard()
           : pathname === '/reviews'
             ? renderReviews()
+            : pathname === '/assessments'
+              ? renderAssessments()
           : pathname === '/employees'
             ? renderEmployees()
             : pathname === '/questions'

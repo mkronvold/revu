@@ -4,7 +4,7 @@ export type AppRole = 'employee' | 'manager' | 'admin';
 export type WorkflowVisibility = 'all' | 'managers' | 'admin only';
 
 export type AppSection = {
-  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'fileManagement' | 'workflow';
+  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assessments' | 'fileManagement' | 'workflow';
   path: `/${string}`;
   group: NavGroup;
   title: string;
@@ -94,6 +94,22 @@ export const appSections: AppSection[] = [
     placeholderTitle: 'Question set management',
     placeholderDescription: 'Future work will add editors for active and archived question sets, plus import and export utilities.',
     nextSlice: 'Wire in review-period aware question set forms and import/export actions.',
+  },
+  {
+    id: 'assessments',
+    path: '/assessments',
+    group: 'Administration',
+    title: 'Assessments',
+    summary: 'Admin-only visibility into every assessment in the active review period, separate from the manager review queue.',
+    audience: ['Admin'],
+    highlights: [
+      'Show self and peer assessments together for the current active cycle.',
+      'Keep assessment status visibility separate from review actions on the Reviews page.',
+      'Give admins one place to confirm assignment sync results and current progress.',
+    ],
+    placeholderTitle: 'Active review period assessments',
+    placeholderDescription: 'This route will show all active-period assessments with subject, assessor, and status details.',
+    nextSlice: 'Add active review period assessment listing and drill-in actions for admins.',
   },
   {
     id: 'fileManagement',

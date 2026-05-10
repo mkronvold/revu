@@ -39,6 +39,16 @@ export type ReviewQueueItem = {
   actionLabel: string;
 };
 
+export type AdminAssessmentRow = {
+  assessmentId: string;
+  title: string;
+  subjectName: string;
+  targetLabel: string;
+  assessorLabel: string;
+  assessmentStatusLabel: string;
+  reviewStatusLabel: string;
+};
+
 export type AssessmentEditorQuestion = {
   questionId: string;
   order: number;
@@ -592,6 +602,41 @@ export function buildReviewQueues(
       return buildReviewTitle(left, snapshot, employeesById).localeCompare(buildReviewTitle(right, snapshot, employeesById));
     })
     .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById));
+}
+
+export function buildAdminAssessmentRows(
+  snapshot: AssessmentWorkflowSnapshot,
+  employees: Employee[],
+  reviewPeriodId: string,
+): AdminAssessmentRow[] {
+  const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+
+  return snapshot.assessments
+    .filter((assessment) => assessment.reviewPeriodId === reviewPeriodId && assessment.archiveState === 'active')
+    .slice()
+    .sort((left, right) => {
+      const subjectNameDifference = getEmployeeName(employeesById, left.employeeId).localeCompare(
+        getEmployeeName(employeesById, right.employeeId),
+      );
+      if (subjectNameDifference !== 0) {
+        return subjectNameDifference;
+      }
+
+      if (left.target !== right.target) {
+        return left.target === 'self' ? -1 : 1;
+      }
+
+      return getAssessorLabel(left, employeesById).localeCompare(getAssessorLabel(right, employeesById));
+    })
+    .map((assessment) => ({
+      assessmentId: assessment.id,
+      title: buildAssessmentTitle(assessment, snapshot, employeesById),
+      subjectName: getEmployeeName(employeesById, assessment.employeeId),
+      targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
+      assessorLabel: getAssessorLabel(assessment, employeesById),
+      assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
+      reviewStatusLabel: buildReviewStatusLabel(assessment),
+    }));
 }
 
 export function getReviewPanel(

@@ -818,6 +818,32 @@ describe('workflow entry', () => {
     expect(Array.from(container.querySelectorAll('.sidebar button')).some((button) => button.textContent === 'Sign out')).toBe(true);
     expect(container.querySelector('.theme-card')).toBeTruthy();
   });
+
+  it('shows an admin-only assessments page for the active review period', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('All assessments') ?? false);
+
+    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    expect(navLinkLabels).toContain('Assessments');
+    expect(container.textContent).toContain('2026 Annual Review');
+    expect(container.textContent).toContain('Assessment status');
+    expect(container.textContent).toContain('Review status');
+    expect(container.textContent).toContain('Submitted');
+    expect(container.textContent).toContain('In review');
+    expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);
+  });
 });
 
 describe('file management screen', () => {

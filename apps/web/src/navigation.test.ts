@@ -17,6 +17,7 @@ describe('web shell foundation', () => {
       'reviews',
       'employees',
       'questions',
+      'assessments',
       'fileManagement',
       'workflow',
     ]);
@@ -25,6 +26,7 @@ describe('web shell foundation', () => {
       '/reviews',
       '/employees',
       '/questions',
+      '/assessments',
       '/file-management',
       '/workflow',
     ]);
@@ -48,6 +50,7 @@ describe('web shell foundation', () => {
       'reviews',
       'employees',
       'questions',
+      'assessments',
       'fileManagement',
       'workflow',
     ]);
@@ -63,6 +66,7 @@ describe('web shell foundation', () => {
       'reviews',
       'employees',
       'questions',
+      'assessments',
       'fileManagement',
     ]);
   });

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptAssessmentReview,
+  buildAdminAssessmentRows,
   buildAssessmentQueues,
   buildReviewQueues,
   completeAssessmentReview,
@@ -98,6 +99,28 @@ describe('assessment and review helpers', () => {
     const rejectedSnapshot = rejectAssessmentToDraft(snapshot, selfAssessmentId, 'Please expand the self-review examples.');
     const rejectedQueue = buildReviewQueues(manny, rejectedSnapshot, employeesListExample.items);
     expect(rejectedQueue.map((item) => item.assessmentId)).not.toContain(selfAssessmentId);
+  });
+
+  it('builds an admin assessment list for the active review period', () => {
+    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const rows = buildAdminAssessmentRows(snapshot, employeesListExample.items, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      assessmentId: selfAssessmentId,
+      subjectName: 'Elliot Employee',
+      targetLabel: 'Self assessment',
+      assessorLabel: 'self',
+      assessmentStatusLabel: 'Submitted',
+      reviewStatusLabel: 'Waiting for acceptance',
+    });
+    expect(rows[1]).toMatchObject({
+      assessmentId: peerAssessmentId,
+      targetLabel: 'Peer assessment',
+      assessorLabel: 'Pat Peer',
+      assessmentStatusLabel: 'Accepted',
+      reviewStatusLabel: 'In review',
+    });
   });
 
   it('shows submitted assessments to every manager who can accept them', () => {

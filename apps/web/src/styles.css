@@ -857,6 +857,65 @@ button.employee-row:focus-visible {
   color: #64748b;
 }
 
+.assessments-table {
+  --assessments-columns: minmax(0, 1.55fr) fit-content(10rem) minmax(0, 1fr) fit-content(10rem) fit-content(11rem);
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: var(--assessments-columns);
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+}
+
+.assessments-header,
+.assessment-row-card {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.assessments-header {
+  padding: 0.45rem 0.35rem 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.assessment-row-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.assessment-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  color: #0f172a;
+  background: transparent;
+}
+
+.assessment-row .employee-row-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.assessment-row-primary {
+  display: grid;
+  gap: 0.15rem;
+}
+
 .employee-row-card {
   display: grid;
   grid-column: 1 / -1;
