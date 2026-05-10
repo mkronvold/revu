@@ -22,6 +22,7 @@ import {
   reviewAssessment,
   submitAssessment,
   updateBackupStatus,
+  updateOwnProfile,
   updateQuestionCategories,
 } from './api';
 
@@ -314,6 +315,41 @@ describe('web api client', () => {
         method: 'POST',
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+  });
+
+  it('updates the signed-in user profile through the auth me endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          session: {
+            ...adminLoginExample.session,
+            user: {
+              ...adminLoginExample.session.user,
+              fullName: 'Ada Updated',
+              email: 'ada.updated@example.com',
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const response = await updateOwnProfile('session-token', {
+      fullName: 'Ada Updated',
+      email: 'ada.updated@example.com',
+    });
+
+    expect(response.session.user.fullName).toBe('Ada Updated');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${apiBaseUrl}/auth/me`,
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+          'content-type': 'application/json',
         }),
       }),
     );

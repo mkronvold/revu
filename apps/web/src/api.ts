@@ -16,6 +16,8 @@ import {
   authLoginResponseSchema,
   authLogoutResponseSchema,
   authMeResponseSchema,
+  authUpdateProfileRequestSchema,
+  authUpdateProfileResponseSchema,
   createAssessmentRequestSchema,
   createAssignmentRequestSchema,
   createEmployeeRequestSchema,
@@ -52,6 +54,7 @@ import {
   type AssessmentsListQuery,
   type AuthLoginRequest,
   type AuthChangePasswordRequest,
+  type AuthUpdateProfileRequest,
   type BackupRestoreMode,
   type BackupRestoreScope,
   type CreateAssessmentRequest,
@@ -235,6 +238,17 @@ export function changePassword(token: string, payload: AuthChangePasswordRequest
     withAuthorization(token, {
       method: 'POST',
       body: JSON.stringify(authChangePasswordRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function updateOwnProfile(token: string, payload: AuthUpdateProfileRequest) {
+  return request(
+    '/auth/me',
+    authUpdateProfileResponseSchema,
+    withAuthorization(token, {
+      method: 'PATCH',
+      body: JSON.stringify(authUpdateProfileRequestSchema.parse(payload)),
     }),
   );
 }

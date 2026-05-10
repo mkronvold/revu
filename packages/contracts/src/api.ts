@@ -169,6 +169,18 @@ export const authChangePasswordResponseSchema = z.object({
   lastPasswordChangeAt: isoTimestampSchema,
 });
 
+export const authUpdateProfileRequestSchema = z
+  .object({
+    fullName: z.string().min(1),
+    email: z.string().email(),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export const authUpdateProfileResponseSchema = authLoginResponseSchema;
+
 export const createEmployeeRequestSchema = z.object({
   username: usernameSchema,
   fullName: z.string().min(1),
@@ -484,6 +496,8 @@ export type AuthMeResponse = z.infer<typeof authMeResponseSchema>;
 export type AuthLogoutResponse = z.infer<typeof authLogoutResponseSchema>;
 export type AuthChangePasswordRequest = z.infer<typeof authChangePasswordRequestSchema>;
 export type AuthChangePasswordResponse = z.infer<typeof authChangePasswordResponseSchema>;
+export type AuthUpdateProfileRequest = z.infer<typeof authUpdateProfileRequestSchema>;
+export type AuthUpdateProfileResponse = z.infer<typeof authUpdateProfileResponseSchema>;
 export type CreateEmployeeRequest = z.infer<typeof createEmployeeRequestSchema>;
 export type UpdateEmployeeRequest = z.infer<typeof updateEmployeeRequestSchema>;
 export type DeleteEmployeeResponse = z.infer<typeof deleteEmployeeResponseSchema>;

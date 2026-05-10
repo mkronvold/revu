@@ -420,6 +420,22 @@ button {
   font-size: 0.8rem;
 }
 
+.sidebar-profile-link {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  background: transparent;
+}
+
+.sidebar-profile-link:hover,
+.sidebar-profile-link:focus-visible {
+  opacity: 0.85;
+  outline: none;
+}
+
 .sidebar-session-card button {
   justify-self: start;
 }
@@ -1767,6 +1783,20 @@ button.employee-row:focus-visible {
   display: grid;
   gap: 1rem;
   background: #ffffff;
+}
+
+.profile-password-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.profile-password-section .section-label {
+  margin-bottom: 0;
+}
+
+.profile-password-fields {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .employee-dialog-card {

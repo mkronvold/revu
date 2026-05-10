@@ -35,6 +35,7 @@ import {
   resetEmployeePassword,
   restoreBackup,
   setEmployeePassword,
+  updateOwnProfile,
   updateBackupStatus,
   updateEmployee,
   updateQuestionCategories,
@@ -187,6 +188,14 @@ type EmployeeDraft = {
   managerId: string;
   assessorId: string;
   initialPassword: string;
+};
+
+type ProfileDraft = {
+  fullName: string;
+  email: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
 };
 
 type DemoAccount = {
@@ -451,6 +460,9 @@ function App() {
   const [nextPasswordDraft, setNextPasswordDraft] = useState('');
   const [confirmPasswordDraft, setConfirmPasswordDraft] = useState('');
   const [changePasswordError, setChangePasswordError] = useState('');
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
+  const [profileError, setProfileError] = useState('');
   const [formError, setFormError] = useState('');
   const [appError, setAppError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
@@ -459,6 +471,7 @@ function App() {
   const [isSavingBackupSettings, setIsSavingBackupSettings] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isChangingOwnPassword, setIsChangingOwnPassword] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
   const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [isSyncingLocalUsers, setIsSyncingLocalUsers] = useState(false);
@@ -1458,6 +1471,10 @@ function App() {
     setNextPasswordDraft('');
     setConfirmPasswordDraft('');
     setChangePasswordError('');
+    setIsProfileDialogOpen(false);
+    setProfileDraft(null);
+    setProfileError('');
+    setIsSavingProfile(false);
     setAppError('');
     setAdminNotice('');
     setQuestionCategories([]);
@@ -1527,6 +1544,52 @@ function App() {
           }
         : currentSession,
     );
+  };
+
+  const syncCurrentUserSummary = (nextUser: Employee) => {
+    setEmployees((currentEmployees) => upsertEmployee(currentEmployees, nextUser));
+    setFoundation((currentFoundation) =>
+      currentFoundation
+        ? {
+            ...currentFoundation,
+            employees: upsertEmployee(currentFoundation.employees, nextUser),
+          }
+        : currentFoundation,
+    );
+    setSelectedEmployeeDetail((currentDetail) =>
+      currentDetail && currentDetail.id === nextUser.id
+        ? {
+            ...currentDetail,
+            ...nextUser,
+          }
+        : currentDetail,
+    );
+  };
+
+  const openProfileDialog = () => {
+    if (!sessionUser) {
+      return;
+    }
+
+    resetEditingState();
+    setSelectedEmployeeId(null);
+    setSelectedEmployeeDetail(null);
+    setPasswordDialogEmployeeId(null);
+    setProfileDraft({
+      fullName: sessionUser.fullName,
+      email: sessionUser.email,
+      currentPassword: '',
+      newPassword: '',
+      confirmNewPassword: '',
+    });
+    setProfileError('');
+    setIsProfileDialogOpen(true);
+  };
+
+  const closeProfileDialog = () => {
+    setIsProfileDialogOpen(false);
+    setProfileDraft(null);
+    setProfileError('');
   };
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -1626,6 +1689,99 @@ function App() {
       setChangePasswordError(getErrorMessage(error));
     } finally {
       setIsChangingOwnPassword(false);
+    }
+  };
+
+  const handleSaveOwnProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!sessionToken || !sessionUser || !profileDraft) {
+      return;
+    }
+
+    const nextFullName = profileDraft.fullName.trim();
+    const nextEmail = profileDraft.email.trim().toLowerCase();
+    const profileChanged = nextFullName !== sessionUser.fullName || nextEmail !== sessionUser.email;
+    const wantsPasswordChange = [
+      profileDraft.currentPassword,
+      profileDraft.newPassword,
+      profileDraft.confirmNewPassword,
+    ].some((value) => value.trim().length > 0);
+
+    if (!nextFullName) {
+      setProfileError('Enter your full name.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      setProfileError('Enter a valid email address.');
+      return;
+    }
+
+    if (!profileChanged && !wantsPasswordChange) {
+      setProfileError('Make a change before saving.');
+      return;
+    }
+
+    if (wantsPasswordChange) {
+      if (!profileDraft.currentPassword.trim()) {
+        setProfileError('Enter your current password.');
+        return;
+      }
+
+      if (!profileDraft.newPassword.trim()) {
+        setProfileError('Enter a new password.');
+        return;
+      }
+
+      if (profileDraft.newPassword.trim().length < 8) {
+        setProfileError('New passwords must be at least 8 characters.');
+        return;
+      }
+
+      if (profileDraft.newPassword !== profileDraft.confirmNewPassword) {
+        setProfileError('New password and confirmation must match.');
+        return;
+      }
+    }
+
+    setIsSavingProfile(true);
+    setProfileError('');
+
+    try {
+      if (profileChanged) {
+        const response = await updateOwnProfile(sessionToken, {
+          fullName: nextFullName,
+          email: nextEmail,
+        });
+        setSession(response.session);
+        syncCurrentUserSummary(response.session.user);
+      }
+
+      if (wantsPasswordChange) {
+        const response = await changePassword(sessionToken, {
+          currentPassword: profileDraft.currentPassword,
+          newPassword: profileDraft.newPassword,
+        });
+        window.sessionStorage.setItem(sessionStorageKey, response.session.token);
+        setSessionToken(response.session.token);
+        setSession(response.session);
+        syncCurrentUserSummary(response.session.user);
+        setLoginPassword('');
+      }
+
+      setAuthNotice(
+        profileChanged && wantsPasswordChange
+          ? 'Profile and password updated.'
+          : wantsPasswordChange
+            ? 'Password updated.'
+            : 'Profile updated.',
+      );
+      closeProfileDialog();
+    } catch (error) {
+      setProfileError(getErrorMessage(error));
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -4507,6 +4663,90 @@ function App() {
     );
   };
 
+  const renderProfileDialog = () =>
+    sessionUser && isProfileDialogOpen && profileDraft ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeProfileDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card"
+          role="dialog"
+          aria-labelledby="profile-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Profile editor</p>
+              <h3 id="profile-dialog-title">{sessionUser.username}</h3>
+            </div>
+            <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
+              Close
+            </button>
+          </div>
+          <form className="stack-form" onSubmit={handleSaveOwnProfile}>
+            <label>
+              Full name
+              <input
+                value={profileDraft.fullName}
+                disabled={isSavingProfile}
+                onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })}
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={profileDraft.email}
+                disabled={isSavingProfile}
+                onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })}
+              />
+            </label>
+            <section className="subcard profile-password-section">
+              <p className="section-label">Change password</p>
+              <p className="muted-copy">Leave the password fields blank to keep your current password.</p>
+              <div className="profile-password-fields">
+                <label>
+                  Current password
+                  <input
+                    type="password"
+                    value={profileDraft.currentPassword}
+                    disabled={isSavingProfile}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, currentPassword: event.target.value })}
+                  />
+                </label>
+                <label>
+                  New password
+                  <input
+                    type="password"
+                    value={profileDraft.newPassword}
+                    disabled={isSavingProfile}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, newPassword: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Confirm new password
+                  <input
+                    type="password"
+                    value={profileDraft.confirmNewPassword}
+                    disabled={isSavingProfile}
+                    onChange={(event) => setProfileDraft({ ...profileDraft, confirmNewPassword: event.target.value })}
+                  />
+                </label>
+              </div>
+            </section>
+            {profileError ? <p className="form-error">{profileError}</p> : null}
+            <div className="action-row">
+              <button type="submit" disabled={isSavingProfile}>
+                {isSavingProfile ? 'Saving…' : 'Save profile'}
+              </button>
+              <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    ) : null;
+
   const renderEmployees = () => {
     const renderEmployeeRosterRow = (employee: Employee) => {
       return (
@@ -4721,7 +4961,10 @@ function App() {
             <p className="section-label">Signed in as</p>
             <h2>{sessionUser.fullName}</h2>
             <p className="sidebar-session-meta">
-              {sessionUser.role} • {sessionUser.username}
+              {sessionUser.role} •{' '}
+              <button type="button" className="sidebar-profile-link" onClick={openProfileDialog}>
+                {sessionUser.username}
+              </button>
             </p>
             <div className="sidebar-session-actions">
               {isRefreshAvailable ? (
@@ -4848,6 +5091,8 @@ function App() {
         {renderNewQuestionCategoryDialog()}
 
         {renderEmployeeDialog()}
+
+        {renderProfileDialog()}
 
         {isAdmin && passwordDialogEmployeeId ? (
           <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>

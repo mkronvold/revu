@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added a self-service sidebar profile editor so clicking your username opens a dialog for updating your own full name, email, and password
 - Linked the sign-in `Revu` title to the GitHub repository, updated the heading to use the company name, removed the old explanatory copy, and now hide seeded API accounts once those built-in users are no longer active
 - Added admin delete-from-edit support for employees, backed by hidden database tombstones so deleted employees drop out of lists and dialogs without reusing hard deletes
 - Updated the password-management dialog copy so the manual password action consistently says `Set password` and prompts for a new password

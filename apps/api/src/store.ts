@@ -1639,6 +1639,59 @@ export class ApiStore {
     }
   }
 
+  async updateOwnProfile(token: string, updates: { fullName?: string; email?: string }): Promise<AuthSession> {
+    try {
+      return await withTransaction(async (client) => {
+        const session = await this.sessionOrThrow(client, token);
+        const nextFullName = updates.fullName ?? session.employee.full_name;
+        const nextEmail = updates.email ?? session.employee.email;
+
+        await this.assertUniqueEmployeeFields(client, {
+          id: session.employee.id,
+          username: session.employee.username,
+          email: nextEmail,
+        });
+
+        const result = await client.query<EmployeeRow>(
+          `
+            UPDATE employees
+            SET full_name = $2,
+                email = $3
+            WHERE id = $1
+            RETURNING
+              id,
+              username,
+              full_name,
+              email,
+              role,
+              status,
+              manager_employee_id,
+              assessor_employee_id,
+              password_hash,
+              password_reset_required,
+              password_changed_at,
+              created_at,
+              updated_at,
+              deleted_at
+          `,
+          [session.employee.id, nextFullName, nextEmail],
+        );
+
+        const updatedEmployee = result.rows[0];
+        if (!updatedEmployee) {
+          throw new ApiError(404, "Employee not found");
+        }
+
+        return this.toSession(session.session, updatedEmployee);
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
   async createEmployee(input: CreateEmployeeRequest) {
     try {
       return await withTransaction(async (client) => {

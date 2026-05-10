@@ -61,6 +61,7 @@ vi.mock('./api', () => {
     updateAssignment: vi.fn(),
     updateBackupStatus: vi.fn(),
     updateEmployee: vi.fn(),
+    updateOwnProfile: vi.fn(),
     updateQuestionCategories: vi.fn(),
     updateQuestionSet: vi.fn(),
     updateReviewPeriod: vi.fn(),
@@ -70,6 +71,7 @@ vi.mock('./api', () => {
 import App from './App';
 import {
   acceptAssessment,
+  changePassword,
   checkApiHealth,
   deleteEmployee,
   exportBackup,
@@ -88,6 +90,7 @@ import {
   restoreBackup,
   updateBackupStatus,
   updateEmployee,
+  updateOwnProfile,
   updateQuestionCategories,
 } from './api';
 
@@ -1303,6 +1306,141 @@ describe('sidebar refresh detection', () => {
 
     await waitFor(() => container.textContent?.includes('New version. Refresh Now') === true);
     expect(vi.mocked(checkApiHealth)).toHaveBeenCalled();
+  });
+});
+
+describe('sidebar profile editor', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.innerHTML = '';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.history.pushState(null, '', '/dashboard');
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('opens from the sidebar username and updates the signed-in user profile and password', async () => {
+    const session = createEmployeeSession();
+    const updatedSession: AuthSession = {
+      ...session,
+      user: {
+        ...session.user,
+        fullName: 'Elliot Updated',
+        email: 'elliot.updated@example.com',
+      },
+    };
+    const changedPasswordSession: AuthSession = {
+      ...updatedSession,
+      token: 'updated-session-token',
+    };
+
+    vi.mocked(me).mockResolvedValue({ session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(getApiIndex).mockResolvedValue({
+      name: 'revu-api',
+      version: '0.1.0',
+      seededAccountsAvailable: true,
+      resources: [],
+    });
+    vi.mocked(updateOwnProfile).mockResolvedValue({ session: updatedSession });
+    vi.mocked(changePassword).mockResolvedValue({
+      session: changedPasswordSession,
+      lastPasswordChangeAt: '2026-06-01T12:00:00.000Z',
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Signed in as') ?? false);
+
+    const usernameButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === session.user.username,
+    );
+    expect(usernameButton).toBeTruthy();
+
+    await act(async () => {
+      usernameButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Profile editor') ?? false);
+
+    const fullNameInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Full name'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const emailInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Email'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const currentPasswordInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Current password'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const newPasswordInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('New password'))
+      ?.querySelector('input') as HTMLInputElement | null;
+    const confirmPasswordInput = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.includes('Confirm new password'))
+      ?.querySelector('input') as HTMLInputElement | null;
+
+    expect(fullNameInput).toBeTruthy();
+    expect(emailInput).toBeTruthy();
+    expect(currentPasswordInput).toBeTruthy();
+    expect(newPasswordInput).toBeTruthy();
+    expect(confirmPasswordInput).toBeTruthy();
+
+    await act(async () => {
+      if (fullNameInput) {
+        setFieldValue(fullNameInput, 'Elliot Updated');
+      }
+      if (emailInput) {
+        setFieldValue(emailInput, 'elliot.updated@example.com');
+      }
+      if (currentPasswordInput) {
+        setFieldValue(currentPasswordInput, 'EmployeePass123!');
+      }
+      if (newPasswordInput) {
+        setFieldValue(newPasswordInput, 'NewProfilePass123!');
+      }
+      if (confirmPasswordInput) {
+        setFieldValue(confirmPasswordInput, 'NewProfilePass123!');
+      }
+      await flushRender();
+    });
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save profile');
+    expect(saveButton).toBeTruthy();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(updateOwnProfile).toHaveBeenCalledWith('session-token', {
+      fullName: 'Elliot Updated',
+      email: 'elliot.updated@example.com',
+    });
+    expect(changePassword).toHaveBeenCalledWith('session-token', {
+      currentPassword: 'EmployeePass123!',
+      newPassword: 'NewProfilePass123!',
+    });
+    expect(window.sessionStorage.getItem('revu-session-token')).toBe('updated-session-token');
+    await waitFor(() => container.textContent?.includes('Elliot Updated') ?? false);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 

@@ -15,6 +15,8 @@ import {
   authLoginResponseSchema,
   authLogoutResponseSchema,
   authMeResponseSchema,
+  authUpdateProfileRequestSchema,
+  authUpdateProfileResponseSchema,
   backupExportQuerySchema,
   backupExportResponseSchema,
   backupRestoreRequestSchema,
@@ -460,6 +462,18 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return authChangePasswordResponseSchema.parse(
         await store.changeOwnPassword(session.token, body.currentPassword, body.newPassword),
       );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/auth/me", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      const body = parseWithSchema(authUpdateProfileRequestSchema, request.body);
+      return authUpdateProfileResponseSchema.parse({
+        session: await store.updateOwnProfile(session.token, body),
+      });
     } catch (error) {
       return sendError(reply, error);
     }

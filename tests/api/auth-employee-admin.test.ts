@@ -86,6 +86,38 @@ describe("auth and employee admin API", () => {
     expect(afterLogoutResponse.statusCode).toBe(401);
   });
 
+  it("lets an authenticated user update their own profile", async () => {
+    const app = await createApp();
+    const employeeLogin = authLoginResponseSchema.parse((await login(app, "elliot.employee", "EmployeePass123!")).json());
+
+    const updateProfileResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${employeeLogin.session.token}`,
+      },
+      payload: {
+        fullName: "Elliot Updated",
+        email: "elliot.updated@example.com",
+      },
+    });
+    expect(updateProfileResponse.statusCode).toBe(200);
+    const updatedSession = authMeResponseSchema.parse(updateProfileResponse.json()).session;
+    expect(updatedSession.user.fullName).toBe("Elliot Updated");
+    expect(updatedSession.user.email).toBe("elliot.updated@example.com");
+    expect(updatedSession.token).toBe(employeeLogin.session.token);
+
+    const meResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: {
+        authorization: `Bearer ${employeeLogin.session.token}`,
+      },
+    });
+    expect(meResponse.statusCode).toBe(200);
+    expect(authMeResponseSchema.parse(meResponse.json()).session.user.fullName).toBe("Elliot Updated");
+  });
+
   it("enforces RBAC while supporting employee CRUD and admin password flows", async () => {
     const app = await createApp();
 
