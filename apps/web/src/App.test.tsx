@@ -649,6 +649,7 @@ describe('questions screen', () => {
     expect(makeActiveButton).toBeTruthy();
     expect(makeActiveButton?.hasAttribute('disabled')).toBe(false);
     expect(makeActiveButton?.parentElement?.className).toContain('review-period-picker-row');
+    expect(makeActiveButton?.parentElement?.parentElement?.className).toContain('review-period-heading');
     expect(makeActiveButton?.nextElementSibling?.className).toContain('review-period-picker');
 
     await act(async () => {

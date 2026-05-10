@@ -3264,7 +3264,7 @@ function App() {
     return (
       <main className="admin-stack">
         <section className="card admin-section-card review-period-card">
-          <div className="section-heading">
+          <div className="section-heading review-period-heading">
             <h3>{selectedReviewPeriod.label}</h3>
             <div className="review-period-picker-row">
               <button

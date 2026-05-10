@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Expanded the Questions review-period header control so the status button gets a wider frame and stays to the left of the pulldown until narrower layouts force wrapping
 - Fixed Winter Nights contrast on the Assessment Queue so assessment type, assessor, and review status render with themed text again
 - Added explicit `Cancel` and `Save question` actions to the nested question editor dialog, and moved the question preview into the response-type section so the prompt and control preview stay together
 - Updated the Questions review-period picker control so the status button stays to the left of the pulldown when space allows, shows live `Make active` for inactive periods, shows disabled `Archived` for archived periods, and shows a disabled highlighted `Active` state for the active period
