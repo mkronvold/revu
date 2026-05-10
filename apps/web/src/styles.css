@@ -109,6 +109,7 @@ button {
   display: grid;
   min-height: 100vh;
   --sidebar-width: clamp(16.25rem, 22vw, 20rem);
+  --standard-modal-width: 92%;
   --modal-available-width: calc(100vw - 4rem);
   grid-template-columns: minmax(13.5rem, var(--sidebar-width)) minmax(0, 1fr);
   background:
@@ -1177,7 +1178,7 @@ button.employee-row:focus-visible {
 }
 
 .review-dialog-card {
-  --modal-card-width: 96%;
+  --modal-card-width: var(--standard-modal-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
 }
@@ -1187,8 +1188,8 @@ button.employee-row:focus-visible {
 }
 
 .assessment-review-dialog-card {
-  --modal-card-width: calc(96% + 10vw);
-  --modal-card-max-width: calc(100vw - 1rem);
+  --modal-card-width: var(--standard-modal-width);
+  --modal-card-max-width: var(--modal-available-width);
 }
 
 .review-dialog-section {
@@ -1367,7 +1368,7 @@ button.employee-row:focus-visible {
 }
 
 .workflow-editor-dialog {
-  width: min(90%, var(--modal-available-width));
+  width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
 }
 
@@ -1483,7 +1484,7 @@ button.employee-row:focus-visible {
 }
 
 .question-set-dialog {
-  width: var(--modal-available-width);
+  width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
@@ -1565,7 +1566,7 @@ button.employee-row:focus-visible {
 }
 
 .question-edit-dialog {
-  width: min(80%, var(--modal-available-width));
+  width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
@@ -1618,7 +1619,7 @@ button.employee-row:focus-visible {
 }
 
 .question-category-dialog {
-  width: min(42%, var(--modal-available-width));
+  width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
 }
 
@@ -1672,7 +1673,7 @@ button.employee-row:focus-visible {
 }
 
 .modal-card {
-  width: min(var(--modal-card-width, 72%), var(--modal-card-max-width, var(--modal-available-width)));
+  width: min(var(--modal-card-width, var(--standard-modal-width)), var(--modal-card-max-width, var(--modal-available-width)));
   max-width: var(--modal-card-max-width, var(--modal-available-width));
   display: grid;
   gap: 1rem;
@@ -1680,7 +1681,7 @@ button.employee-row:focus-visible {
 }
 
 .employee-dialog-card {
-  width: min(92%, var(--modal-available-width));
+  width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
   overflow: auto;
