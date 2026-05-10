@@ -327,7 +327,11 @@ describe('questions screen', () => {
       'Teamwork',
       'New category…',
     ]);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('short written self-rating');
+    const initialHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    expect(initialHelperInputs).toHaveLength(5);
+    expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'checkbox')).toBe(true);
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('strongly agree');
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('strongly disagree');
 
     await act(async () => {
       setFieldValue(categorySelect!, '__new-question-category__');
@@ -361,12 +365,27 @@ describe('questions screen', () => {
     const responseTypeField = questionEditor?.querySelector('.question-response-type-field select') as HTMLSelectElement | null;
     expect(responseTypeField).toBeTruthy();
     await act(async () => {
+      setFieldValue(responseTypeField!, 'ranking');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const rankingHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    expect(rankingHelperInputs).toHaveLength(5);
+    expect(rankingHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('n/a');
+
+    await act(async () => {
       setFieldValue(responseTypeField!, 'narrative');
       await Promise.resolve();
     });
     await flushRender();
 
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('longer free-form response');
+    const narrativeHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    expect(narrativeHelperInputs).toHaveLength(0);
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+      'Use a written self-rating with supporting context and examples.',
+    );
   });
 
   it('warns before closing a dirty question-set dialog without saving', async () => {

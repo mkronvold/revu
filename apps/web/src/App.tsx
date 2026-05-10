@@ -119,14 +119,32 @@ const newQuestionCategoryOptionValue = '__new-question-category__';
 
 type QuestionSetQuestionDraft = QuestionSetDraft['questions'][number];
 
-const questionTypeHelperCopy: Record<QuestionSetQuestionDraft['type'], string> = {
-  subjective: 'Use a short written self-rating with supporting context and examples.',
-  ranking: 'Use a comparable scored answer so peers can rank performance on the same scale.',
-  narrative: 'Use a longer free-form response when nuance matters more than a score.',
-};
+const questionTypeHelperOptions = {
+  subjective: ['strongly agree', 'somewhat agree', 'not sure', 'somewhat disagree', 'strongly disagree'],
+  ranking: ['4', '3', '2', '1', 'n/a'],
+} as const satisfies Record<Exclude<QuestionSetQuestionDraft['type'], 'narrative'>, readonly string[]>;
 
 function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
+}
+
+function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
+  if (type === 'narrative') {
+    return <p className="toolbar-note question-response-helper">Use a written self-rating with supporting context and examples.</p>;
+  }
+
+  const inputType = type === 'subjective' ? 'checkbox' : 'radio';
+
+  return (
+    <div className="toolbar-note question-response-helper question-response-helper-options" role="presentation">
+      {questionTypeHelperOptions[type].map((option) => (
+        <label className="question-response-helper-option" key={option}>
+          <input type={inputType} disabled />
+          <span>{option}</span>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 type EmployeeDraft = {
@@ -2673,7 +2691,7 @@ function App() {
                 <option value="narrative">narrative</option>
               </select>
             </label>
-            <p className="toolbar-note question-response-helper">{questionTypeHelperCopy[editingQuestionDraft.type]}</p>
+            {renderQuestionTypeHelper(editingQuestionDraft.type)}
           </div>
           <section className="subcard question-edit-preview">
             <p className="section-label">Preview</p>

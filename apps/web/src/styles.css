@@ -1600,6 +1600,23 @@ button.employee-row:focus-visible {
   margin: 0;
 }
 
+.question-response-helper-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+}
+
+.question-response-helper-option {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.question-response-helper-option input {
+  margin: 0;
+}
+
 .question-category-dialog {
   width: min(42%, var(--modal-available-width));
   max-width: var(--modal-available-width);
