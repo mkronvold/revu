@@ -1449,6 +1449,12 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Review status');
     expect(container.textContent).toContain('Submitted');
     expect(container.textContent).toContain('In review');
+    expect(container.textContent).toContain(
+      '1 self-assessment, 0 not started, 0 incomplete, 1 submitted waiting review, 0 reviewed',
+    );
+    expect(container.textContent).toContain(
+      '1 peer-assessment, 0 not started, 0 incomplete, 1 submitted waiting review, 0 reviewed',
+    );
     expect(container.textContent).toContain('Clear not started assessments');
     expect(container.textContent).toContain('Sync assessments to assignments');
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);

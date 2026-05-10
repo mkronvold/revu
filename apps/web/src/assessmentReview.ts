@@ -48,10 +48,21 @@ export type AdminAssessmentRow = {
   assessmentId: string;
   title: string;
   subjectName: string;
+  target: Assessment['target'];
   targetLabel: string;
   assessorLabel: string;
   assessmentStatusLabel: string;
   reviewStatusLabel: string;
+  summaryBucket: 'not-started' | 'incomplete' | 'submitted-waiting-review' | 'reviewed';
+};
+
+export type AdminAssessmentSummary = {
+  target: Assessment['target'];
+  total: number;
+  notStarted: number;
+  incomplete: number;
+  submittedWaitingReview: number;
+  reviewed: number;
 };
 
 export type AssessmentEditorQuestion = {
@@ -357,6 +368,32 @@ function buildReviewStatusLabel(assessment: Assessment) {
     case 'new':
     case 'draft':
       return 'Not started';
+  }
+}
+
+function buildAdminAssessmentSummaryBucket(
+  snapshot: AssessmentWorkflowSnapshot,
+  assessment: Assessment,
+): AdminAssessmentRow['summaryBucket'] {
+  switch (getDashboardAssessmentQueueStatus(snapshot, assessment)) {
+    case 'not-started':
+      return 'not-started';
+    case 'incomplete':
+    case 'ready-to-submit':
+      return 'incomplete';
+    case null:
+      break;
+  }
+
+  switch (assessment.reviewState) {
+    case 'submitted':
+    case 'accepted':
+      return 'submitted-waiting-review';
+    case 'reviewed':
+      return 'reviewed';
+    case 'new':
+    case 'draft':
+      return 'not-started';
   }
 }
 
@@ -671,11 +708,66 @@ export function buildAdminAssessmentRows(
       assessmentId: assessment.id,
       title: buildAssessmentTitle(assessment, snapshot, employeesById),
       subjectName: getEmployeeName(employeesById, assessment.employeeId),
+      target: assessment.target,
       targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
       assessorLabel: getAssessorLabel(assessment, employeesById),
       assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
       reviewStatusLabel: buildReviewStatusLabel(assessment),
+      summaryBucket: buildAdminAssessmentSummaryBucket(snapshot, assessment),
     }));
+}
+
+export function buildAdminAssessmentSummary(rows: AdminAssessmentRow[]): AdminAssessmentSummary[] {
+  const summaryByTarget = new Map<Assessment['target'], AdminAssessmentSummary>([
+    [
+      'self',
+      {
+        target: 'self',
+        total: 0,
+        notStarted: 0,
+        incomplete: 0,
+        submittedWaitingReview: 0,
+        reviewed: 0,
+      },
+    ],
+    [
+      'peer',
+      {
+        target: 'peer',
+        total: 0,
+        notStarted: 0,
+        incomplete: 0,
+        submittedWaitingReview: 0,
+        reviewed: 0,
+      },
+    ],
+  ]);
+
+  for (const row of rows) {
+    const summary = summaryByTarget.get(row.target);
+    if (!summary) {
+      continue;
+    }
+
+    summary.total += 1;
+
+    switch (row.summaryBucket) {
+      case 'not-started':
+        summary.notStarted += 1;
+        break;
+      case 'incomplete':
+        summary.incomplete += 1;
+        break;
+      case 'submitted-waiting-review':
+        summary.submittedWaitingReview += 1;
+        break;
+      case 'reviewed':
+        summary.reviewed += 1;
+        break;
+    }
+  }
+
+  return [summaryByTarget.get('self')!, summaryByTarget.get('peer')!];
 }
 
 export function getReviewPanel(

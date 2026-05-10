@@ -1581,6 +1581,15 @@ button.employee-row:focus-visible {
   width: 100%;
 }
 
+.assessment-list-summary {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.assessment-list-summary p {
+  margin: 0;
+}
+
 .review-period-card {
   gap: 0.85rem;
 }

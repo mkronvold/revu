@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptAssessmentReview,
+  buildAdminAssessmentSummary,
   buildAdminAssessmentRows,
   buildAssessmentQueues,
   buildReviewQueues,
@@ -133,6 +134,41 @@ describe('assessment and review helpers', () => {
     expect(rows[1]).toMatchObject({
       assessorLabel: 'deleted user',
     });
+  });
+
+  it('builds admin assessment summary buckets for draft and reviewed rows', () => {
+    const readyToSubmitSnapshot = rejectAssessmentToDraft(
+      createAssessmentWorkflowSnapshot(foundationSnapshotExample),
+      selfAssessmentId,
+      'Please add one more example.',
+    );
+    const reviewedSnapshot = completeAssessmentReview(readyToSubmitSnapshot, peerAssessmentId, 'Closed out.', {
+      actorId: manny.id,
+      now: '2026-02-18T15:30:00.000Z',
+    });
+
+    const summary = buildAdminAssessmentSummary(
+      buildAdminAssessmentRows(reviewedSnapshot, employeesListExample.items, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    );
+
+    expect(summary).toEqual([
+      {
+        target: 'self',
+        total: 1,
+        notStarted: 0,
+        incomplete: 1,
+        submittedWaitingReview: 0,
+        reviewed: 0,
+      },
+      {
+        target: 'peer',
+        total: 1,
+        notStarted: 0,
+        incomplete: 0,
+        submittedWaitingReview: 0,
+        reviewed: 1,
+      },
+    ]);
   });
 
   it('shows submitted assessments to every manager who can accept them', () => {

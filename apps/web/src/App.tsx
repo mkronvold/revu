@@ -59,6 +59,7 @@ import {
   type WorkflowVisibility,
 } from './navigation';
 import {
+  buildAdminAssessmentSummary,
   type AssessmentEditorQuestion,
   buildAdminAssessmentRows,
   buildReviewQueues,
@@ -902,6 +903,10 @@ function App() {
       ].some((value) => value.toLowerCase().includes(normalizedQuery)),
     );
   }, [adminAssessmentRows, assessmentSearchQuery]);
+  const adminAssessmentSummary = useMemo(
+    () => buildAdminAssessmentSummary(filteredAdminAssessmentRows),
+    [filteredAdminAssessmentRows],
+  );
   const reviewAssessmentIds = useMemo(
     () => reviewQueues.map((item) => item.assessmentId),
     [reviewQueues],
@@ -4913,6 +4918,18 @@ function App() {
                 placeholder="Search assessments"
               />
             </label>
+          </div>
+        ) : null}
+
+        {activeAssessmentReviewPeriod ? (
+          <div className="assessment-list-summary" aria-label="Assessment summary">
+            {adminAssessmentSummary.map((summary) => (
+              <p className="muted-copy" key={summary.target}>
+                {summary.total} {summary.total === 1 ? `${summary.target}-assessment` : `${summary.target}-assessments`},{' '}
+                {summary.notStarted} not started, {summary.incomplete} incomplete,{' '}
+                {summary.submittedWaitingReview} submitted waiting review, {summary.reviewed} reviewed
+              </p>
+            ))}
           </div>
         ) : null}
 
