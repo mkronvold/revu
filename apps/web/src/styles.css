@@ -1706,6 +1706,23 @@ button.employee-row:focus-visible {
   padding-left: 1.25rem;
 }
 
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-content th {
+  font-weight: 700;
+}
+
 .workflow-page-markdown {
   gap: 0.75rem;
 }

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Enabled GFM table rendering in shared markdown content so workflow pages and previews render markdown tables correctly
 - Refreshed the workflow page from the latest foundation snapshot whenever it is reopened so browser-to-browser workflow edits show up without a full page reload
 - Fixed the workflow editor dialog sizing so its footer stays scrollable and the Cancel action remains reachable on shorter screens
 - Fixed question-set saves so removing or reordering peer questions no longer trips the unique display-order constraint during updates

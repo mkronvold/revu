@@ -36,4 +36,19 @@ describe('question presentation helpers', () => {
     expect(markup).toContain('<br/>');
     expect(markup).toContain('Second line');
   });
+
+  it('renders markdown tables with header and body cells', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownContent
+        markdown={'| Role | Action |\n| --- | --- |\n| Employee | Submit assessment |\n| Manager | Review submission |'}
+        className="markdown-content"
+      />,
+    );
+
+    expect(markup).toContain('<table>');
+    expect(markup).toContain('<thead>');
+    expect(markup).toContain('<th>Role</th>');
+    expect(markup).toContain('<td>Submit assessment</td>');
+    expect(markup).toContain('<td>Review submission</td>');
+  });
 });

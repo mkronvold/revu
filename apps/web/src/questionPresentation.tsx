@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 
 import type { QuestionSetDraft } from './reviewAdmin';
 
@@ -41,7 +42,7 @@ type MarkdownContentProps = {
 export function MarkdownContent({ markdown, className }: MarkdownContentProps) {
   return (
     <div className={className}>
-      <ReactMarkdown remarkPlugins={[remarkBreaks]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{markdown}</ReactMarkdown>
     </div>
   );
 }
