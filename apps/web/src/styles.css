@@ -1746,41 +1746,36 @@ button.employee-row:focus-visible {
 
 .workflow-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   min-height: 0;
   overflow: auto;
-  align-items: stretch;
+  align-items: start;
 }
 
 .workflow-editor-fields {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 1rem;
-  min-height: 0;
 }
 
 .workflow-editor-markdown-field {
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  align-items: start;
 }
 
 .workflow-editor-markdown-field textarea {
-  height: 100%;
-  min-height: 26rem;
+  min-height: 32rem;
   resize: vertical;
   font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
 }
 
 .workflow-editor-preview {
-  min-height: 0;
-  overflow: auto;
+  display: grid;
+  gap: 0.85rem;
 }
 
-@media (max-width: 900px) {
-  .workflow-editor-grid {
-    grid-template-columns: 1fr;
-  }
+.workflow-editor-preview-body {
+  max-height: 20rem;
+  overflow: auto;
 }
 
 .question-set-heading {

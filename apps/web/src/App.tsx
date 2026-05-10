@@ -643,6 +643,8 @@ function App() {
   const assignmentImportInputRef = useRef<HTMLInputElement | null>(null);
   const assignmentImportFormatRef = useRef<TransferFormat>('json');
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
+  const workflowTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const workflowPreviewBodyRef = useRef<HTMLDivElement | null>(null);
 
   const cycleTheme = () => {
     setThemePreference((currentTheme) => getNextThemePreference(currentTheme));
@@ -1496,6 +1498,28 @@ function App() {
     const response = await listEmployees(sessionToken);
     setEmployees(response.items);
   };
+
+  const syncWorkflowPreviewScroll = useCallback(() => {
+    const textarea = workflowTextareaRef.current;
+    const previewBody = workflowPreviewBodyRef.current;
+    if (!textarea || !previewBody) {
+      return;
+    }
+
+    const textareaScrollableHeight = textarea.scrollHeight - textarea.clientHeight;
+    const previewScrollableHeight = previewBody.scrollHeight - previewBody.clientHeight;
+
+    if (textareaScrollableHeight <= 0 || previewScrollableHeight <= 0) {
+      previewBody.scrollTop = 0;
+      return;
+    }
+
+    previewBody.scrollTop = (textarea.scrollTop / textareaScrollableHeight) * previewScrollableHeight;
+  }, []);
+
+  useEffect(() => {
+    syncWorkflowPreviewScroll();
+  }, [syncWorkflowPreviewScroll, workflowDraft]);
 
   useEffect(() => {
     if (!sessionToken || !sessionUser || passwordResetRequired || pathname !== '/workflow') {
@@ -6465,17 +6489,21 @@ function App() {
                   <label className="stack-form workflow-editor-markdown-field">
                     <span>Workflow markdown</span>
                     <textarea
+                      ref={workflowTextareaRef}
                       aria-label="Workflow markdown"
                       rows={24}
                       value={workflowDraft}
                       disabled={isSavingWorkflowSettings}
                       onChange={(event) => setWorkflowDraft(event.target.value)}
+                      onScroll={syncWorkflowPreviewScroll}
                     />
                   </label>
                 </div>
                 <section className="subcard workflow-editor-preview">
                   <p className="section-label">Preview</p>
-                  <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
+                  <div className="workflow-editor-preview-body" ref={workflowPreviewBodyRef}>
+                    <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
+                  </div>
                 </section>
               </div>
               <div className="dialog-footer">

@@ -1836,12 +1836,17 @@ describe('file management screen', () => {
     expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe('Edit workflow');
     expect(container.textContent).not.toContain('Edit workflow markdown');
 
+    const workflowEditorGrid = container.querySelector('.workflow-editor-grid');
     const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
     const workflowVisibilitySelect = container.querySelector(
       'select[aria-label="Workflow visibility"]',
     ) as HTMLSelectElement | null;
+    const workflowPreviewBody = container.querySelector('.workflow-editor-preview-body') as HTMLDivElement | null;
+    expect(workflowEditorGrid?.children[0]?.classList.contains('workflow-editor-fields')).toBe(true);
+    expect(workflowEditorGrid?.children[1]?.classList.contains('workflow-editor-preview')).toBe(true);
     expect(workflowTextarea).toBeTruthy();
     expect(workflowVisibilitySelect).toBeTruthy();
+    expect(workflowPreviewBody).toBeTruthy();
     expect(Array.from(workflowVisibilitySelect?.options ?? [], (option) => option.textContent)).toEqual([
       'all',
       'managers',
@@ -1859,6 +1864,20 @@ describe('file management screen', () => {
     });
 
     expect(container.querySelector('.workflow-editor-preview')?.innerHTML).toContain('<strong>Bold</strong>');
+
+    Object.defineProperty(workflowTextarea!, 'scrollHeight', { configurable: true, value: 900 });
+    Object.defineProperty(workflowTextarea!, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(workflowTextarea!, 'scrollTop', { configurable: true, writable: true, value: 300 });
+    Object.defineProperty(workflowPreviewBody!, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(workflowPreviewBody!, 'clientHeight', { configurable: true, value: 200 });
+    Object.defineProperty(workflowPreviewBody!, 'scrollTop', { configurable: true, writable: true, value: 0 });
+
+    await act(async () => {
+      workflowTextarea?.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(workflowPreviewBody?.scrollTop).toBe(200);
 
     const saveWorkflowButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Save workflow',
