@@ -136,3 +136,4 @@ bash ./scripts/db-seed-if-empty.sh
 
 printf 'Starting deployment stack...\n'
 docker compose up -d "$@"
+printf 'Containers up\n'
