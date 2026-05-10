@@ -1740,24 +1740,41 @@ button.employee-row:focus-visible {
   width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
   max-height: calc(100vh - 4rem);
-  overflow: auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
 }
 
 .workflow-editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
-  align-items: start;
+  min-height: 0;
+  overflow: auto;
+  align-items: stretch;
 }
 
 .workflow-editor-fields {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 1rem;
+  min-height: 0;
 }
 
-.workflow-editor-grid textarea {
-  min-height: 24rem;
+.workflow-editor-markdown-field {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workflow-editor-markdown-field textarea {
+  height: 100%;
+  min-height: 26rem;
+  resize: vertical;
   font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+.workflow-editor-preview {
+  min-height: 0;
+  overflow: auto;
 }
 
 @media (max-width: 900px) {

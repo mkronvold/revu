@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Simplified workflow page and editor copy, hid sidebar-visibility details from non-editors, and tuned the workflow editor textarea to use more of the dialog height with vertical-only resizing
 - Enabled GFM table rendering in shared markdown content so workflow pages and previews render markdown tables correctly
 - Refreshed the workflow page from the latest foundation snapshot whenever it is reopened so browser-to-browser workflow edits show up without a full page reload
 - Fixed the workflow editor dialog sizing so its footer stays scrollable and the Cancel action remains reachable on shorter screens

@@ -1253,6 +1253,8 @@ describe('workflow entry', () => {
     await waitFor(() => window.location.pathname === '/workflow');
 
     expect(container.textContent).toContain('Reference the full review lifecycle');
+    expect(container.querySelector('.workflow-page-card .section-label')?.textContent).toBe('Workflow');
+    expect(container.textContent).not.toContain('Review workflow markdown');
     expect(container.textContent).toContain('Edit workflow');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
@@ -1279,6 +1281,7 @@ describe('workflow entry', () => {
     expect(navLinkLabels).not.toContain('Workflow');
     expect(window.location.pathname).toBe('/workflow');
     expect(container.textContent).not.toContain('Edit workflow');
+    expect(container.textContent).not.toContain('Sidebar visibility:');
     expect(container.textContent).toContain('Managers accept and review submitted Assessments and add their comments');
   });
 
@@ -1316,7 +1319,9 @@ describe('workflow entry', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Edit workflow markdown') ?? false);
+    await waitFor(() => container.querySelector('.workflow-editor-dialog') !== null);
+    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe('Edit workflow');
+    expect(container.textContent).not.toContain('Edit workflow markdown');
 
     const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
     const cancelButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Cancel');
@@ -1826,7 +1831,9 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Edit workflow markdown') ?? false);
+    await waitFor(() => container.querySelector('.workflow-editor-dialog') !== null);
+    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe('Edit workflow');
+    expect(container.textContent).not.toContain('Edit workflow markdown');
 
     const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
     const workflowVisibilitySelect = container.querySelector(

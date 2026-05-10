@@ -775,6 +775,7 @@ function App() {
   const hasEmployeeReadAccess = session?.permissions.includes('employees:read') ?? false;
   const canManageEmployees = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
   const isAdmin = sessionUser?.role === 'admin';
+  const canEditWorkflow = session?.permissions.includes('workflow:update') ?? false;
   const availableBackupExportModes = useMemo(() => {
     const supportedModes = new Set(backupStatus?.supportedUserExportModes ?? localUserExportModeOptions.map((option) => option.value));
     return localUserExportModeOptions.filter((option) => supportedModes.has(option.value));
@@ -5591,16 +5592,15 @@ function App() {
       <section className="card card-wide workflow-page-card">
         <div className="section-heading">
           <div>
-            <p className="section-label">Review lifecycle</p>
-            <h3>Review workflow markdown</h3>
+            <p className="section-label">Workflow</p>
           </div>
-          {isAdmin ? (
+          {canEditWorkflow ? (
             <button type="button" onClick={openWorkflowEditor}>
               Edit workflow
             </button>
           ) : null}
         </div>
-        <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p>
+        {canEditWorkflow ? <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p> : null}
         <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
       </section>
     </main>
@@ -6413,7 +6413,7 @@ function App() {
           </div>
         ) : null}
 
-        {isAdmin && workflowDraft !== null && workflowVisibilityDraft !== null ? (
+        {canEditWorkflow && workflowDraft !== null && workflowVisibilityDraft !== null ? (
           <div
             className="modal-backdrop"
             role="presentation"
@@ -6432,8 +6432,10 @@ function App() {
             >
               <div className="section-heading">
                 <div>
-                  <p className="section-label">Workflow</p>
-                  <h3 id="workflow-editor-title">Edit workflow markdown</h3>
+                  <p className="section-label">Edit workflow</p>
+                  <h3 id="workflow-editor-title" className="sr-only">
+                    Edit workflow
+                  </h3>
                 </div>
                 <button
                   type="button"
@@ -6459,11 +6461,11 @@ function App() {
                       <option value="admin only">admin only</option>
                     </select>
                   </label>
-                  <label className="stack-form">
+                  <label className="stack-form workflow-editor-markdown-field">
                     <span>Workflow markdown</span>
                     <textarea
                       aria-label="Workflow markdown"
-                      rows={18}
+                      rows={24}
                       value={workflowDraft}
                       disabled={isSavingWorkflowSettings}
                       onChange={(event) => setWorkflowDraft(event.target.value)}
