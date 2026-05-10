@@ -170,6 +170,10 @@ function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
 }
 
+function serializeQuestionDraft(draft: QuestionSetQuestionDraft) {
+  return JSON.stringify(draft);
+}
+
 function createBlankQuestionSetDraft(draft: QuestionSetDraft): QuestionSetDraft {
   return {
     ...draft,
@@ -187,7 +191,18 @@ function serializeWorkflowDraft(markdown: string, visibility: WorkflowVisibility
 
 function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
   if (type === 'narrative') {
-    return <p className="toolbar-note question-response-helper">Use a written self-rating with supporting context and examples.</p>;
+    return (
+      <div className="toolbar-note question-response-helper question-response-helper-narrative">
+        <p>Use a written self-rating with supporting context and examples.</p>
+        <textarea
+          aria-hidden="true"
+          className="question-response-helper-textarea"
+          disabled
+          placeholder="Share context and examples..."
+          rows={4}
+        />
+      </div>
+    );
   }
 
   return (
@@ -198,6 +213,18 @@ function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
           <span>{option}</span>
         </label>
       ))}
+    </div>
+  );
+}
+
+function renderQuestionTypePreview(question: Pick<QuestionSetQuestionDraft, 'prompt' | 'type'>) {
+  return (
+    <div className="subcard question-edit-response-preview">
+      <MarkdownContent
+        markdown={question.prompt || 'No prompt yet.'}
+        className="markdown-content question-prompt-markdown question-edit-response-preview-copy"
+      />
+      {renderQuestionTypeHelper(question.type)}
     </div>
   );
 }
@@ -580,6 +607,8 @@ function App() {
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
   const [questionSetInitialDraft, setQuestionSetInitialDraft] = useState<string | null>(null);
   const [editingQuestionDraftId, setEditingQuestionDraftId] = useState<string | null>(null);
+  const [questionEditorDraft, setQuestionEditorDraft] = useState<QuestionSetQuestionDraft | null>(null);
+  const [questionEditorInitialDraft, setQuestionEditorInitialDraft] = useState<string | null>(null);
   const [isNewQuestionCategoryDialogOpen, setIsNewQuestionCategoryDialogOpen] = useState(false);
   const [newQuestionCategoryDraft, setNewQuestionCategoryDraft] = useState('');
   const [newQuestionCategoryError, setNewQuestionCategoryError] = useState('');
@@ -893,10 +922,11 @@ function App() {
     () => buildQuestionCategorySuggestions(questionCategories, questionSetDraft),
     [questionCategories, questionSetDraft],
   );
-  const editingQuestionDraft = useMemo(
+  const editingQuestionSource = useMemo(
     () => questionSetDraft?.questions.find((question) => question.id === editingQuestionDraftId) ?? null,
     [editingQuestionDraftId, questionSetDraft],
   );
+  const editingQuestionDraft = questionEditorDraft;
   const questionCategoryOptions = useMemo(() => {
     const categories = new Set(questionCategorySuggestions);
     if (editingQuestionDraft?.category) {
@@ -908,10 +938,30 @@ function App() {
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
   }, [editingQuestionDraft?.category, questionCategorySuggestions]);
+  const isQuestionEditorDirty = useMemo(
+    () =>
+      Boolean(
+        questionEditorDraft &&
+          questionEditorInitialDraft &&
+          serializeQuestionDraft(questionEditorDraft) !== questionEditorInitialDraft,
+      ),
+    [questionEditorDraft, questionEditorInitialDraft],
+  );
   const activeReviewAdminPeriod = useMemo(
     () => reviewAdmin?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
     [reviewAdmin],
   );
+  useEffect(() => {
+    if (!editingQuestionSource) {
+      setQuestionEditorDraft(null);
+      setQuestionEditorInitialDraft(null);
+      return;
+    }
+
+    const nextDraft = { ...editingQuestionSource };
+    setQuestionEditorDraft(nextDraft);
+    setQuestionEditorInitialDraft(serializeQuestionDraft(nextDraft));
+  }, [editingQuestionSource]);
   const isAssessmentDraftDirty = useMemo(() => {
     if (!selectedAssessmentEditor) {
       return false;
@@ -2665,17 +2715,29 @@ function App() {
     setQuestionSetDraft(null);
     setQuestionSetInitialDraft(null);
     setEditingQuestionDraftId(null);
+    setQuestionEditorDraft(null);
+    setQuestionEditorInitialDraft(null);
     setIsNewQuestionCategoryDialogOpen(false);
     setNewQuestionCategoryDraft('');
     setNewQuestionCategoryError('');
     return true;
   };
 
-  const closeQuestionEditorDialog = () => {
+  const closeQuestionEditorDialog = (options?: { force?: boolean }) => {
+    if (!options?.force && isQuestionEditorDirty) {
+      const confirmed = window.confirm('Close this question without saving your changes?');
+      if (!confirmed) {
+        return false;
+      }
+    }
+
     setEditingQuestionDraftId(null);
+    setQuestionEditorDraft(null);
+    setQuestionEditorInitialDraft(null);
     setIsNewQuestionCategoryDialogOpen(false);
     setNewQuestionCategoryDraft('');
     setNewQuestionCategoryError('');
+    return true;
   };
 
   const updateQuestionSetDraftField = <Field extends keyof QuestionSetDraft,>(
@@ -2688,20 +2750,10 @@ function App() {
   const updateQuestionDraftField = <
     Field extends keyof QuestionSetQuestionDraft,
   >(
-    questionId: string,
     field: Field,
     value: QuestionSetQuestionDraft[Field],
   ) => {
-    setQuestionSetDraft((currentDraft) =>
-      currentDraft
-        ? {
-            ...currentDraft,
-            questions: currentDraft.questions.map((question) =>
-              question.id === questionId ? { ...question, [field]: value } : question,
-            ),
-          }
-        : currentDraft,
-    );
+    setQuestionEditorDraft((currentDraft) => (currentDraft ? { ...currentDraft, [field]: value } : currentDraft));
   };
 
   const removeQuestionDraft = (questionId: string) => {
@@ -2720,7 +2772,7 @@ function App() {
     );
 
     if (editingQuestionDraftId === questionId) {
-      setEditingQuestionDraftId(null);
+      closeQuestionEditorDialog({ force: true });
     }
   };
 
@@ -2772,7 +2824,7 @@ function App() {
       return;
     }
 
-    updateQuestionDraftField(editingQuestionDraft.id, 'category', value);
+    updateQuestionDraftField('category', value);
   };
 
   const saveNewQuestionCategory = async (event: FormEvent<HTMLFormElement>) => {
@@ -2800,13 +2852,33 @@ function App() {
         items: [...questionCategories, existingCategory],
       });
       setQuestionCategories(response.items);
-      updateQuestionDraftField(editingQuestionDraft.id, 'category', existingCategory);
+      updateQuestionDraftField('category', existingCategory);
       closeNewQuestionCategoryDialog();
     } catch (error) {
       setNewQuestionCategoryError(getErrorMessage(error));
     } finally {
       setIsSavingReviewAdmin(false);
     }
+  };
+
+  const saveEditingQuestionDraft = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!questionEditorDraft) {
+      return;
+    }
+
+    setQuestionSetDraft((currentDraft) =>
+      currentDraft
+        ? {
+            ...currentDraft,
+            questions: currentDraft.questions.map((question) =>
+              question.id === questionEditorDraft.id ? { ...questionEditorDraft } : question,
+            ),
+          }
+        : currentDraft,
+    );
+    closeQuestionEditorDialog({ force: true });
   };
 
   const saveQuestionDraft = async (event: FormEvent<HTMLFormElement>) => {
@@ -3547,7 +3619,7 @@ function App() {
 
   const renderQuestionEditorDialog = () =>
     pathname === '/questions' && questionSetDraft && editingQuestionDraft ? (
-      <div className="modal-backdrop" role="presentation" onClick={closeQuestionEditorDialog}>
+      <div className="modal-backdrop" role="presentation" onClick={() => void closeQuestionEditorDialog()}>
         <section
           aria-modal="true"
           className="card modal-card question-edit-dialog"
@@ -3563,66 +3635,74 @@ function App() {
                 {questionSetDraft.target === 'self' ? 'Self assessment' : 'Peer assessment'} • {questionSetDraft.title}
               </p>
             </div>
-            <button type="button" className="secondary-button" onClick={closeQuestionEditorDialog}>
-              Close
-            </button>
+            <div className="dialog-header-actions">
+              <button type="button" className="secondary-button" onClick={() => void closeQuestionEditorDialog()}>
+                Close
+              </button>
+            </div>
           </div>
 
-          <label className="question-edit-field question-category-field">
-            <span className="question-edit-field-label">Category</span>
-            <select
-              aria-label="Question category"
-              value={editingQuestionDraft.category}
-              disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
-              onChange={(event) => handleQuestionCategoryChange(event.target.value)}
-            >
-              <option value="">No category</option>
-              {questionCategoryOptions.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-              <option value={newQuestionCategoryOptionValue}>New category…</option>
-            </select>
-          </label>
-          <label className="question-edit-field question-prompt-field">
-            <span className="question-edit-field-label">Question</span>
-            <textarea
-              rows={10}
-              value={editingQuestionDraft.prompt}
-              disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
-              onChange={(event) => updateQuestionDraftField(editingQuestionDraft.id, 'prompt', event.target.value)}
-            />
-          </label>
-          <label className="question-edit-field question-response-type-field">
-            <span className="question-edit-field-label">Response type</span>
-            <div className="question-edit-response-group">
+          <form className="stack-form" onSubmit={saveEditingQuestionDraft}>
+            <label className="question-edit-field question-category-field">
+              <span className="question-edit-field-label">Category</span>
               <select
-                aria-label="Response type"
-                value={editingQuestionDraft.type}
+                aria-label="Question category"
+                value={editingQuestionDraft.category}
                 disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
-                onChange={(event) =>
-                  updateQuestionDraftField(
-                    editingQuestionDraft.id,
-                    'type',
-                    event.target.value as QuestionSetQuestionDraft['type'],
-                  )
-                }
+                onChange={(event) => handleQuestionCategoryChange(event.target.value)}
               >
-                <option value="subjective">subjective</option>
-                <option value="ranking">ranking</option>
-                <option value="narrative">narrative</option>
+                <option value="">No category</option>
+                {questionCategoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+                <option value={newQuestionCategoryOptionValue}>New category…</option>
               </select>
-              {renderQuestionTypeHelper(editingQuestionDraft.type)}
+            </label>
+            <label className="question-edit-field question-prompt-field">
+              <span className="question-edit-field-label">Question</span>
+              <textarea
+                rows={10}
+                value={editingQuestionDraft.prompt}
+                disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
+                onChange={(event) => updateQuestionDraftField('prompt', event.target.value)}
+              />
+            </label>
+            <label className="question-edit-field question-response-type-field">
+              <span className="question-edit-field-label">Response type</span>
+              <div className="question-edit-response-group">
+                <select
+                  aria-label="Response type"
+                  value={editingQuestionDraft.type}
+                  disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
+                  onChange={(event) => updateQuestionDraftField('type', event.target.value as QuestionSetQuestionDraft['type'])}
+                >
+                  <option value="subjective">subjective</option>
+                  <option value="ranking">ranking</option>
+                  <option value="narrative">narrative</option>
+                </select>
+                {renderQuestionTypePreview(editingQuestionDraft)}
+              </div>
+            </label>
+            <div className="dialog-footer">
+              <div className="dialog-footer-end">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={isSavingReviewAdmin}
+                  onClick={() => void closeQuestionEditorDialog()}
+                >
+                  Cancel
+                </button>
+                {selectedReviewPeriod?.status === 'archived' ? null : (
+                  <button type="submit" disabled={isSavingReviewAdmin || !isQuestionEditorDirty}>
+                    Save question
+                  </button>
+                )}
+              </div>
             </div>
-          </label>
-          <section className="subcard question-edit-preview">
-            <p className="section-label">Preview</p>
-            <MarkdownContent
-              markdown={editingQuestionDraft.prompt || 'No prompt yet.'}
-              className="markdown-content question-prompt-markdown"
-            />
-          </section>
+          </form>
         </section>
       </div>
     ) : null;

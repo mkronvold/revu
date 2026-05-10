@@ -372,6 +372,7 @@ describe('questions screen', () => {
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
     vi.mocked(updateQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Strategy', 'Teamwork'] });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -426,9 +427,20 @@ describe('questions screen', () => {
 
     const questionEditor = container.querySelector('.question-edit-dialog');
     expect(questionEditor).toBeTruthy();
+    expect(Array.from(questionEditor?.querySelectorAll('button') ?? []).map((button) => button.textContent)).toEqual([
+      'Close',
+      'Cancel',
+      'Save question',
+    ]);
+    expect(questionEditor?.querySelector('.question-edit-preview')).toBeNull();
 
     const categorySelect = questionEditor?.querySelector('select[aria-label="Question category"]') as HTMLSelectElement | null;
+    const questionPromptField = questionEditor?.querySelector('.question-prompt-field textarea') as HTMLTextAreaElement | null;
     expect(categorySelect).toBeTruthy();
+    expect(questionPromptField).toBeTruthy();
+    expect(questionEditor?.querySelector('.question-edit-response-preview .question-prompt-markdown')?.textContent).toContain(
+      'How did you lead?',
+    );
     expect(categorySelect?.value).toBe('');
     expect(Array.from(categorySelect?.options ?? []).map((option) => option.textContent)).toEqual([
       'No category',
@@ -473,29 +485,88 @@ describe('questions screen', () => {
     expect(updatedCategorySelect?.value).toBe('Strategy');
 
     const responseTypeField = questionEditor?.querySelector('.question-response-type-field select') as HTMLSelectElement | null;
+    const saveQuestionButton = Array.from(questionEditor?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Save question',
+    ) as HTMLButtonElement | undefined;
+    const cancelQuestionButton = Array.from(questionEditor?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Cancel',
+    );
     expect(responseTypeField).toBeTruthy();
+
     await act(async () => {
-      setFieldValue(responseTypeField!, 'ranking');
+      setFieldValue(questionPromptField!, 'Canceled question prompt');
       await Promise.resolve();
     });
     await flushRender();
 
-    const rankingHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    expect(saveQuestionButton?.disabled).toBe(false);
+
+    await act(async () => {
+      cancelQuestionButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('Close this question without saving your changes?');
+    expect(container.querySelector('.question-edit-dialog')).toBeNull();
+
+    const reopenedQuestionRow = container.querySelector('.question-set-dialog-row-button');
+    expect(reopenedQuestionRow).toBeTruthy();
+
+    await act(async () => {
+      reopenedQuestionRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const reopenedEditor = container.querySelector('.question-edit-dialog');
+    expect(reopenedEditor).toBeTruthy();
+    const reopenedPromptField = reopenedEditor?.querySelector('.question-prompt-field textarea') as HTMLTextAreaElement | null;
+    const reopenedResponseTypeField = reopenedEditor?.querySelector(
+      '.question-response-type-field select',
+    ) as HTMLSelectElement | null;
+    expect(reopenedPromptField?.value).not.toBe('Canceled question prompt');
+
+    await act(async () => {
+      setFieldValue(reopenedResponseTypeField!, 'ranking');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const rankingHelperInputs = Array.from(reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
     expect(rankingHelperInputs).toHaveLength(5);
     expect(rankingHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain("Don't know");
+    expect(reopenedEditor?.querySelector('.question-response-helper')?.textContent).toContain("Don't know");
 
     await act(async () => {
-      setFieldValue(responseTypeField!, 'narrative');
+      setFieldValue(reopenedResponseTypeField!, 'narrative');
       await Promise.resolve();
     });
     await flushRender();
 
-    const narrativeHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    const narrativeHelperInputs = Array.from(reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
     expect(narrativeHelperInputs).toHaveLength(0);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+    expect(reopenedEditor?.querySelector('.question-response-helper')?.textContent).toContain(
       'Use a written self-rating with supporting context and examples.',
     );
+    expect(reopenedEditor?.querySelector('.question-response-helper textarea')).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(reopenedPromptField!, 'Saved question prompt');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const saveUpdatedQuestionButton = Array.from(reopenedEditor?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Save question',
+    );
+    expect(saveUpdatedQuestionButton).toBeTruthy();
+
+    await act(async () => {
+      saveUpdatedQuestionButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('.question-edit-dialog')).toBeNull();
+    expect(container.querySelector('.question-set-dialog-row-button')?.textContent).toContain('Saved question prompt');
   });
 
   it('shows end, assessment due, and review due fields when editing a review period', async () => {

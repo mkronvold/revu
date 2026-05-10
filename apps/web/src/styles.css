@@ -1890,6 +1890,21 @@ button.employee-row:focus-visible {
   resize: vertical;
 }
 
+.question-edit-response-group,
+.question-edit-response-preview,
+.question-response-helper-narrative {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.question-edit-response-preview {
+  align-content: start;
+}
+
+.question-edit-response-preview-copy {
+  min-height: 1.5rem;
+}
+
 .question-response-helper {
   margin: 0;
 }
@@ -1909,6 +1924,16 @@ button.employee-row:focus-visible {
 
 .question-response-helper-option input {
   margin: 0;
+}
+
+.question-response-helper-narrative p {
+  margin: 0;
+}
+
+.question-response-helper-textarea {
+  width: 100%;
+  min-height: 8rem;
+  resize: none;
 }
 
 .question-category-dialog {
