@@ -2063,6 +2063,8 @@ describe('employees screen', () => {
       row.textContent?.includes('Elliot Employee'),
     );
     expect(elliotRow).toBeTruthy();
+    expect(elliotRow?.textContent).not.toContain('Assessor 1:');
+    expect(elliotRow?.textContent).not.toContain('Assessor 2:');
 
     const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
     expect(summaryButton).toBeTruthy();

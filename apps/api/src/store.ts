@@ -1951,39 +1951,6 @@ export class ApiStore {
         await this.ensureEmployeeDeletedColumn(client);
         await this.employeeOrThrow(client, employeeId);
 
-        const assignmentReference = await client.query<ExistsRow>(
-          `
-            SELECT EXISTS(
-              SELECT 1
-              FROM review_period_assignments
-              WHERE employee_id = $1
-                 OR manager_employee_id = $1
-                 OR assessor_employee_id = $1
-            ) AS exists
-          `,
-          [employeeId],
-        );
-        if (assignmentReference.rows[0]?.exists) {
-          throw new ApiError(409, "Employee is still referenced by review period assignments");
-        }
-
-        const assessmentReference = await client.query<ExistsRow>(
-          `
-            SELECT EXISTS(
-              SELECT 1
-              FROM assessments
-              WHERE employee_id = $1
-                 OR assessor_employee_id = $1
-                 OR accepted_by_employee_id = $1
-                 OR reviewed_by_employee_id = $1
-            ) AS exists
-          `,
-          [employeeId],
-        );
-        if (assessmentReference.rows[0]?.exists) {
-          throw new ApiError(409, "Employee is still referenced by assessments");
-        }
-
         const tombstonedAt = nowIso();
         await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
         const deleteResult = await client.query(

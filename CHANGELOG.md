@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Removed the `Assessor 1:` and `Assessor 2:` prefixes from the stacked assessor values in the employee directory column
+- Fixed inactive employee tombstone deletes so review-period assignment and assessment references no longer block deletion; those historical links now stay attached to the hidden tombstone row
 - Added inactive-period question-set copying into the current active review cycle, reshaped the dashboard into an active-period action queue that matches the Reviews table layout, and rebuilt assessment authoring dialogs with grouped category sections plus document-style scale responses
 - Allowed deleting inactive employees even when active employee relationships still point at them, kept those manager/assessor references attached to the hidden tombstone row, and now render missing tombstone-backed names as `deleted user`
 - Stopped the sign-in screen from defaulting to the old seeded `ada.admin` username after seeded accounts are hidden, and now remember the last successfully used username in browser local storage

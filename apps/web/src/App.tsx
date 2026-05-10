@@ -1305,11 +1305,20 @@ function App() {
       name: getEmployeeName(entry.id),
     }));
 
-  const renderAssessorList = (employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>) => (
+  const renderAssessorList = (
+    employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>,
+    options: { showLabels?: boolean } = {},
+  ) => (
     <span className="stacked-relationship-list">
       {getAssessorNames(employee).map((assessor) => (
         <span key={assessor.label}>
-          <strong>{assessor.label}:</strong> {assessor.name}
+          {options.showLabels === false ? (
+            assessor.name
+          ) : (
+            <>
+              <strong>{assessor.label}:</strong> {assessor.name}
+            </>
+          )}
         </span>
       ))}
     </span>
@@ -5213,7 +5222,7 @@ function App() {
             <span className="employee-row-cell">{employee.role}</span>
             <span className="employee-row-cell">{employee.email}</span>
             <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
-            <span className="employee-row-cell">{renderAssessorList(employee)}</span>
+            <span className="employee-row-cell">{renderAssessorList(employee, { showLabels: false })}</span>
             <span className="employee-row-cell">
               <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
             </span>

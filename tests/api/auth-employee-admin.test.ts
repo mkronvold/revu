@@ -516,7 +516,7 @@ describe("auth and employee admin API", () => {
     expect((await login(app, "ada.admin", "AdminPass123!")).statusCode).toBe(200);
   });
 
-  it("allows deleting inactive employees that are still referenced and preserves those tombstone relationships", async () => {
+  it("allows deleting inactive employees that are still referenced by relationships, assignments, and assessments", async () => {
     const app = await createApp();
     const adminLogin = authLoginResponseSchema.parse((await login(app, "ada.admin", "AdminPass123!")).json());
 
@@ -531,7 +531,8 @@ describe("auth and employee admin API", () => {
         fullName: "Former Manager",
         email: "former.manager@example.com",
         role: "manager",
-        status: "inactive",
+        status: "active",
+        password: "FormerManager123!",
       },
     });
     expect(createResponse.statusCode).toBe(201);
@@ -548,6 +549,43 @@ describe("auth and employee admin API", () => {
       },
     });
     expect(reassignEmployeeResponse.statusCode).toBe(200);
+
+    const reassignAssignmentResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/assignments/cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        managerId: deletedManager.id,
+      },
+    });
+    expect(reassignAssignmentResponse.statusCode).toBe(200);
+
+    const managerLogin = authLoginResponseSchema.parse((await login(app, "former.manager", "FormerManager123!")).json());
+    const acceptResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/assessments/dddddddd-dddd-4ddd-8ddd-dddddddddddd/accept",
+      headers: {
+        authorization: `Bearer ${managerLogin.session.token}`,
+      },
+      payload: {
+        managerNotes: "Accepted by the soon-to-be deleted manager.",
+      },
+    });
+    expect(acceptResponse.statusCode).toBe(200);
+
+    const deactivateEmployeeResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${deletedManager.id}`,
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        status: "inactive",
+      },
+    });
+    expect(deactivateEmployeeResponse.statusCode).toBe(200);
 
     const deleteResponse = await app.inject({
       method: "DELETE",
@@ -584,6 +622,23 @@ describe("auth and employee admin API", () => {
       fullName: "Elliot Employee Updated",
       managerId: deletedManager.id,
     });
+
+    const foundationResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+    });
+    expect(foundationResponse.statusCode).toBe(200);
+    const foundation = foundationSnapshotSchema.parse(foundationResponse.json());
+    expect(foundation.employees.some((employee) => employee.id === deletedManager.id)).toBe(false);
+    expect(
+      foundation.assignments.find((assignment) => assignment.id === "cccccccc-cccc-4ccc-8ccc-cccccccccccc")?.managerId,
+    ).toBe(deletedManager.id);
+    expect(
+      foundation.assessments.find((assessment) => assessment.id === "dddddddd-dddd-4ddd-8ddd-dddddddddddd")?.acceptedByEmployeeId,
+    ).toBe(deletedManager.id);
   });
 
   it("rejects imported password-hash credentials that do not use a supported stored-password format", async () => {
