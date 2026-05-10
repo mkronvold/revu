@@ -57,6 +57,7 @@ vi.mock('./api', () => {
     updateAssignment: vi.fn(),
     updateBackupStatus: vi.fn(),
     updateEmployee: vi.fn(),
+    updateQuestionCategories: vi.fn(),
     updateQuestionSet: vi.fn(),
     updateReviewPeriod: vi.fn(),
   };
@@ -80,6 +81,7 @@ import {
   restoreBackup,
   updateBackupStatus,
   updateEmployee,
+  updateQuestionCategories,
 } from './api';
 
 function cloneQuestionSlice() {
@@ -268,6 +270,7 @@ describe('questions screen', () => {
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(updateQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Strategy', 'Teamwork'] });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -282,6 +285,7 @@ describe('questions screen', () => {
     expect(reviewPeriodCard?.textContent).not.toContain('Export CSV');
     expect(reviewPeriodCard?.textContent).not.toContain('Import JSON');
     expect(reviewPeriodCard?.textContent).not.toContain('Import CSV');
+    expect(reviewPeriodCard?.textContent).toContain('Edit question categories');
 
     const questionSetCard = container.querySelector('.question-set-card');
     expect(questionSetCard?.innerHTML).toContain('<strong>Lead with clarity</strong>');
@@ -391,6 +395,73 @@ describe('questions screen', () => {
     expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
       'Use a written self-rating with supporting context and examples.',
     );
+  });
+
+  it('edits persistent question categories from the review-period card', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Teamwork'] });
+    vi.mocked(updateQuestionCategories).mockResolvedValue({ items: ['Growth', 'Strategy', 'Teamwork'] });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const editCategoriesButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit question categories',
+    );
+    expect(editCategoriesButton).toBeTruthy();
+
+    await act(async () => {
+      editCategoriesButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const dialog = container.querySelector('.question-categories-dialog');
+    expect(dialog).toBeTruthy();
+
+    const inputs = Array.from(dialog?.querySelectorAll('input[aria-label^="Question category "]') ?? []) as HTMLInputElement[];
+    expect(inputs.map((input) => input.value)).toEqual(['Growth', 'Teamwork']);
+
+    const addButton = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Add category');
+    expect(addButton).toBeTruthy();
+
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    const updatedInputs = Array.from(
+      container.querySelectorAll('.question-categories-dialog input[aria-label^="Question category "]'),
+    ) as HTMLInputElement[];
+    expect(updatedInputs).toHaveLength(3);
+
+    await act(async () => {
+      setFieldValue(updatedInputs[2]!, 'Strategy');
+      await Promise.resolve();
+    });
+    await flushRender();
+
+    const saveButton = Array.from(container.querySelectorAll('.question-categories-dialog button')).find(
+      (button) => button.textContent === 'Save categories',
+    );
+    expect(saveButton).toBeTruthy();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(updateQuestionCategories).toHaveBeenCalledWith('session-token', {
+      items: ['Growth', 'Teamwork', 'Strategy'],
+    });
+    expect(container.querySelector('.question-categories-dialog')).toBeNull();
   });
 
   it('warns before closing a dirty question-set dialog without saving', async () => {

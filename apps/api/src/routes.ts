@@ -57,6 +57,7 @@ import {
   updateBackupStatusRequestSchema,
   updateAssignmentRequestSchema,
   updateEmployeeRequestSchema,
+  updateQuestionCategoriesRequestSchema,
   updateQuestionSetRequestSchema,
   updateReviewPeriodRequestSchema,
   type AuthPermission,
@@ -655,6 +656,19 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       requirePermissions(session, ["questionSets:update"]);
       return questionCategoriesListResponseSchema.parse({
         items: await store.listQuestionCategories(),
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.put("/question-categories", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["questionSets:update"]);
+      const body = parseWithSchema(updateQuestionCategoriesRequestSchema, request.body);
+      return questionCategoriesListResponseSchema.parse({
+        items: await store.replaceQuestionCategories(body),
       });
     } catch (error) {
       return sendError(reply, error);

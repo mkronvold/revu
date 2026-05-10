@@ -386,9 +386,17 @@ export const questionCategoriesListResponseSchema = z.object({
   items: z.array(questionCategoryNameSchema),
 });
 
-export const backupReviewDataSchema = foundationSnapshotSchema.omit({
-  employees: true,
+export const updateQuestionCategoriesRequestSchema = z.object({
+  items: z.array(questionCategoryNameSchema),
 });
+
+export const backupReviewDataSchema = foundationSnapshotSchema
+  .omit({
+    employees: true,
+  })
+  .extend({
+    questionCategories: z.array(questionCategoryNameSchema).default([]),
+  });
 
 export const backupSnapshotSchema = z.object({
   version: z.literal(1),
@@ -506,6 +514,7 @@ export type ExportStubResponse = z.infer<typeof exportStubResponseSchema>;
 export type ImportStubRequest = z.infer<typeof importStubRequestSchema>;
 export type ImportStubResponse = z.infer<typeof importStubResponseSchema>;
 export type QuestionCategoriesListResponse = z.infer<typeof questionCategoriesListResponseSchema>;
+export type UpdateQuestionCategoriesRequest = z.infer<typeof updateQuestionCategoriesRequestSchema>;
 export type BackupReviewData = z.infer<typeof backupReviewDataSchema>;
 export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
 export type BackupExportQuery = z.infer<typeof backupExportQuerySchema>;

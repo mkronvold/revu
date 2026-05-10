@@ -45,6 +45,7 @@ import type {
   UpdateAssignmentRequest,
   UpdateBackupStatusRequest,
   UpdateEmployeeRequest,
+  UpdateQuestionCategoriesRequest,
   UpdateQuestionSetRequest,
   UpdateReviewPeriodRequest,
 } from "@revu/contracts";
@@ -2102,6 +2103,8 @@ export class ApiStore {
           );
         }
 
+        await this.insertQuestionCategories(client, input.questions.map((question) => question.category));
+
         return await this.questionSetOrThrow(client, questionSetId);
       });
     } catch (error) {
@@ -2204,6 +2207,8 @@ export class ApiStore {
               removedQuestionIds,
             ]);
           }
+
+          await this.insertQuestionCategories(client, updates.questions.map((question) => question.category));
         }
 
         if (updates.status === "active") {
@@ -2698,20 +2703,15 @@ export class ApiStore {
   }
 
   async listQuestionCategories() {
-    const result = await this.pool.query<{ category: string }>(
-      `
-        SELECT category
-        FROM (
-          SELECT DISTINCT trim(category) AS category
-          FROM question_set_questions
-          WHERE category IS NOT NULL
-            AND length(trim(category)) > 0
-        ) categories
-        ORDER BY lower(category), category
-      `,
-    );
+    return this.loadQuestionCategories(this.pool);
+  }
 
-    return result.rows.map((row) => row.category);
+  async replaceQuestionCategories(input: UpdateQuestionCategoriesRequest) {
+    return withTransaction(async (client) => {
+      await client.query("DELETE FROM question_categories");
+      await this.insertQuestionCategories(client, input.items);
+      return this.loadQuestionCategories(client);
+    });
   }
 
   async getBackupStatus(): Promise<BackupStatusResponse> {
@@ -2744,10 +2744,11 @@ export class ApiStore {
   }
 
   async createBackup(mode: LocalUsersExportMode = "preserve-passwords"): Promise<BackupSnapshot> {
-    const [users, reviewPeriods, questionSets, assignments, assessments] = await Promise.all([
+    const [users, reviewPeriods, questionSets, questionCategories, assignments, assessments] = await Promise.all([
       this.exportLocalUsers("json", mode),
       this.listReviewPeriods(),
       this.listQuestionSets(),
+      this.listQuestionCategories(),
       this.listAssignments(),
       this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
     ]);
@@ -2763,6 +2764,7 @@ export class ApiStore {
       reviewData: {
         reviewPeriods,
         questionSets,
+        questionCategories,
         assignments,
         assessments,
       },
@@ -2838,6 +2840,7 @@ export class ApiStore {
 
   private async insertQuestionSetsSnapshot(client: DbClient, questionSets: QuestionSet[]) {
     for (const questionSet of questionSets) {
+      const questionCategories: string[] = [];
       await client.query(
         `
           INSERT INTO question_sets (
@@ -2890,8 +2893,71 @@ export class ApiStore {
             questionSet.updatedAt,
           ],
         );
+        if (question.category) {
+          questionCategories.push(question.category);
+        }
       }
+
+      await this.insertQuestionCategories(client, questionCategories);
     }
+  }
+
+  private normalizeQuestionCategories(categories: string[]) {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const category of categories) {
+      const trimmedCategory = category.trim();
+      if (!trimmedCategory) {
+        continue;
+      }
+
+      const key = trimmedCategory.toLocaleLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      normalized.push(trimmedCategory);
+    }
+
+    return normalized.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+  }
+
+  private async insertQuestionCategories(client: DbClient, categories: string[]) {
+    const normalizedCategories = this.normalizeQuestionCategories(categories);
+
+    for (const category of normalizedCategories) {
+      await client.query(
+        `
+          INSERT INTO question_categories (name)
+          VALUES ($1)
+          ON CONFLICT (name) DO NOTHING
+        `,
+        [category],
+      );
+    }
+  }
+
+  private async loadQuestionCategories(client: DbClient) {
+    const result = await client.query<{ category: string }>(
+      `
+        SELECT category
+        FROM (
+          SELECT trim(name) AS category
+          FROM question_categories
+          WHERE length(trim(name)) > 0
+          UNION
+          SELECT DISTINCT trim(category) AS category
+          FROM question_set_questions
+          WHERE category IS NOT NULL
+            AND length(trim(category)) > 0
+        ) categories
+        ORDER BY lower(category), category
+      `,
+    );
+
+    return result.rows.map((row) => row.category);
   }
 
   private async insertAssignmentsSnapshot(client: DbClient, assignments: Assignment[]) {
@@ -3245,12 +3311,14 @@ export class ApiStore {
       throw new ApiError(409, "Question-only restores require assignments and assessments to be cleared first");
     }
 
+    await client.query("DELETE FROM question_categories");
     await client.query("DELETE FROM question_set_questions");
     await client.query("DELETE FROM question_sets");
     await client.query("DELETE FROM review_periods");
 
     await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
     await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
+    await this.insertQuestionCategories(client, reviewData.questionCategories);
   }
 
   private async replaceReviewData(client: DbClient, reviewData: BackupReviewData) {
@@ -3260,12 +3328,14 @@ export class ApiStore {
     await client.query("DELETE FROM assessment_responses");
     await client.query("DELETE FROM assessments");
     await client.query("DELETE FROM review_period_assignments");
+    await client.query("DELETE FROM question_categories");
     await client.query("DELETE FROM question_set_questions");
     await client.query("DELETE FROM question_sets");
     await client.query("DELETE FROM review_periods");
 
     await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
     await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
+    await this.insertQuestionCategories(client, reviewData.questionCategories);
     await this.insertAssignmentsSnapshot(client, reviewData.assignments);
     await this.insertAssessmentsSnapshot(client, reviewData.assessments);
   }

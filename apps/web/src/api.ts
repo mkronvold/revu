@@ -9,6 +9,7 @@ import {
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
   updateBackupStatusRequestSchema,
+  updateQuestionCategoriesRequestSchema,
   authChangePasswordRequestSchema,
   authChangePasswordResponseSchema,
   authLoginResponseSchema,
@@ -69,6 +70,7 @@ import {
   type UpdateBackupStatusRequest,
   type UpdateAssignmentRequest,
   type UpdateEmployeeRequest,
+  type UpdateQuestionCategoriesRequest,
   type UpdateQuestionSetRequest,
   type UpdateReviewPeriodRequest,
 } from '@revu/contracts';
@@ -399,6 +401,17 @@ export function importQuestionSets(token: string, reviewPeriodId: string, payloa
 
 export function listQuestionCategories(token: string) {
   return request('/question-categories', questionCategoriesListResponseSchema, withAuthorization(token));
+}
+
+export function updateQuestionCategories(token: string, payload: UpdateQuestionCategoriesRequest) {
+  return request(
+    '/question-categories',
+    questionCategoriesListResponseSchema,
+    withAuthorization(token, {
+      method: 'PUT',
+      body: JSON.stringify(updateQuestionCategoriesRequestSchema.parse(payload)),
+    }),
+  );
 }
 
 export function createAssignment(token: string, reviewPeriodId: string, payload: CreateAssignmentRequest) {

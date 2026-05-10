@@ -162,6 +162,29 @@ async function insertQuestionSets(client: PoolClient) {
   }
 }
 
+async function insertQuestionCategories(client: PoolClient) {
+  const categories = Array.from(
+    new Set(
+      questionSetsListExample.items.flatMap((questionSet) =>
+        questionSet.questions
+          .map((question) => question.category.trim())
+          .filter((category) => category.length > 0),
+      ),
+    ),
+  ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+
+  for (const category of categories) {
+    await client.query(
+      `
+        INSERT INTO question_categories (name)
+        VALUES ($1)
+        ON CONFLICT (name) DO NOTHING
+      `,
+      [category],
+    );
+  }
+}
+
 async function insertAssignments(client: PoolClient) {
   for (const assignment of assignmentsListExample.items) {
     await client.query(
@@ -257,6 +280,15 @@ export async function resetDemoData() {
 
   try {
     await client.query("BEGIN");
+    await client.query(
+      `
+        CREATE TABLE IF NOT EXISTS question_categories (
+          name text PRIMARY KEY,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `,
+    );
     await client.query("SET LOCAL session_replication_role = replica");
     await client.query(
       `
@@ -265,6 +297,7 @@ export async function resetDemoData() {
           assessment_responses,
           assessments,
           review_period_assignments,
+          question_categories,
           question_set_questions,
           question_sets,
           review_periods,
@@ -276,6 +309,7 @@ export async function resetDemoData() {
     await insertEmployees(client);
     await insertReviewPeriods(client);
     await insertQuestionSets(client);
+    await insertQuestionCategories(client);
     await insertAssignments(client);
     await insertAssessments(client);
     await client.query("COMMIT");

@@ -33,6 +33,7 @@ import {
   setEmployeePassword,
   updateBackupStatus,
   updateEmployee,
+  updateQuestionCategories,
 } from './api';
 import { buildDashboardSnapshot } from './dashboard';
 import {
@@ -476,6 +477,9 @@ function App() {
   const [newQuestionCategoryDraft, setNewQuestionCategoryDraft] = useState('');
   const [newQuestionCategoryError, setNewQuestionCategoryError] = useState('');
   const [questionCategories, setQuestionCategories] = useState<string[]>([]);
+  const [isQuestionCategoriesDialogOpen, setIsQuestionCategoriesDialogOpen] = useState(false);
+  const [questionCategoriesDraft, setQuestionCategoriesDraft] = useState<string[]>([]);
+  const [questionCategoriesDialogError, setQuestionCategoriesDialogError] = useState('');
   const [workflowContent, setWorkflowContent] = useState<string>(() => getStoredWorkflowMarkdown());
   const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(() => getStoredWorkflowVisibility());
   const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
@@ -1126,6 +1130,69 @@ function App() {
     const response = await listQuestionCategories(sessionToken);
     setQuestionCategories(response.items);
     return response.items;
+  };
+
+  const openQuestionCategoriesDialog = () => {
+    setQuestionCategoriesDraft(questionCategories);
+    setQuestionCategoriesDialogError('');
+    setReviewPeriodDraft(null);
+    setAdminNotice('');
+    setIsQuestionCategoriesDialogOpen(true);
+  };
+
+  const closeQuestionCategoriesDialog = () => {
+    setIsQuestionCategoriesDialogOpen(false);
+    setQuestionCategoriesDraft([]);
+    setQuestionCategoriesDialogError('');
+  };
+
+  const updateQuestionCategoryDraft = (index: number, value: string) => {
+    setQuestionCategoriesDraft((currentDraft) =>
+      currentDraft.map((category, categoryIndex) => (categoryIndex === index ? value : category)),
+    );
+    if (questionCategoriesDialogError) {
+      setQuestionCategoriesDialogError('');
+    }
+  };
+
+  const addQuestionCategoryDraft = () => {
+    setQuestionCategoriesDraft((currentDraft) => [...currentDraft, '']);
+    if (questionCategoriesDialogError) {
+      setQuestionCategoriesDialogError('');
+    }
+  };
+
+  const removeQuestionCategoryDraft = (index: number) => {
+    setQuestionCategoriesDraft((currentDraft) => currentDraft.filter((_, categoryIndex) => categoryIndex !== index));
+    if (questionCategoriesDialogError) {
+      setQuestionCategoriesDialogError('');
+    }
+  };
+
+  const saveQuestionCategoriesDialog = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!sessionToken || !isAdmin) {
+      setQuestionCategoriesDialogError('Authentication required.');
+      return;
+    }
+
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+    setQuestionCategoriesDialogError('');
+
+    try {
+      const response = await updateQuestionCategories(sessionToken, {
+        items: questionCategoriesDraft,
+      });
+      setQuestionCategories(response.items);
+      closeQuestionCategoriesDialog();
+      setAdminNotice('Updated question categories.');
+    } catch (error) {
+      setQuestionCategoriesDialogError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
   };
 
   const refreshBackupStatus = async () => {
@@ -2161,10 +2228,10 @@ function App() {
     updateQuestionDraftField(editingQuestionDraft.id, 'category', value);
   };
 
-  const saveNewQuestionCategory = (event: FormEvent<HTMLFormElement>) => {
+  const saveNewQuestionCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!editingQuestionDraft) {
+    if (!editingQuestionDraft || !sessionToken || !isAdmin) {
       return;
     }
 
@@ -2177,8 +2244,22 @@ function App() {
     const existingCategory =
       questionCategoryOptions.find((category) => category.toLowerCase() === trimmedCategory.toLowerCase()) ?? trimmedCategory;
 
-    updateQuestionDraftField(editingQuestionDraft.id, 'category', existingCategory);
-    closeNewQuestionCategoryDialog();
+    setIsSavingReviewAdmin(true);
+    setAppError('');
+    setNewQuestionCategoryError('');
+
+    try {
+      const response = await updateQuestionCategories(sessionToken, {
+        items: [...questionCategories, existingCategory],
+      });
+      setQuestionCategories(response.items);
+      updateQuestionDraftField(editingQuestionDraft.id, 'category', existingCategory);
+      closeNewQuestionCategoryDialog();
+    } catch (error) {
+      setNewQuestionCategoryError(getErrorMessage(error));
+    } finally {
+      setIsSavingReviewAdmin(false);
+    }
   };
 
   const saveQuestionDraft = async (event: FormEvent<HTMLFormElement>) => {
@@ -2505,17 +2586,22 @@ function App() {
               Archived review periods stay visible here but question sets become read-only until an admin unarchives the cycle.
             </p>
           ) : null}
-          <div className="action-row">
-            <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
-              Add period
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={selectedReviewPeriod.status === 'archived'}
-              onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
-            >
-              Edit period
+          <div className="action-row review-period-actions">
+            <div className="review-period-primary-actions">
+              <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+                Add period
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={selectedReviewPeriod.status === 'archived'}
+                onClick={() => startEditingReviewPeriod(selectedReviewPeriod)}
+              >
+                Edit period
+              </button>
+            </div>
+            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
+              Edit question categories
             </button>
           </div>
           {reviewPeriodDraft ? (
@@ -2837,6 +2923,71 @@ function App() {
             <div className="action-row">
               <button type="submit">Save category</button>
               <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    ) : null;
+
+  const renderQuestionCategoriesDialog = () =>
+    pathname === '/questions' && isQuestionCategoriesDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onClick={closeQuestionCategoriesDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card question-categories-dialog"
+          role="dialog"
+          aria-labelledby="question-categories-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Questions</p>
+              <h3 id="question-categories-dialog-title">Edit question categories</h3>
+            </div>
+            <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
+              Close
+            </button>
+          </div>
+          <form className="stack-form" onSubmit={saveQuestionCategoriesDialog}>
+            <div className="question-categories-editor">
+              {questionCategoriesDraft.length > 0 ? (
+                questionCategoriesDraft.map((category, index) => (
+                  <div className="question-categories-editor-row" key={`question-category-${index}`}>
+                    <label className="sr-only" htmlFor={`question-category-${index}`}>
+                      Question category {index + 1}
+                    </label>
+                    <input
+                      id={`question-category-${index}`}
+                      aria-label={`Question category ${index + 1}`}
+                      value={category}
+                      onChange={(event) => updateQuestionCategoryDraft(index, event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => removeQuestionCategoryDraft(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="muted-copy">No persistent categories yet. Add one below.</p>
+              )}
+            </div>
+            <div className="action-row question-categories-editor-actions">
+              <button type="button" className="secondary-button" onClick={addQuestionCategoryDraft}>
+                Add category
+              </button>
+            </div>
+            {questionCategoriesDialogError ? <p className="form-error">{questionCategoriesDialogError}</p> : null}
+            <div className="action-row">
+              <button type="submit" disabled={isSavingReviewAdmin}>
+                Save categories
+              </button>
+              <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
                 Cancel
               </button>
             </div>
@@ -4523,6 +4674,8 @@ function App() {
         {renderQuestionSetDialog()}
 
         {renderQuestionEditorDialog()}
+
+        {renderQuestionCategoriesDialog()}
 
         {renderNewQuestionCategoryDialog()}
 

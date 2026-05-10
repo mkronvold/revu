@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Persisted question categories independently of question rows, added an Edit question categories dialog on Questions, and included the saved category list in backup export/restore flows
 - Added editable automatic-backup settings for enable/disable, backup period, and retention count in File Management, and wired the backup sidecar plus Compose volumes to the shared scheduler config
 - Added unsaved-change confirmation when closing the workflow editor dialog after editing markdown or visibility
 - Unified all modal windows to the same shared width as the Employee Detail popup

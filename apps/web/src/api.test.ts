@@ -21,6 +21,7 @@ import {
   reviewAssessment,
   submitAssessment,
   updateBackupStatus,
+  updateQuestionCategories,
 } from './api';
 
 describe('web api client', () => {
@@ -167,6 +168,28 @@ describe('web api client', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           authorization: 'Bearer session-token',
+        }),
+      }),
+    );
+  });
+
+  it('updates persisted question categories through the API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: ['Growth', 'Strategy', 'Teamwork'] }), { status: 200 }),
+    );
+
+    const response = await updateQuestionCategories('session-token', {
+      items: ['Growth', 'Strategy', 'Teamwork'],
+    });
+
+    expect(response.items).toEqual(['Growth', 'Strategy', 'Teamwork']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${apiBaseUrl}/question-categories`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          authorization: 'Bearer session-token',
+          'content-type': 'application/json',
         }),
       }),
     );

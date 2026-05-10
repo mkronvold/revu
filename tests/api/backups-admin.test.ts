@@ -109,6 +109,19 @@ describe("backup and question category admin API", () => {
     expect(categories).toEqual(expect.arrayContaining(["Collaboration", "Growth", "Impact", "Teamwork"]));
     expect(categories).toEqual([...categories].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" })));
 
+    const updateCategoriesResponse = await app.inject({
+      method: "PUT",
+      url: "/api/v1/question-categories",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        items: [...categories, "Unassigned focus"],
+      },
+    });
+    expect(updateCategoriesResponse.statusCode).toBe(200);
+    expect(questionCategoriesListResponseSchema.parse(updateCategoriesResponse.json()).items).toContain("Unassigned focus");
+
     const statusResponse = await app.inject({
       method: "GET",
       url: "/api/v1/admin/backups/status",
@@ -130,6 +143,7 @@ describe("backup and question category admin API", () => {
     expect(exportResponse.headers["content-type"]).toContain("application/json");
     expect(exportResponse.headers["content-disposition"]).toContain("attachment;");
     expect(exportResponse.headers["content-disposition"]).toContain(".json");
+    expect(backup.reviewData.questionCategories).toContain("Unassigned focus");
     expect(backup.users.mode).toBe("preserve-passwords");
     expect(backup.users.items.find((item) => item.username === "ada.admin")).toMatchObject({
       id: "11111111-1111-4111-8111-111111111111",

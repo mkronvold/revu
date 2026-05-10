@@ -1312,6 +1312,17 @@ button.employee-row:focus-visible {
   gap: 0.75rem;
 }
 
+.review-period-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review-period-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .review-period-card .toolbar-note {
   margin-top: 0;
 }
@@ -1621,6 +1632,27 @@ button.employee-row:focus-visible {
 .question-category-dialog {
   width: min(var(--standard-modal-width), var(--modal-available-width));
   max-width: var(--modal-available-width);
+}
+
+.question-categories-dialog {
+  width: min(var(--standard-modal-width), var(--modal-available-width));
+  max-width: var(--modal-available-width);
+}
+
+.question-categories-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.question-categories-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.question-categories-editor-actions {
+  justify-content: flex-start;
 }
 
 .assignment-table {
