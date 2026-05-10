@@ -299,13 +299,42 @@ restart_stack() {
   bash ./up.sh
 }
 
-log "Watching GHCR deployment images every ${interval_minutes} minute(s)."
+wait_for_next_check() {
+  local remaining_seconds="$sleep_seconds"
+  local key=""
+
+  if [[ ! -t 0 ]]; then
+    sleep "$remaining_seconds"
+    return 1
+  fi
+
+  while (( remaining_seconds > 0 )); do
+    if IFS= read -r -s -n 1 -t 1 key; then
+      if [[ "$key" == "r" || "$key" == "R" ]]; then
+        log 'Manual refresh requested. Checking for updates now.'
+        return 0
+      fi
+    fi
+
+    (( remaining_seconds -= 1 ))
+  done
+
+  return 1
+}
+
+log "Watching GHCR deployment images every ${interval_minutes} minute(s). Press r to refresh immediately."
 
 while true; do
   if check_for_updates; then
     restart_stack
   fi
 
-  log "Sleeping for ${interval_minutes} minute(s)..."
-  sleep "$sleep_seconds"
+  if [[ -t 0 ]]; then
+    log "Waiting ${interval_minutes} minute(s) before the next check. Press r to refresh now."
+  else
+    log "Sleeping for ${interval_minutes} minute(s)..."
+  fi
+  if wait_for_next_check; then
+    continue
+  fi
 done
