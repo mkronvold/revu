@@ -1066,6 +1066,13 @@ button.employee-row:focus-visible {
   align-items: start;
 }
 
+.detail-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding-right: 0.5rem;
+}
+
 .detail-grid dt {
   font-size: 0.8rem;
   font-weight: 700;
@@ -1076,6 +1083,8 @@ button.employee-row:focus-visible {
 
 .detail-grid dd {
   color: #0f172a;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .temporary-password,

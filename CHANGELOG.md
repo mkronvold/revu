@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added spacing and wrapping inside detail-grid fields so long employee detail values like email addresses no longer collide with adjacent dialog fields
 - Added API outage recovery detection that polls `/health` and shows a `New version. Refresh Now` button in the signed-in sidebar card after the API comes back
 - Realigned the Reviews queue and Employee directory columns with shared grid tracks and moved the employee table header onto the same themed header surface as Reviews
 - Allowed uppercase employee usernames while keeping login and username uniqueness checks case-insensitive, including upgrading older employee username constraints on first write
