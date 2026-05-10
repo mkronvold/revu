@@ -2506,13 +2506,22 @@ function App() {
       return;
     }
 
-    if (!reviewPeriodDraft.startDate || !reviewPeriodDraft.dueDate) {
-      setAdminNotice('Choose both the start date and due date for the review period.');
+    if (
+      !reviewPeriodDraft.startDate ||
+      !reviewPeriodDraft.dueDate ||
+      !reviewPeriodDraft.assessmentDueDate ||
+      !reviewPeriodDraft.reviewDueDate
+    ) {
+      setAdminNotice('Choose the start date, end date, assessment due date, and review due date for the review period.');
       return;
     }
 
-    if (reviewPeriodDraft.dueDate < reviewPeriodDraft.startDate) {
-      setAdminNotice('The due date must be on or after the start date.');
+    if (
+      reviewPeriodDraft.startDate > reviewPeriodDraft.assessmentDueDate ||
+      reviewPeriodDraft.assessmentDueDate > reviewPeriodDraft.reviewDueDate ||
+      reviewPeriodDraft.reviewDueDate > reviewPeriodDraft.dueDate
+    ) {
+      setAdminNotice('Review period dates must be ordered as start date, assessment due date, review due date, then end date.');
       return;
     }
 
@@ -3126,6 +3135,14 @@ function App() {
               </dd>
             </div>
             <div>
+              <dt>Assessment due</dt>
+              <dd>{selectedReviewPeriod.assessmentDueDate}</dd>
+            </div>
+            <div>
+              <dt>Review due</dt>
+              <dd>{selectedReviewPeriod.reviewDueDate}</dd>
+            </div>
+            <div>
               <dt>Status</dt>
               <dd>{selectedReviewPeriod.status}</dd>
             </div>
@@ -3191,11 +3208,31 @@ function App() {
                   />
                 </label>
                 <label>
-                  Due date
+                  End date
                   <input
                     type="date"
                     value={reviewPeriodDraft.dueDate}
                     onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Assessment Due Date
+                  <input
+                    type="date"
+                    value={reviewPeriodDraft.assessmentDueDate}
+                    onChange={(event) =>
+                      setReviewPeriodDraft({ ...reviewPeriodDraft, assessmentDueDate: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Review Due Date
+                  <input
+                    type="date"
+                    value={reviewPeriodDraft.reviewDueDate}
+                    onChange={(event) =>
+                      setReviewPeriodDraft({ ...reviewPeriodDraft, reviewDueDate: event.target.value })
+                    }
                   />
                 </label>
                 <label>
@@ -3749,7 +3786,8 @@ function App() {
                       <div>
                         <strong>{reviewPeriod.label}</strong>
                         <p className="muted-copy">
-                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • {summary.questionSetCount} question sets •{' '}
+                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} •
+                          {' '}review by {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets •{' '}
                           {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
                         </p>
                       </div>
@@ -3795,7 +3833,8 @@ function App() {
                       <div>
                         <strong>{reviewPeriod.label}</strong>
                         <p className="muted-copy">
-                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • {summary.questionSetCount} question sets •{' '}
+                          {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} •
+                          {' '}review by {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets •{' '}
                           {summary.assignmentCount} assignments • {summary.assessmentCount} assessments
                         </p>
                       </div>
@@ -3981,6 +4020,14 @@ function App() {
             </dd>
           </div>
           <div>
+            <dt>Assessment due</dt>
+            <dd>{selectedReviewPeriod.assessmentDueDate}</dd>
+          </div>
+          <div>
+            <dt>Review due</dt>
+            <dd>{selectedReviewPeriod.reviewDueDate}</dd>
+          </div>
+          <div>
             <dt>Status</dt>
             <dd>{selectedReviewPeriod.status}</dd>
           </div>
@@ -4097,6 +4144,7 @@ function App() {
                         <span>Name</span>
                         <span>Assessment type</span>
                         <span>Assessor</span>
+                        <span>Due</span>
                         <span>Status</span>
                       </div>
                       {queue.items.map((item) => (
@@ -4112,6 +4160,7 @@ function App() {
                             </span>
                             <span className="employee-row-cell">{item.targetLabel}</span>
                             <span className="employee-row-cell">{item.assessorLabel}</span>
+                            <span className="employee-row-cell">{item.dueDate}</span>
                             <span className="employee-row-cell review-queue-step-cell">
                               <span className="pill">{item.statusLabel}</span>
                             </span>
@@ -4178,7 +4227,7 @@ function App() {
                 <dd>{selectedAssessmentEditor.reviewPeriodLabel}</dd>
               </div>
               <div>
-                <dt>Due date</dt>
+                <dt>Assessment due date</dt>
                 <dd>{selectedAssessmentEditor.dueDate}</dd>
               </div>
             </dl>
@@ -4314,6 +4363,7 @@ function App() {
                   <span>Name</span>
                   <span>Review type</span>
                   <span>Assessor</span>
+                  <span>Due</span>
                   <span>Next step</span>
                 </div>
                 {reviewQueues.map((item) => (
@@ -4329,6 +4379,7 @@ function App() {
                       </span>
                       <span className="employee-row-cell">{item.targetLabel}</span>
                       <span className="employee-row-cell">{item.assessorLabel}</span>
+                      <span className="employee-row-cell">{item.dueDate}</span>
                       <span className="employee-row-cell review-queue-step-cell">
                         <span className="pill">{item.nextStepLabel}</span>
                       </span>
@@ -4390,6 +4441,14 @@ function App() {
               <dd>
                 {activeAssessmentReviewPeriod.startDate} → {activeAssessmentReviewPeriod.dueDate}
               </dd>
+            </div>
+            <div>
+              <dt>Assessment due</dt>
+              <dd>{activeAssessmentReviewPeriod.assessmentDueDate}</dd>
+            </div>
+            <div>
+              <dt>Review due</dt>
+              <dd>{activeAssessmentReviewPeriod.reviewDueDate}</dd>
             </div>
             <div>
               <dt>Status</dt>
@@ -4484,7 +4543,7 @@ function App() {
                 <dd>{selectedReviewPanel.reviewPeriodLabel}</dd>
               </div>
               <div>
-                <dt>Due date</dt>
+                <dt>Review due date</dt>
                 <dd>{selectedReviewPanel.dueDate}</dd>
               </div>
               <div>

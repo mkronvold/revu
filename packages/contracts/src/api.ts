@@ -247,6 +247,8 @@ export const createReviewPeriodRequestSchema = z.object({
   label: z.string().min(1),
   startDate: z.string().date(),
   dueDate: z.string().date(),
+  assessmentDueDate: z.string().date(),
+  reviewDueDate: z.string().date(),
   status: editableReviewPeriodStatusSchema.default("inactive"),
 });
 
@@ -256,6 +258,8 @@ export const updateReviewPeriodRequestSchema = z
     label: z.string().min(1),
     startDate: z.string().date(),
     dueDate: z.string().date(),
+    assessmentDueDate: z.string().date(),
+    reviewDueDate: z.string().date(),
     status: editableReviewPeriodStatusSchema,
   })
   .partial()

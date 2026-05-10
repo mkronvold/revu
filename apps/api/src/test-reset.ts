@@ -35,6 +35,16 @@ function seedPasswordFor(username: string) {
   return password;
 }
 
+async function ensureReviewPeriodDueDateColumns(client: PoolClient) {
+  await client.query(
+    `
+      ALTER TABLE review_periods
+      ADD COLUMN IF NOT EXISTS assessment_due_date DATE,
+      ADD COLUMN IF NOT EXISTS review_due_date DATE
+    `,
+  );
+}
+
 async function insertEmployees(client: PoolClient) {
   for (const employee of employeesListExample.items) {
     await client.query(
@@ -85,12 +95,14 @@ async function insertReviewPeriods(client: PoolClient) {
           label,
           start_date,
           due_date,
+          assessment_due_date,
+          review_due_date,
           status,
           archived_at,
           archived_by_employee_id,
           created_at,
           updated_at
-        ) VALUES ($1,$2,$3,$4::date,$5::date,$6,$7::timestamptz,$8,$9::timestamptz,$10::timestamptz)
+        ) VALUES ($1,$2,$3,$4::date,$5::date,$6::date,$7::date,$8,$9::timestamptz,$10,$11::timestamptz,$12::timestamptz)
       `,
       [
         period.id,
@@ -98,6 +110,8 @@ async function insertReviewPeriods(client: PoolClient) {
         period.label,
         period.startDate,
         period.dueDate,
+        period.assessmentDueDate,
+        period.reviewDueDate,
         period.status,
         period.archivedAt,
         period.archivedByEmployeeId,
@@ -301,6 +315,7 @@ export async function resetDemoData() {
 
   try {
     await client.query("BEGIN");
+    await ensureReviewPeriodDueDateColumns(client);
     await client.query(
       `
         CREATE TABLE IF NOT EXISTS question_categories (

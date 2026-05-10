@@ -47,7 +47,7 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
   }));
 
   return {
-    dueLabel: activeReviewPeriod ? `Complete by ${formatDate(activeReviewPeriod.dueDate)}` : 'No active review period',
+    dueLabel: activeReviewPeriod ? `Complete by ${formatDate(activeReviewPeriod.assessmentDueDate)}` : 'No active review period',
     queues,
     reviewSummary:
       user.role === 'employee'

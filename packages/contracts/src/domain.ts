@@ -128,6 +128,8 @@ export const reviewPeriodSchema = z.object({
   label: z.string().min(1),
   startDate: isoDateSchema,
   dueDate: isoDateSchema,
+  assessmentDueDate: isoDateSchema,
+  reviewDueDate: isoDateSchema,
   status: reviewPeriodStatusSchema,
   archivedAt: isoTimestampSchema.nullable(),
   archivedByEmployeeId: idSchema.nullable(),

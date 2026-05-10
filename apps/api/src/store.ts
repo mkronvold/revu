@@ -97,6 +97,8 @@ type ReviewPeriodRow = {
   label: string;
   start_date: Date | string;
   due_date: Date | string;
+  assessment_due_date: Date | string;
+  review_due_date: Date | string;
   status: ReviewPeriod["status"];
   archived_at: Date | string | null;
   archived_by_employee_id: string | null;
@@ -633,6 +635,8 @@ export class ApiStore {
           label,
           start_date,
           due_date,
+          assessment_due_date,
+          review_due_date,
           status,
           archived_at,
           archived_by_employee_id,
@@ -659,6 +663,8 @@ export class ApiStore {
       label: row.label,
       startDate: toIsoDate(row.start_date),
       dueDate: toIsoDate(row.due_date),
+      assessmentDueDate: toIsoDate(row.assessment_due_date),
+      reviewDueDate: toIsoDate(row.review_due_date),
       status: row.status,
       archivedAt: toIsoTimestamp(row.archived_at),
       archivedByEmployeeId: row.archived_by_employee_id,
@@ -1159,7 +1165,15 @@ export class ApiStore {
 
   private async assertReviewPeriodFields(
     client: DbClient,
-    candidate: { id?: string; key: string; startDate: string; dueDate: string; status: ReviewPeriod["status"] },
+    candidate: {
+      id?: string;
+      key: string;
+      startDate: string;
+      dueDate: string;
+      assessmentDueDate: string;
+      reviewDueDate: string;
+      status: ReviewPeriod["status"];
+    },
   ) {
     const result = await client.query<UniqueReviewPeriodKeyRow>(
       `
@@ -1177,8 +1191,12 @@ export class ApiStore {
       throw new ApiError(409, "Review period key already exists");
     }
 
-    if (candidate.startDate > candidate.dueDate) {
-      throw new ApiError(400, "Review period start date must be on or before due date");
+    if (
+      candidate.startDate > candidate.assessmentDueDate ||
+      candidate.assessmentDueDate > candidate.reviewDueDate ||
+      candidate.reviewDueDate > candidate.dueDate
+    ) {
+      throw new ApiError(400, "Review period dates must be ordered as start date, assessment due date, review due date, then end date");
     }
 
     if (candidate.status === "archived") {
@@ -2060,6 +2078,8 @@ export class ApiStore {
           label,
           start_date,
           due_date,
+          assessment_due_date,
+          review_due_date,
           status,
           archived_at,
           archived_by_employee_id,
@@ -2096,6 +2116,8 @@ export class ApiStore {
               label,
               start_date,
               due_date,
+              assessment_due_date,
+              review_due_date,
               status,
               archived_at,
               archived_by_employee_id,
@@ -2107,11 +2129,13 @@ export class ApiStore {
               $3,
               $4::date,
               $5::date,
-              $6,
+              $6::date,
+              $7::date,
+              $8,
               NULL,
               NULL,
-              $7::timestamptz,
-              $7::timestamptz
+              $9::timestamptz,
+              $9::timestamptz
             )
             RETURNING
               id,
@@ -2119,13 +2143,25 @@ export class ApiStore {
               label,
               start_date,
               due_date,
+              assessment_due_date,
+              review_due_date,
               status,
               archived_at,
               archived_by_employee_id,
               created_at,
               updated_at
           `,
-          [reviewPeriodId, input.key, input.label, input.startDate, input.dueDate, input.status, timestamp],
+          [
+            reviewPeriodId,
+            input.key,
+            input.label,
+            input.startDate,
+            input.dueDate,
+            input.assessmentDueDate,
+            input.reviewDueDate,
+            input.status,
+            timestamp,
+          ],
         );
 
         const reviewPeriod = result.rows[0];
@@ -2164,7 +2200,9 @@ export class ApiStore {
                 label = $3,
                 start_date = $4::date,
                 due_date = $5::date,
-                status = $6
+                assessment_due_date = $6::date,
+                review_due_date = $7::date,
+                status = $8
             WHERE id = $1
             RETURNING
               id,
@@ -2172,6 +2210,8 @@ export class ApiStore {
               label,
               start_date,
               due_date,
+              assessment_due_date,
+              review_due_date,
               status,
               archived_at,
               archived_by_employee_id,
@@ -2184,6 +2224,8 @@ export class ApiStore {
             nextReviewPeriod.label,
             nextReviewPeriod.startDate,
             nextReviewPeriod.dueDate,
+            nextReviewPeriod.assessmentDueDate,
+            nextReviewPeriod.reviewDueDate,
             nextReviewPeriod.status,
           ],
         );
@@ -2226,6 +2268,8 @@ export class ApiStore {
               label,
               start_date,
               due_date,
+              assessment_due_date,
+              review_due_date,
               status,
               archived_at,
               archived_by_employee_id,
@@ -2271,6 +2315,8 @@ export class ApiStore {
               label,
               start_date,
               due_date,
+              assessment_due_date,
+              review_due_date,
               status,
               archived_at,
               archived_by_employee_id,
@@ -3349,12 +3395,14 @@ export class ApiStore {
             label,
             start_date,
             due_date,
+            assessment_due_date,
+            review_due_date,
             status,
             archived_at,
             archived_by_employee_id,
             created_at,
             updated_at
-          ) VALUES ($1,$2,$3,$4::date,$5::date,$6,$7::timestamptz,$8,$9::timestamptz,$10::timestamptz)
+          ) VALUES ($1,$2,$3,$4::date,$5::date,$6::date,$7::date,$8,$9::timestamptz,$10,$11::timestamptz,$12::timestamptz)
         `,
         [
           period.id,
@@ -3362,6 +3410,8 @@ export class ApiStore {
           period.label,
           period.startDate,
           period.dueDate,
+          period.assessmentDueDate,
+          period.reviewDueDate,
           period.status,
           period.archivedAt,
           period.archivedByEmployeeId,

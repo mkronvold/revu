@@ -494,6 +494,35 @@ describe('questions screen', () => {
     );
   });
 
+  it('shows end, assessment due, and review due fields when editing a review period', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Self questions') ?? false);
+
+    const editPeriodButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit period');
+    expect(editPeriodButton).toBeTruthy();
+
+    await act(async () => {
+      editPeriodButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.textContent).toContain('End date');
+    expect(container.textContent).toContain('Assessment Due Date');
+    expect(container.textContent).toContain('Review Due Date');
+    expect(container.textContent).not.toContain('Due date');
+  });
+
   it('edits persistent question categories from the review-period card', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
@@ -1741,7 +1770,9 @@ describe('reviews screen', () => {
     expect(container.textContent).toContain('Name');
     expect(container.textContent).toContain('Review type');
     expect(container.textContent).toContain('Assessor');
+    expect(container.textContent).toContain('Due');
     expect(container.textContent).toContain('Next step');
+    expect(container.textContent).toContain('2/28/2026');
     expect(container.textContent).not.toContain('Submitted and waiting for acceptance');
 
     const standaloneCollapseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Collapse');
@@ -1999,6 +2030,8 @@ describe('dashboard screen', () => {
     expect(container.textContent).toContain('Name');
     expect(container.textContent).toContain('Assessment type');
     expect(container.textContent).toContain('Assessor');
+    expect(container.textContent).toContain('Due');
+    expect(container.textContent).toContain('2/21/2026');
     expect(container.textContent).toContain('Status');
     const dashboardAssessorField = Array.from(container.querySelectorAll('.dashboard-identity-field')).find((field) =>
       field.textContent?.includes('Assessors'),

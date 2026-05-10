@@ -20,6 +20,7 @@ export type AssessmentQueueItem = {
   subjectName: string;
   targetLabel: string;
   assessorLabel: string;
+  dueDate: string;
   statusLabel: string;
   actionLabel: string;
 };
@@ -37,6 +38,7 @@ export type ReviewQueueItem = {
   reviewPeriodLabel: string;
   targetLabel: string;
   assessorLabel: string;
+  dueDate: string;
   nextStepLabel: string;
   statusLabel: string;
   actionLabel: string;
@@ -422,6 +424,7 @@ function toAssessmentQueueItem(
   employeesById: Map<string, Employee>,
 ): AssessmentQueueItem {
   const subjectName = getEmployeeName(employeesById, assessment.employeeId);
+  const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
 
   return {
     assessmentId: assessment.id,
@@ -430,6 +433,7 @@ function toAssessmentQueueItem(
     subjectName,
     targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
     assessorLabel: getAssessorLabel(assessment, employeesById),
+    dueDate: reviewPeriod ? formatDate(reviewPeriod.assessmentDueDate) : 'Unknown due date',
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     actionLabel: 'Open',
   };
@@ -441,6 +445,7 @@ function toReviewQueueItem(
   employeesById: Map<string, Employee>,
 ): ReviewQueueItem {
   const subjectName = getEmployeeName(employeesById, assessment.employeeId);
+  const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
 
   return {
     assessmentId: assessment.id,
@@ -449,6 +454,8 @@ function toReviewQueueItem(
     reviewPeriodLabel: getReviewPeriodLabel(snapshot, assessment),
     targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
     assessorLabel: getAssessorLabel(assessment, employeesById),
+    dueDate:
+      reviewPeriod && assessment.reviewState !== 'reviewed' ? formatDate(reviewPeriod.reviewDueDate) : '—',
     nextStepLabel: buildReviewNextStepLabel(assessment),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     actionLabel: 'Open',
@@ -465,8 +472,8 @@ function orderAssessments(
     .sort((left, right) => {
       const leftReviewPeriod = reviewPeriodsById.get(left.reviewPeriodId);
       const rightReviewPeriod = reviewPeriodsById.get(right.reviewPeriodId);
-      const leftDueDate = leftReviewPeriod?.dueDate ?? '';
-      const rightDueDate = rightReviewPeriod?.dueDate ?? '';
+      const leftDueDate = leftReviewPeriod?.assessmentDueDate ?? '';
+      const rightDueDate = rightReviewPeriod?.assessmentDueDate ?? '';
 
       if (leftDueDate !== rightDueDate) {
         return leftDueDate.localeCompare(rightDueDate);
@@ -555,7 +562,7 @@ export function getAssessmentEditor(
     detail: buildAssessmentDetail(assessment, snapshot, employeesById),
     targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
     reviewPeriodLabel: reviewPeriod?.label ?? 'Current review period',
-    dueDate: reviewPeriod ? formatDate(reviewPeriod.dueDate) : 'Unknown due date',
+    dueDate: reviewPeriod ? formatDate(reviewPeriod.assessmentDueDate) : 'Unknown due date',
     subjectName: getEmployeeName(employeesById, assessment.employeeId),
     assessorName: getEmployeeName(employeesById, assessment.assessorId),
     managerName: getEmployeeName(employeesById, employeesById.get(assessment.employeeId)?.managerId ?? null),
@@ -695,7 +702,7 @@ export function getReviewPanel(
     assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     reviewStatusLabel: buildReviewStatusLabel(assessment),
     reviewPeriodLabel: reviewPeriod?.label ?? 'Current review period',
-    dueDate: reviewPeriod ? formatDate(reviewPeriod.dueDate) : 'Unknown due date',
+    dueDate: reviewPeriod ? formatDate(reviewPeriod.reviewDueDate) : 'Unknown due date',
     subjectName: getEmployeeName(employeesById, assessment.employeeId),
     assessorName: getAssessorLabel(assessment, employeesById),
     managerName: getEmployeeName(employeesById, currentManagerId),

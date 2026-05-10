@@ -61,10 +61,11 @@ describe('integrated dashboard snapshot', () => {
       employeesListExample.items,
     );
 
-    expect(snapshot.dueLabel).toBe('Complete by 2/28/2026');
+    expect(snapshot.dueLabel).toBe('Complete by 2/21/2026');
     expect(snapshot.reviewSummary).toMatch(/employee dashboard stays centered on assessments/i);
     expect(snapshot.queues.map((queue) => queue.title)).toEqual(['Not Started', 'Incomplete', 'Complete but Not Submitted']);
     expect(snapshot.queues[1]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
+    expect(snapshot.queues[1]?.items[0]?.dueDate).toBe('2/21/2026');
     expect(snapshot.queues[1]?.items[0]?.statusLabel).toBe('Incomplete');
     expect(snapshot.queues.flatMap((queue) => queue.items.map((item) => item.assessmentId))).not.toContain(
       '56565656-5656-4565-8565-565656565656',

@@ -278,6 +278,8 @@ describe("backup and question category admin API", () => {
         label: "Restorable Period",
         startDate: "2027-03-01",
         dueDate: "2027-04-01",
+        assessmentDueDate: "2027-03-24",
+        reviewDueDate: "2027-03-29",
       },
     });
     expect(createReviewPeriodResponse.statusCode).toBe(201);

@@ -705,7 +705,7 @@ button.employee-row:focus-visible {
 }
 
 .dashboard-queue-table {
-  --review-queue-columns: minmax(0, 1.8fr) fit-content(10rem) minmax(0, 1fr) fit-content(12rem);
+  --review-queue-columns: minmax(0, 1.65fr) fit-content(10rem) minmax(0, 1fr) fit-content(8rem) fit-content(12rem);
 }
 
 .queue-card {
@@ -1248,7 +1248,7 @@ button.employee-row:focus-visible {
 }
 
 .review-queue-table {
-  --review-queue-columns: minmax(0, 1.8fr) fit-content(9rem) minmax(0, 1fr) fit-content(10rem);
+  --review-queue-columns: minmax(0, 1.65fr) fit-content(9rem) minmax(0, 1fr) fit-content(8rem) fit-content(10rem);
   width: 100%;
   min-width: 0;
   display: grid;

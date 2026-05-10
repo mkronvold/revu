@@ -60,12 +60,19 @@ describe("review periods, question sets, and assignments admin API", () => {
         key: "2027",
         label: "2027 Annual Review",
         startDate: "2027-01-01",
-        dueDate: "2027-02-28",
+        dueDate: "2027-03-07",
+        assessmentDueDate: "2027-02-21",
+        reviewDueDate: "2027-02-28",
       },
     });
 
     expect(createdReviewPeriodResponse.statusCode).toBe(201);
     const createdReviewPeriod = reviewPeriodResponseSchema.parse(createdReviewPeriodResponse.json()).item;
+    expect(createdReviewPeriod).toMatchObject({
+      dueDate: "2027-03-07",
+      assessmentDueDate: "2027-02-21",
+      reviewDueDate: "2027-02-28",
+    });
 
     const updatedReviewPeriodResponse = await app.inject({
       method: "PATCH",
@@ -305,7 +312,9 @@ describe("review periods, question sets, and assignments admin API", () => {
         key: "2028",
         label: "2028 Annual Review",
         startDate: "2028-01-01",
-        dueDate: "2028-02-28",
+        dueDate: "2028-03-07",
+        assessmentDueDate: "2028-02-21",
+        reviewDueDate: "2028-02-28",
         status: "active",
       },
     });

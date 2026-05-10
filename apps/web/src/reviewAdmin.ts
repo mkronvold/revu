@@ -22,6 +22,8 @@ export type ReviewPeriodDraft = {
   label: string;
   startDate: string;
   dueDate: string;
+  assessmentDueDate: string;
+  reviewDueDate: string;
   status: Exclude<ReviewPeriod["status"], "archived">;
 };
 
@@ -131,6 +133,8 @@ export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod, defaultStatus: 
         label: reviewPeriod.label,
         startDate: reviewPeriod.startDate,
         dueDate: reviewPeriod.dueDate,
+        assessmentDueDate: reviewPeriod.assessmentDueDate,
+        reviewDueDate: reviewPeriod.reviewDueDate,
         status: reviewPeriod.status === "archived" ? "inactive" : reviewPeriod.status,
       }
     : {
@@ -139,6 +143,8 @@ export function toReviewPeriodDraft(reviewPeriod?: ReviewPeriod, defaultStatus: 
         label: '',
         startDate: '',
         dueDate: '',
+        assessmentDueDate: '',
+        reviewDueDate: '',
         status: defaultStatus,
       };
 }
@@ -197,6 +203,8 @@ export function upsertReviewPeriod(
     label: draft.label.trim(),
     startDate: draft.startDate,
     dueDate: draft.dueDate,
+    assessmentDueDate: draft.assessmentDueDate,
+    reviewDueDate: draft.reviewDueDate,
     status: draft.status,
     archivedAt: null,
     archivedByEmployeeId: null,

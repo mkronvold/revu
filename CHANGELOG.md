@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard and review queues
 - Removed the `Assessor 1:` and `Assessor 2:` prefixes from the dashboard hero assessor summary
 - Moved assessment-sync controls onto the Assessments page, renamed that view to `Assessment Queue`, and added a confirmed clear action that removes ready-to-start assessments from the active review period
 - Updated `autoupdate.sh` to restart through `up.sh`, so automatic refreshes apply the same migration and bootstrap path as manual startups

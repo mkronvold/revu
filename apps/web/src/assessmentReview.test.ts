@@ -65,6 +65,7 @@ describe('assessment and review helpers', () => {
       subjectName: 'Elliot Employee',
       targetLabel: 'Self assessment',
       assessorLabel: 'self',
+      dueDate: '2/28/2026',
       nextStepLabel: 'waiting to be accepted',
       statusLabel: 'Submitted',
     });
@@ -72,6 +73,7 @@ describe('assessment and review helpers', () => {
       title: '2026 Peer Assessment - Elliot Employee',
       targetLabel: 'Peer assessment',
       assessorLabel: 'Pat Peer',
+      dueDate: '2/28/2026',
       nextStepLabel: 'waiting to be reviewed',
       statusLabel: 'Accepted',
     });

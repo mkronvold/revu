@@ -266,6 +266,8 @@ export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDr
     label: draft.label.trim(),
     startDate: draft.startDate,
     dueDate: draft.dueDate,
+    assessmentDueDate: draft.assessmentDueDate,
+    reviewDueDate: draft.reviewDueDate,
     status: draft.status,
   };
 
