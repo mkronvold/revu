@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Auto-create the persistent `question_categories` table on first use so category editing still works on older databases before the new migration has been applied
 - Fixed the employee directory table so headers and row columns share the same grid alignment
 - Persisted question categories independently of question rows, added an Edit question categories dialog on Questions, and included the saved category list in backup export/restore flows
 - Added editable automatic-backup settings for enable/disable, backup period, and retention count in File Management, and wired the backup sidecar plus Compose volumes to the shared scheduler config

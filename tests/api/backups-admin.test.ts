@@ -160,6 +160,29 @@ describe("backup and question category admin API", () => {
     expect(meResponse.statusCode).toBe(200);
   });
 
+  it("recreates the question category table on demand for older databases", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+
+    await getPool().query("DROP TABLE IF EXISTS question_categories");
+
+    const updateCategoriesResponse = await app.inject({
+      method: "PUT",
+      url: "/api/v1/question-categories",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        items: ["Growth", "Strategy", "Teamwork"],
+      },
+    });
+
+    expect(updateCategoriesResponse.statusCode).toBe(200);
+    expect(questionCategoriesListResponseSchema.parse(updateCategoriesResponse.json()).items).toEqual(
+      expect.arrayContaining(["Growth", "Strategy", "Teamwork"]),
+    );
+  });
+
   it("supports rotate-passcodes backup exports when requested", async () => {
     const app = await createApp();
     const session = await loginAsAdmin(app);

@@ -2708,6 +2708,7 @@ export class ApiStore {
 
   async replaceQuestionCategories(input: UpdateQuestionCategoriesRequest) {
     return withTransaction(async (client) => {
+      await this.ensureQuestionCategoriesTable(client);
       await client.query("DELETE FROM question_categories");
       await this.insertQuestionCategories(client, input.items);
       return this.loadQuestionCategories(client);
@@ -2928,8 +2929,21 @@ export class ApiStore {
     return normalized.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
   }
 
+  private async ensureQuestionCategoriesTable(client: DbClient) {
+    await client.query(
+      `
+        CREATE TABLE IF NOT EXISTS question_categories (
+          name text PRIMARY KEY,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `,
+    );
+  }
+
   private async insertQuestionCategories(client: DbClient, categories: Array<string | null | undefined>) {
     const normalizedCategories = this.normalizeQuestionCategories(categories);
+    await this.ensureQuestionCategoriesTable(client);
 
     for (const category of normalizedCategories) {
       await client.query(
@@ -2944,6 +2958,7 @@ export class ApiStore {
   }
 
   private async loadQuestionCategories(client: DbClient) {
+    await this.ensureQuestionCategoriesTable(client);
     const result = await client.query<{ category: string }>(
       `
         SELECT category
@@ -3315,6 +3330,7 @@ export class ApiStore {
       throw new ApiError(409, "Question-only restores require assignments and assessments to be cleared first");
     }
 
+    await this.ensureQuestionCategoriesTable(client);
     await client.query("DELETE FROM question_categories");
     await client.query("DELETE FROM question_set_questions");
     await client.query("DELETE FROM question_sets");
@@ -3332,6 +3348,7 @@ export class ApiStore {
     await client.query("DELETE FROM assessment_responses");
     await client.query("DELETE FROM assessments");
     await client.query("DELETE FROM review_period_assignments");
+    await this.ensureQuestionCategoriesTable(client);
     await client.query("DELETE FROM question_categories");
     await client.query("DELETE FROM question_set_questions");
     await client.query("DELETE FROM question_sets");
