@@ -59,7 +59,6 @@ export type AdminAssessmentRow = {
   assessmentStatusLabel: string;
   lifecycleLabel: string;
   nextStepLabel: string;
-  openAssessmentLabel: string;
   reviewActionLabel: string | null;
   workflowActionLabel: string | null;
   summaryBucket: 'drafting' | 'submitted' | 'accepted' | 'ready-for-meeting' | 'scheduled' | 'concluded';
@@ -1271,7 +1270,6 @@ export function buildAdminAssessmentRows(
       assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
       lifecycleLabel: buildAdminAssessmentLifecycleLabel(snapshot, assessment),
       nextStepLabel: buildAdminAssessmentNextStepLabel(summaryBucket),
-      openAssessmentLabel: 'Open assessment',
       reviewActionLabel: assessment.reviewState === 'submitted' ? 'Review submission' : null,
       workflowActionLabel: buildAdminAssessmentSetActionLabel(assessmentSetState),
       summaryBucket,

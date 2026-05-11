@@ -976,7 +976,6 @@ function App() {
         item.assessmentStatusLabel,
         item.lifecycleLabel,
         item.nextStepLabel,
-        item.openAssessmentLabel,
         item.reviewActionLabel ?? '',
         item.workflowActionLabel ?? '',
       ].some((value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery)),
@@ -5630,7 +5629,7 @@ function App() {
                   <span>Assessor</span>
                   <span>Assessment status</span>
                   <span>Workflow stage</span>
-                  <span>Override actions</span>
+                  <span>Actions</span>
                 </div>
                 {filteredAdminAssessmentRows.map((item) => (
                   <div
@@ -5657,16 +5656,6 @@ function App() {
                         <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
                       </span>
                       <span className="employee-row-cell assessment-row-actions">
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleSelectAssessment(item.assessmentId);
-                          }}
-                        >
-                          {item.openAssessmentLabel}
-                        </button>
                         {item.reviewActionLabel ? (
                           <button
                             type="button"

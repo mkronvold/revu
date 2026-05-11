@@ -151,7 +151,6 @@ describe('assessment and review helpers', () => {
       assessmentStatusLabel: 'Scheduled',
       lifecycleLabel: 'Scheduled',
       nextStepLabel: 'Assigned reviewers or an admin can record reviewer conclusions.',
-      openAssessmentLabel: 'Open assessment',
       reviewActionLabel: null,
       workflowActionLabel: 'Conclude review',
       summaryBucket: 'scheduled',

@@ -1635,9 +1635,8 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('2026 Annual Review');
     expect(container.textContent).toContain('Assessment status');
     expect(container.textContent).toContain('Workflow stage');
-    expect(container.textContent).toContain('Override actions');
+    expect(container.textContent).toContain('Actions');
     expect(container.textContent).toContain('Scheduled');
-    expect(container.textContent).toContain('Open assessment');
     expect(container.textContent).toContain('Conclude review');
     expect(container.textContent).toContain(
       'Showing 2 assessments • 0 not started / incomplete • 0 submitted • 0 accepted • 0 ready for meeting • 2 scheduled • 0 concluded',
@@ -1739,13 +1738,11 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
-    const openButton = Array.from(container.querySelectorAll('.assessment-row-actions button')).find(
-      (button) => button.textContent === 'Open assessment',
-    );
-    expect(openButton).toBeTruthy();
+    const row = container.querySelector('.assessment-row-card-clickable') as HTMLDivElement | null;
+    expect(row).toBeTruthy();
 
     await act(async () => {
-      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
