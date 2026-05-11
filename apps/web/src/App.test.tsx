@@ -33,6 +33,7 @@ vi.mock('./api', () => {
     createStoredBackup: vi.fn(),
     createQuestionSet: vi.fn(),
     createReviewPeriod: vi.fn(),
+    deleteAssessmentByAdmin: vi.fn(),
     deleteAssignment: vi.fn(),
     deleteEmployee: vi.fn(),
     deleteReviewPeriod: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock('./api', () => {
     syncAssessmentsToAssignments: vi.fn(),
     submitAssessment: vi.fn(),
     unarchiveReviewPeriod: vi.fn(),
+    updateAssessmentByAdmin: vi.fn(),
     updateAssignment: vi.fn(),
     updateBackupStatus: vi.fn(),
     updateEmployee: vi.fn(),
@@ -91,6 +93,7 @@ import {
   concludeAssessmentSet,
   createStoredBackup,
   createQuestionSet,
+  deleteAssessmentByAdmin,
   deleteEmployee,
   deleteReviewPeriod,
   deleteStoredBackup,
@@ -1634,7 +1637,7 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Workflow stage');
     expect(container.textContent).toContain('Override actions');
     expect(container.textContent).toContain('Scheduled');
-    expect(container.textContent).toContain('View assessment');
+    expect(container.textContent).toContain('Open assessment');
     expect(container.textContent).toContain('Conclude review');
     expect(container.textContent).toContain(
       'Showing 2 assessments • 0 not started / incomplete • 0 submitted • 0 accepted • 0 ready for meeting • 2 scheduled • 0 concluded',
@@ -1752,6 +1755,66 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Self assessment form');
     expect(container.textContent).toContain('Save for later');
     expect(container.textContent).toContain('Submit');
+  });
+
+  it('opens accepted assessments from the row and lets admins delete them', async () => {
+    let currentFoundation = createAssessmentLifecycleSnapshot('accepted');
+    const assessmentId = currentFoundation.assessments[0]!.id;
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundation));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(deleteAssessmentByAdmin).mockImplementation(async (_token, deletedAssessmentId) => {
+      currentFoundation = {
+        ...currentFoundation,
+        assessments: currentFoundation.assessments.filter((assessment) => assessment.id !== deletedAssessmentId),
+      };
+      return {
+        assessmentId: deletedAssessmentId,
+        deleted: true,
+      };
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+
+    const initialRows = container.querySelectorAll('.assessment-row-card').length;
+    const row = container.querySelector('.assessment-row-card-clickable') as HTMLDivElement | null;
+    expect(row).toBeTruthy();
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    expect(container.textContent).toContain('Assessment status');
+    expect(container.textContent).toContain('Save for later');
+    expect(container.textContent).toContain('Accept');
+    expect(container.textContent).toContain('Delete assessment');
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Delete assessment',
+    ) as HTMLButtonElement | undefined;
+
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') === null);
+    expect(deleteAssessmentByAdmin).toHaveBeenCalledWith('session-token', assessmentId);
+    expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(initialRows - 1);
   });
 
   it('opens submitted review actions from the admin assessments page', async () => {

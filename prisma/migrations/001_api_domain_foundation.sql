@@ -203,7 +203,7 @@ AS $$
     FROM assessments a
     JOIN review_periods rp ON rp.id = a.review_period_id
     WHERE a.id = p_assessment_id
-      AND (a.review_state IN ('accepted', 'reviewed') OR rp.status = 'archived')
+      AND (a.review_state IN ('reviewed') OR rp.status = 'archived')
   );
 $$;
 
@@ -332,7 +332,7 @@ BEGIN
   v_assessment_id := COALESCE(NEW.assessment_id, OLD.assessment_id);
 
   IF assessment_is_locked(v_assessment_id) THEN
-    RAISE EXCEPTION 'Accepted, reviewed, or archived assessments are read-only';
+    RAISE EXCEPTION 'Reviewed or archived assessments are read-only';
   END IF;
 
   RETURN COALESCE(NEW, OLD);

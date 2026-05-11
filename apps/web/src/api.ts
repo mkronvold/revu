@@ -1,5 +1,6 @@
 import {
   acceptAssessmentRequestSchema,
+  adminUpdateAssessmentRequestSchema,
   apiIndexResponseSchema,
   assessmentItemResponseSchema,
   assessmentSetRequestSchema,
@@ -35,6 +36,7 @@ import {
   createQuestionSetRequestSchema,
   createReviewPeriodRequestSchema,
   deleteAssignmentResponseSchema,
+  deleteAssessmentResponseSchema,
   deleteEmployeeResponseSchema,
   deleteReviewPeriodResponseSchema,
   employeeResponseSchema,
@@ -65,6 +67,7 @@ import {
   updateWorkflowSettingsRequestSchema,
   workflowSettingsResponseSchema,
   type AcceptAssessmentRequest,
+  type AdminUpdateAssessmentRequest,
   type AssessmentSetRequest,
   type AssessmentsListQuery,
   type AuthLoginRequest,
@@ -758,6 +761,17 @@ export function acceptAssessment(token: string, assessmentId: string, payload: A
   );
 }
 
+export function updateAssessmentByAdmin(token: string, assessmentId: string, payload: AdminUpdateAssessmentRequest) {
+  return request(
+    `/assessments/${assessmentId}/admin`,
+    assessmentItemResponseSchema,
+    withAuthorization(token, {
+      method: 'PATCH',
+      body: JSON.stringify(adminUpdateAssessmentRequestSchema.parse(payload)),
+    }),
+  );
+}
+
 export function rejectAssessmentToDraft(
   token: string,
   assessmentId: string,
@@ -769,6 +783,16 @@ export function rejectAssessmentToDraft(
     withAuthorization(token, {
       method: 'POST',
       body: JSON.stringify(rejectAssessmentToDraftRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function deleteAssessmentByAdmin(token: string, assessmentId: string) {
+  return request(
+    `/assessments/${assessmentId}`,
+    deleteAssessmentResponseSchema,
+    withAuthorization(token, {
+      method: 'DELETE',
     }),
   );
 }

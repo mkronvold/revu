@@ -443,7 +443,7 @@ export const apiIndexExample: ApiIndexResponse = {
 export const domainRulesExample: DomainRulesResponse = {
   postgresIsSourceOfTruth: true,
   employeeAssessorMatchesPeerAssignment: true,
-  acceptedAssessmentsAreImmutable: true,
+  acceptedAssessmentsAreImmutable: false,
   singleActiveQuestionSetPerTarget: true,
   archiveIsDrivenByReviewPeriod: true,
   employeeAssessmentSetsTransitionTogether: true,

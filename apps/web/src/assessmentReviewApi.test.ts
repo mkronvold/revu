@@ -4,32 +4,38 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./api', () => ({
   acceptAssessment: vi.fn(),
   concludeAssessmentSet: vi.fn(),
+  deleteAssessmentByAdmin: vi.fn(),
   markAssessmentSetReadyForMeeting: vi.fn(),
   reassignAssessment: vi.fn(),
   rejectAssessmentToDraft: vi.fn(),
   saveAssessmentDraft: vi.fn(),
   scheduleAssessmentSet: vi.fn(),
   submitAssessment: vi.fn(),
+  updateAssessmentByAdmin: vi.fn(),
 }));
 
 import {
   acceptAssessment,
   concludeAssessmentSet,
+  deleteAssessmentByAdmin,
   markAssessmentSetReadyForMeeting,
   reassignAssessment,
   saveAssessmentDraft,
   scheduleAssessmentSet,
   submitAssessment,
+  updateAssessmentByAdmin,
 } from './api';
 import {
   acceptReviewToApi,
   buildAssessmentResponsePayload,
   concludeAssessmentSetInApi,
+  deleteAssessmentByAdminInApi,
   markAssessmentSetReadyForMeetingInApi,
   reassignAssessmentInApi,
   saveAssessmentDraftToApi,
   scheduleAssessmentSetInApi,
   submitAssessmentToApi,
+  updateAssessmentByAdminInApi,
 } from './assessmentReviewApi';
 import { createAssessmentWorkflowSnapshot, getAssessmentEditor, getReviewPanel } from './assessmentReview';
 
@@ -218,5 +224,60 @@ describe('assessment review API orchestration', () => {
       managerId: foundationSnapshotExample.employees[0]!.id,
       assessorId: foundationSnapshotExample.employees[2]!.id,
     });
+  });
+
+  it('routes admin assessment override and delete actions through the admin endpoints', async () => {
+    const snapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+          ? {
+              ...assessment,
+              reviewState: 'accepted',
+              acceptedAt: '2026-01-20T00:00:00.000Z',
+              acceptedByEmployeeId: '11111111-1111-4111-8111-111111111111',
+              isReadOnly: true,
+            }
+          : assessment,
+      ),
+    });
+    const admin = employeesListExample.items.find((employee) => employee.role === 'admin')!;
+    const editor = getAssessmentEditor(snapshot, employeesListExample.items, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', admin)!;
+
+    vi.mocked(updateAssessmentByAdmin).mockResolvedValue({
+      item: foundationSnapshotExample.assessments[0]!,
+    });
+    vi.mocked(deleteAssessmentByAdmin).mockResolvedValue({
+      assessmentId: editor.assessmentId,
+      deleted: true,
+    });
+
+    const updateResult = await updateAssessmentByAdminInApi('session-token', editor, {
+      'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa': 'Updated answer',
+    }, {
+      reviewState: 'scheduled',
+      managerNotes: '  Ready for reviewer meeting.  ',
+    });
+    const deleteResult = await deleteAssessmentByAdminInApi('session-token', editor);
+
+    expect(updateAssessmentByAdmin).toHaveBeenCalledWith('session-token', editor.assessmentId, {
+      responses: [
+        {
+          questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+          order: 1,
+          response: 'Updated answer',
+        },
+        {
+          questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+          order: 2,
+          response: 'I successfully launched our new workflow.',
+        },
+      ],
+      managerNotes: 'Ready for reviewer meeting.',
+      reviewState: 'scheduled',
+    });
+    expect(deleteAssessmentByAdmin).toHaveBeenCalledWith('session-token', editor.assessmentId);
+    expect(updateResult.notice).toBe('Assessment updated.');
+    expect(deleteResult.notice).toBe('Assessment deleted.');
   });
 });

@@ -911,6 +911,16 @@ button.employee-row:focus-visible {
   background: transparent;
 }
 
+.assessment-row-card-clickable {
+  cursor: pointer;
+}
+
+.assessment-row-card-clickable:hover .assessment-row,
+.assessment-row-card-clickable:focus-visible .assessment-row {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: rgba(59, 130, 246, 0.05);
+}
+
 .assessment-row {
   display: grid;
   grid-column: 1 / -1;
@@ -948,6 +958,29 @@ button.employee-row:focus-visible {
 
 .assessment-row-actions button {
   white-space: nowrap;
+}
+
+.assessment-admin-controls {
+  display: grid;
+  gap: 1rem;
+}
+
+.assessment-admin-notes,
+.assessment-admin-state-control {
+  display: grid;
+  gap: 0.35rem;
+  color: #334155;
+}
+
+.assessment-admin-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.assessment-admin-state-control {
+  flex: 1 1 14rem;
 }
 
 .employee-row-card {

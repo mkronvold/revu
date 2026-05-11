@@ -79,7 +79,7 @@ describe("API/domain foundation", () => {
     const apiIndex = apiIndexResponseSchema.parse(indexResponse.json());
     expect(apiIndex.resources.length).toBeGreaterThan(0);
     expect(apiIndex.seededAccountsAvailable).toBe(true);
-    expect(domainRulesResponseSchema.parse(rulesResponse.json()).acceptedAssessmentsAreImmutable).toBe(true);
+    expect(domainRulesResponseSchema.parse(rulesResponse.json()).acceptedAssessmentsAreImmutable).toBe(false);
     expect(employeesListResponseSchema.parse(employeesResponse.json()).items.length).toBeGreaterThan(0);
     expect(reviewPeriodsListResponseSchema.parse(periodsResponse.json()).items.length).toBe(2);
     expect(questionSetsListResponseSchema.parse(questionSetsResponse.json()).items.length).toBe(4);
@@ -155,6 +155,6 @@ describe("API/domain foundation", () => {
     expect(sql).toContain("assignment_requires_peer_assessor");
     expect(sql).toContain("assessment_target_matches_relationship");
     expect(sql).toContain("prevent_assessment_response_mutation_if_locked");
-    expect(sql).toContain("Accepted, reviewed, or archived assessments are read-only");
+    expect(sql).toContain("Reviewed or archived assessments are read-only");
   });
 });

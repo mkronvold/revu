@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Made the admin Assessments page open the assessment form from any row click, added an admin-only delete action, and introduced full admin override editing so admins can update responses/notes and move assessments directly between draft, submitted, accepted, ready-for-meeting, scheduled, and concluded states
 - Fixed inactive-to-active question-set copying so questions with blank categories are normalized to uncategorized instead of failing API validation
 - Updated workflow docs and default workflow content so README, navigation copy, and seeded markdown now describe the dashboard-led `new` → `draft` → `submitted` → `accepted` → `ready_for_meeting` → `scheduled` → `concluded` lifecycle without the old review-queue wording
 - Refreshed the admin-only Assessments page around the new workflow lifecycle so summaries, filters, row details, and override actions now track not started / incomplete, submitted, accepted, ready for meeting, scheduled, and concluded work without the old reviewed terminology

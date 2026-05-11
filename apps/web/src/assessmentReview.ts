@@ -93,6 +93,7 @@ export type AssessmentEditorQuestionGroup = {
 
 export type AssessmentEditor = {
   assessmentId: string;
+  reviewState: Assessment['reviewState'];
   title: string;
   statusLabel: string;
   detail: string;
@@ -107,9 +108,12 @@ export type AssessmentEditor = {
   footerMarkdown: string;
   managerNotes: string | null;
   isReadOnly: boolean;
+  isAdminOverride: boolean;
   isComplete: boolean;
   canSave: boolean;
   canSubmit: boolean;
+  canAccept: boolean;
+  canDelete: boolean;
   questions: AssessmentEditorQuestion[];
 };
 
@@ -836,6 +840,7 @@ export function getAssessmentEditor(
   snapshot: AssessmentWorkflowSnapshot,
   employees: Employee[],
   assessmentId: string,
+  user?: Employee | null,
 ): AssessmentEditor | null {
   const assessment = snapshot.assessments.find((candidate) => candidate.id === assessmentId);
   if (!assessment) {
@@ -845,11 +850,13 @@ export function getAssessmentEditor(
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const questionSet = getQuestionSet(snapshot, assessment);
   const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
-  const readOnly = assessment.isReadOnly || assessment.archiveState === 'archived' || reviewPeriod?.status === 'archived';
+  const isAdminOverride = user?.role === 'admin' && assessment.archiveState !== 'archived' && reviewPeriod?.status !== 'archived';
+  const readOnly = !isAdminOverride && (assessment.isReadOnly || assessment.archiveState === 'archived' || reviewPeriod?.status === 'archived');
   const isComplete = isAssessmentComplete(snapshot, assessment);
 
   return {
     assessmentId: assessment.id,
+    reviewState: assessment.reviewState,
     title: buildAssessmentTitle(assessment, snapshot, employeesById),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     detail: buildAssessmentDetail(assessment, snapshot, employeesById),
@@ -864,9 +871,12 @@ export function getAssessmentEditor(
     footerMarkdown: questionSet?.footerMarkdown ?? '',
     managerNotes: assessment.managerNotes,
     isReadOnly: Boolean(readOnly),
+    isAdminOverride,
     isComplete,
-    canSave: !readOnly && assessment.reviewState !== 'submitted',
-    canSubmit: !readOnly && assessment.reviewState !== 'submitted',
+    canSave: !readOnly && (isAdminOverride || assessment.reviewState !== 'submitted'),
+    canSubmit: !readOnly && (isAdminOverride || assessment.reviewState !== 'submitted'),
+    canAccept: isAdminOverride,
+    canDelete: isAdminOverride,
     questions: getAssessmentQuestionRows(snapshot, assessment),
   };
 }
@@ -1261,7 +1271,7 @@ export function buildAdminAssessmentRows(
       assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
       lifecycleLabel: buildAdminAssessmentLifecycleLabel(snapshot, assessment),
       nextStepLabel: buildAdminAssessmentNextStepLabel(summaryBucket),
-      openAssessmentLabel: summaryBucket === 'drafting' ? 'Open assessment' : 'View assessment',
+      openAssessmentLabel: 'Open assessment',
       reviewActionLabel: assessment.reviewState === 'submitted' ? 'Review submission' : null,
       workflowActionLabel: buildAdminAssessmentSetActionLabel(assessmentSetState),
       summaryBucket,

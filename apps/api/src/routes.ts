@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import {
   acceptAssessmentRequestSchema,
+  adminUpdateAssessmentRequestSchema,
   apiIndexResponseSchema,
   apiIndexExample,
   assessmentItemResponseSchema,
@@ -37,6 +38,7 @@ import {
   createQuestionSetRequestSchema,
   createReviewPeriodRequestSchema,
   deleteAssignmentResponseSchema,
+  deleteAssessmentResponseSchema,
   deleteEmployeeResponseSchema,
   deleteReviewPeriodResponseSchema,
   domainRulesExample,
@@ -1056,6 +1058,29 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return assessmentItemResponseSchema.parse({
         item: await store.rejectAssessmentToDraft(session, assessmentId, body.managerNotes),
       });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/assessments/:id/admin", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
+      const body = parseWithSchema(adminUpdateAssessmentRequestSchema, request.body ?? {});
+      return assessmentItemResponseSchema.parse({
+        item: await store.updateAssessmentByAdmin(session, assessmentId, body),
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.delete("/assessments/:id", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
+      return deleteAssessmentResponseSchema.parse(await store.deleteAssessmentByAdmin(session, assessmentId));
     } catch (error) {
       return sendError(reply, error);
     }

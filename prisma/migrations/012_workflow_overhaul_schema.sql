@@ -108,7 +108,7 @@ AS $$
     JOIN review_periods rp ON rp.id = a.review_period_id
     WHERE a.id = p_assessment_id
       AND (
-        a.review_state IN ('accepted', 'ready_for_meeting', 'scheduled', 'concluded', 'reviewed')
+        a.review_state IN ('reviewed')
         OR a.archive_state = 'archived'
         OR rp.status = 'archived'
       )
@@ -129,7 +129,7 @@ BEGIN
 
   IF v_review_period_status = 'archived' THEN
     IF (to_jsonb(NEW) - 'archive_state' - 'updated_at') <> (to_jsonb(OLD) - 'archive_state' - 'updated_at') THEN
-      RAISE EXCEPTION 'Accepted, reviewed, or archived assessments are read-only';
+      RAISE EXCEPTION 'Reviewed or archived assessments are read-only';
     END IF;
 
     RETURN NEW;
@@ -189,40 +189,24 @@ BEGIN
   FROM employees
   WHERE id = NEW.employee_id;
 
-  IF EXISTS (
-    SELECT 1
-    FROM assessments a
-    WHERE a.review_period_id = NEW.review_period_id
-      AND a.employee_id = NEW.employee_id
-      AND a.archive_state = 'active'
-      AND a.review_state = 'concluded'
-  ) THEN
-    IF EXISTS (
-      SELECT 1
-      FROM assessments a
-      WHERE a.review_period_id = NEW.review_period_id
-        AND a.employee_id = NEW.employee_id
-        AND a.archive_state = 'active'
+  IF NEW.review_state = 'concluded'
+    AND (
+      (
+        v_reviewer1_employee_id IS NOT NULL
         AND (
-          a.review_state <> 'concluded'
-          OR (
-            v_reviewer1_employee_id IS NOT NULL
-            AND (
-              a.reviewer1_completed_at IS NULL
-              OR a.reviewer1_completed_by_employee_id IS NULL
-            )
-          )
-          OR (
-            v_reviewer2_employee_id IS NOT NULL
-            AND (
-              a.reviewer2_completed_at IS NULL
-              OR a.reviewer2_completed_by_employee_id IS NULL
-            )
-          )
+          NEW.reviewer1_completed_at IS NULL
+          OR NEW.reviewer1_completed_by_employee_id IS NULL
         )
+      )
+      OR (
+        v_reviewer2_employee_id IS NOT NULL
+        AND (
+          NEW.reviewer2_completed_at IS NULL
+          OR NEW.reviewer2_completed_by_employee_id IS NULL
+        )
+      )
     ) THEN
-      RAISE EXCEPTION 'Employee assessment sets can only be concluded after every active assessment records each assigned reviewer conclusion';
-    END IF;
+    RAISE EXCEPTION 'Concluded assessments must record each assigned reviewer completion';
   END IF;
 
   RETURN NULL;
@@ -234,39 +218,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF NEW.review_state = OLD.review_state THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'new' AND NEW.review_state IN ('draft', 'submitted') THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'draft' AND NEW.review_state IN ('draft', 'submitted') THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'submitted' AND NEW.review_state IN ('draft', 'accepted') THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'accepted' AND NEW.review_state IN ('ready_for_meeting', 'reviewed') THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'ready_for_meeting' AND NEW.review_state = 'scheduled' THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'scheduled' AND NEW.review_state = 'concluded' THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.review_state = 'concluded' AND NEW.review_state = 'scheduled' THEN
-    RETURN NEW;
-  END IF;
-
-  RAISE EXCEPTION 'Invalid assessment review transition: % -> %', OLD.review_state, NEW.review_state;
+  RETURN NEW;
 END;
 $$;
 

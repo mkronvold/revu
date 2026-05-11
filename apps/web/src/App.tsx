@@ -1,4 +1,5 @@
 import type {
+  AssessmentReviewState,
   AuthSession,
   BackupSchedule,
   BackupRestoreScope,
@@ -74,11 +75,13 @@ import {
 import {
   acceptReviewToApi,
   concludeAssessmentSetInApi,
+  deleteAssessmentByAdminInApi,
   markAssessmentSetReadyForMeetingInApi,
   rejectReviewToApi,
   saveAssessmentDraftToApi,
   scheduleAssessmentSetInApi,
   submitAssessmentToApi,
+  updateAssessmentByAdminInApi,
 } from './assessmentReviewApi';
 import {
   buildAssignmentRows,
@@ -205,6 +208,27 @@ const assessmentResponseOptions = {
   Exclude<QuestionSetQuestionDraft['type'], 'narrative'>,
   readonly { value: string; label: string }[]
 >;
+
+const adminAssessmentStateOptions = [
+  { value: 'new', label: 'Not started' },
+  { value: 'draft', label: 'Incomplete' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'ready_for_meeting', label: 'Ready for meeting' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'concluded', label: 'Concluded' },
+] as const satisfies readonly { value: Exclude<AssessmentReviewState, 'reviewed'>; label: string }[];
+
+function normalizeAdminAssessmentState(
+  reviewState: AssessmentReviewState,
+): Exclude<AssessmentReviewState, 'reviewed'> {
+  return reviewState === 'reviewed' ? 'accepted' : reviewState;
+}
+
+function normalizeOptionalAssessmentNotes(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function serializeQuestionSetDraft(draft: QuestionSetDraft) {
   return JSON.stringify(draft);
@@ -650,6 +674,10 @@ function App() {
   const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<'all' | AdminAssessmentRow['target']>('all');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
+  const [assessmentManagerNotesDraft, setAssessmentManagerNotesDraft] = useState('');
+  const [assessmentAdminStateDraft, setAssessmentAdminStateDraft] = useState<Exclude<AssessmentReviewState, 'reviewed'>>(
+    'new',
+  );
   const [workflowNotice, setWorkflowNotice] = useState('');
   const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
@@ -1000,9 +1028,9 @@ function App() {
   const selectedAssessmentEditor = useMemo(
     () =>
       assessmentWorkflow && selectedAssessmentId
-        ? getAssessmentEditor(assessmentWorkflow, workflowEmployees, selectedAssessmentId)
+        ? getAssessmentEditor(assessmentWorkflow, workflowEmployees, selectedAssessmentId, sessionUser)
         : null,
-    [assessmentWorkflow, selectedAssessmentId, workflowEmployees],
+    [assessmentWorkflow, selectedAssessmentId, sessionUser, workflowEmployees],
   );
   const selectedReviewPanel = useMemo(
     () =>
@@ -1116,6 +1144,15 @@ function App() {
       (question) => (assessmentResponsesDraft[question.questionId] ?? question.response) !== question.response,
     );
   }, [assessmentResponsesDraft, selectedAssessmentEditor]);
+  const hasAssessmentDraftResponses = useMemo(() => {
+    if (!selectedAssessmentEditor) {
+      return false;
+    }
+
+    return selectedAssessmentEditor.questions.some(
+      (question) => (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
+    );
+  }, [assessmentResponsesDraft, selectedAssessmentEditor]);
   const isAssessmentDraftComplete = useMemo(() => {
     if (!selectedAssessmentEditor) {
       return false;
@@ -1128,6 +1165,24 @@ function App() {
       )
     );
   }, [assessmentResponsesDraft, selectedAssessmentEditor]);
+  const normalizedAssessmentManagerNotesDraft = useMemo(
+    () => normalizeOptionalAssessmentNotes(assessmentManagerNotesDraft),
+    [assessmentManagerNotesDraft],
+  );
+  const isAssessmentManagerNotesDirty = useMemo(() => {
+    if (!selectedAssessmentEditor || !selectedAssessmentEditor.isAdminOverride) {
+      return false;
+    }
+
+    return normalizedAssessmentManagerNotesDraft !== selectedAssessmentEditor.managerNotes;
+  }, [normalizedAssessmentManagerNotesDraft, selectedAssessmentEditor]);
+  const isAssessmentAdminStateDirty = useMemo(() => {
+    if (!selectedAssessmentEditor || !selectedAssessmentEditor.isAdminOverride) {
+      return false;
+    }
+
+    return assessmentAdminStateDraft !== normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState);
+  }, [assessmentAdminStateDraft, selectedAssessmentEditor]);
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -1453,12 +1508,16 @@ function App() {
   useEffect(() => {
     if (!selectedAssessmentEditor) {
       setAssessmentResponsesDraft({});
+      setAssessmentManagerNotesDraft('');
+      setAssessmentAdminStateDraft('new');
       return;
     }
 
     setAssessmentResponsesDraft(
       Object.fromEntries(selectedAssessmentEditor.questions.map((question) => [question.questionId, question.response] as const)),
     );
+    setAssessmentManagerNotesDraft(selectedAssessmentEditor.managerNotes ?? '');
+    setAssessmentAdminStateDraft(normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState));
   }, [selectedAssessmentEditor]);
 
   useEffect(() => {
@@ -1857,6 +1916,15 @@ function App() {
 
   const handleSelectAssessment = (assessmentId: string) => {
     setSelectedAssessmentId(assessmentId);
+  };
+
+  const handleAssessmentRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, assessmentId: string) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    handleSelectAssessment(assessmentId);
   };
 
   const openAssessmentSetWorkflowDialog = (reviewPeriodId: string, employeeId: string) => {
@@ -2825,7 +2893,18 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
+      const { notice } = selectedAssessmentEditor.isAdminOverride
+        ? await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
+            reviewState:
+              normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'new'
+              || normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'draft'
+                ? hasAssessmentDraftResponses
+                  ? 'draft'
+                  : 'new'
+                : normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState),
+            managerNotes: assessmentManagerNotesDraft,
+          })
+        : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -2845,13 +2924,95 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = isAssessmentDraftComplete
-        ? await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft)
-        : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
+      const { notice } = selectedAssessmentEditor.isAdminOverride
+        ? isAssessmentDraftComplete
+          ? await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
+              reviewState: 'submitted',
+              managerNotes: assessmentManagerNotesDraft,
+            })
+          : await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
+              reviewState: hasAssessmentDraftResponses ? 'draft' : 'new',
+              managerNotes: assessmentManagerNotesDraft,
+            })
+        : isAssessmentDraftComplete
+          ? await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft)
+          : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
       await refreshFoundationSnapshot();
       setWorkflowNotice(
         isAssessmentDraftComplete ? notice : 'Assessment saved for later. Complete every response before submitting.',
       );
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingAssessmentWorkflow(false);
+    }
+  };
+
+  const handleAcceptAssessmentAsAdmin = async () => {
+    if (!selectedAssessmentEditor || !selectedAssessmentEditor.isAdminOverride || !sessionToken) {
+      return;
+    }
+
+    setIsSavingAssessmentWorkflow(true);
+    setAppError('');
+    setWorkflowNotice('');
+
+    try {
+      const { notice } = await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
+        reviewState: 'accepted',
+        managerNotes: assessmentManagerNotesDraft,
+      });
+      await refreshFoundationSnapshot();
+      setWorkflowNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingAssessmentWorkflow(false);
+    }
+  };
+
+  const handleUpdateAssessmentStatusAsAdmin = async () => {
+    if (!selectedAssessmentEditor || !selectedAssessmentEditor.isAdminOverride || !sessionToken) {
+      return;
+    }
+
+    setIsSavingAssessmentWorkflow(true);
+    setAppError('');
+    setWorkflowNotice('');
+
+    try {
+      const { notice } = await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
+        reviewState: assessmentAdminStateDraft,
+        managerNotes: assessmentManagerNotesDraft,
+      });
+      await refreshFoundationSnapshot();
+      setWorkflowNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingAssessmentWorkflow(false);
+    }
+  };
+
+  const handleDeleteAssessmentAsAdmin = async () => {
+    if (!selectedAssessmentEditor || !selectedAssessmentEditor.canDelete || !sessionToken) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${selectedAssessmentEditor.title}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSavingAssessmentWorkflow(true);
+    setAppError('');
+    setWorkflowNotice('');
+
+    try {
+      const { notice } = await deleteAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor);
+      closeAssessmentDialog();
+      await refreshFoundationSnapshot();
+      setWorkflowNotice(notice);
     } catch (error) {
       setAppError(getErrorMessage(error));
     } finally {
@@ -5181,7 +5342,50 @@ function App() {
               </section>
             ))}
           </div>
-          {selectedAssessmentEditor.managerNotes ? (
+          {selectedAssessmentEditor.isAdminOverride ? (
+            <section className="assessment-admin-controls">
+              <label className="assessment-admin-notes">
+                <span>Manager or admin notes</span>
+                <textarea
+                  rows={4}
+                  disabled={isSavingAssessmentWorkflow}
+                  value={assessmentManagerNotesDraft}
+                  onChange={(event) => setAssessmentManagerNotesDraft(event.target.value)}
+                />
+              </label>
+              <div className="assessment-admin-state-row">
+                <label className="assessment-admin-state-control">
+                  <span>Assessment status</span>
+                  <select
+                    disabled={isSavingAssessmentWorkflow}
+                    value={assessmentAdminStateDraft}
+                    onChange={(event) =>
+                      setAssessmentAdminStateDraft(
+                        event.target.value as Exclude<AssessmentReviewState, 'reviewed'>,
+                      )
+                    }
+                  >
+                    {adminAssessmentStateOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={
+                    isSavingAssessmentWorkflow
+                    || (!isAssessmentAdminStateDirty && !isAssessmentDraftDirty && !isAssessmentManagerNotesDirty)
+                  }
+                  onClick={() => void handleUpdateAssessmentStatusAsAdmin()}
+                >
+                  Update status
+                </button>
+              </div>
+            </section>
+          ) : selectedAssessmentEditor.managerNotes ? (
             <div className="toolbar-note">
               <p>
                 <strong>Review notes:</strong> {selectedAssessmentEditor.managerNotes}
@@ -5195,6 +5399,18 @@ function App() {
             />
           ) : null}
           <div className="dialog-footer">
+            <div className="dialog-footer-start">
+              {selectedAssessmentEditor.canDelete ? (
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={isSavingAssessmentWorkflow}
+                  onClick={() => void handleDeleteAssessmentAsAdmin()}
+                >
+                  Delete assessment
+                </button>
+              ) : null}
+            </div>
             <div className="dialog-footer-end">
               <button
                 type="button"
@@ -5210,6 +5426,15 @@ function App() {
               >
                 Submit
               </button>
+              {selectedAssessmentEditor.canAccept ? (
+                <button
+                  type="button"
+                  disabled={!isAssessmentDraftComplete || isSavingAssessmentWorkflow}
+                  onClick={() => void handleAcceptAssessmentAsAdmin()}
+                >
+                  Accept
+                </button>
+              ) : null}
             </div>
           </div>
         </section>
@@ -5408,7 +5633,14 @@ function App() {
                   <span>Override actions</span>
                 </div>
                 {filteredAdminAssessmentRows.map((item) => (
-                  <div className="assessment-row-card" key={item.assessmentId}>
+                  <div
+                    className="assessment-row-card assessment-row-card-clickable"
+                    key={item.assessmentId}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelectAssessment(item.assessmentId)}
+                    onKeyDown={(event) => handleAssessmentRowKeyDown(event, item.assessmentId)}
+                  >
                     <div className="assessment-row">
                       <span className="employee-row-cell assessment-row-primary">
                         <strong>{item.subjectName}</strong>
@@ -5425,18 +5657,34 @@ function App() {
                         <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
                       </span>
                       <span className="employee-row-cell assessment-row-actions">
-                        <button type="button" className="secondary-button" onClick={() => handleSelectAssessment(item.assessmentId)}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleSelectAssessment(item.assessmentId);
+                          }}
+                        >
                           {item.openAssessmentLabel}
                         </button>
                         {item.reviewActionLabel ? (
-                          <button type="button" onClick={() => handleSelectReviewAssessment(item.assessmentId)}>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleSelectReviewAssessment(item.assessmentId);
+                            }}
+                          >
                             {item.reviewActionLabel}
                           </button>
                         ) : null}
                         {item.workflowActionLabel ? (
                           <button
                             type="button"
-                            onClick={() => openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId);
+                            }}
                           >
                             {item.workflowActionLabel}
                           </button>

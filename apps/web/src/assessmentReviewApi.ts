@@ -1,5 +1,6 @@
 import type {
   AcceptAssessmentRequest,
+  AssessmentReviewState,
   AssessmentReviewerRole,
   AssessmentResponse,
   ConcludeAssessmentRequest,
@@ -10,12 +11,14 @@ import type {
 import {
   acceptAssessment,
   concludeAssessmentSet,
+  deleteAssessmentByAdmin,
   markAssessmentSetReadyForMeeting,
   reassignAssessment,
   rejectAssessmentToDraft,
   saveAssessmentDraft,
   scheduleAssessmentSet,
   submitAssessment,
+  updateAssessmentByAdmin,
 } from './api';
 import type { AssessmentEditor, AssessmentSetQueueItem, ReviewPanel } from './assessmentReview';
 
@@ -68,6 +71,36 @@ export async function submitAssessmentToApi(
   return {
     assessment: response.item,
     notice: 'Assessment submitted for manager or admin acceptance.',
+  };
+}
+
+export async function updateAssessmentByAdminInApi(
+  token: string,
+  editor: AssessmentEditor,
+  draftResponses: Record<string, string>,
+  options: {
+    reviewState: Exclude<AssessmentReviewState, 'reviewed'>;
+    managerNotes: string;
+  },
+) {
+  const response = await updateAssessmentByAdmin(token, editor.assessmentId, {
+    responses: buildAssessmentResponsePayload(editor, draftResponses),
+    managerNotes: normalizeOptionalNotes(options.managerNotes),
+    reviewState: options.reviewState,
+  });
+
+  return {
+    assessment: response.item,
+    notice: 'Assessment updated.',
+  };
+}
+
+export async function deleteAssessmentByAdminInApi(token: string, editor: AssessmentEditor) {
+  const response = await deleteAssessmentByAdmin(token, editor.assessmentId);
+
+  return {
+    result: response,
+    notice: 'Assessment deleted.',
   };
 }
 

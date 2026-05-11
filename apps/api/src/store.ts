@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { basename, dirname, extname, join } from "node:path";
 
 import type {
+  AdminUpdateAssessmentRequest,
   Assessment,
   AssessmentArchiveState,
   AssessmentReviewerRole,
@@ -30,6 +31,7 @@ import type {
   CreateQuestionInput,
   CreateQuestionSetRequest,
   CreateReviewPeriodRequest,
+  DeleteAssessmentResponse,
   Employee,
   EmployeeAdmin,
   EmployeeAuthMetadata,
@@ -400,6 +402,7 @@ function mapDatabaseError(error: unknown) {
       case "Question sets for archived review periods are read-only":
       case "Assignments for archived review periods are read-only":
       case "Accepted, reviewed, or archived assessments are read-only":
+      case "Reviewed or archived assessments are read-only":
       case "Accepted, reviewed, or archived assessments have immutable authored fields":
       case "Assessment review state cannot change after review period archive":
         return new ApiError(409, error.message);
@@ -633,6 +636,26 @@ export class ApiStore {
     );
     await client.query(
       `
+        CREATE OR REPLACE FUNCTION assessment_is_locked(p_assessment_id UUID)
+        RETURNS BOOLEAN
+        LANGUAGE sql
+        AS $$
+          SELECT EXISTS (
+            SELECT 1
+            FROM assessments a
+            JOIN review_periods rp ON rp.id = a.review_period_id
+            WHERE a.id = p_assessment_id
+              AND (
+                a.review_state IN ('reviewed')
+                OR a.archive_state = 'archived'
+                OR rp.status = 'archived'
+              )
+          );
+        $$;
+      `,
+    );
+    await client.query(
+      `
         CREATE OR REPLACE FUNCTION enforce_employee_assessment_set_conclusion()
         RETURNS TRIGGER
         LANGUAGE plpgsql
@@ -646,40 +669,24 @@ export class ApiStore {
           FROM employees
           WHERE id = NEW.employee_id;
 
-          IF EXISTS (
-            SELECT 1
-            FROM assessments a
-            WHERE a.review_period_id = NEW.review_period_id
-              AND a.employee_id = NEW.employee_id
-              AND a.archive_state = 'active'
-              AND a.review_state = 'concluded'
-          ) THEN
-            IF EXISTS (
-              SELECT 1
-              FROM assessments a
-              WHERE a.review_period_id = NEW.review_period_id
-                AND a.employee_id = NEW.employee_id
-                AND a.archive_state = 'active'
+          IF NEW.review_state = 'concluded'
+            AND (
+              (
+                v_reviewer1_employee_id IS NOT NULL
                 AND (
-                  a.review_state <> 'concluded'
-                  OR (
-                    v_reviewer1_employee_id IS NOT NULL
-                    AND (
-                      a.reviewer1_completed_at IS NULL
-                      OR a.reviewer1_completed_by_employee_id IS NULL
-                    )
-                  )
-                  OR (
-                    v_reviewer2_employee_id IS NOT NULL
-                    AND (
-                      a.reviewer2_completed_at IS NULL
-                      OR a.reviewer2_completed_by_employee_id IS NULL
-                    )
-                  )
+                  NEW.reviewer1_completed_at IS NULL
+                  OR NEW.reviewer1_completed_by_employee_id IS NULL
                 )
+              )
+              OR (
+                v_reviewer2_employee_id IS NOT NULL
+                AND (
+                  NEW.reviewer2_completed_at IS NULL
+                  OR NEW.reviewer2_completed_by_employee_id IS NULL
+                )
+              )
             ) THEN
-              RAISE EXCEPTION 'Employee assessment sets can only be concluded after every active assessment records each assigned reviewer conclusion';
-            END IF;
+            RAISE EXCEPTION 'Concluded assessments must record each assigned reviewer completion';
           END IF;
 
           RETURN NULL;
@@ -694,39 +701,7 @@ export class ApiStore {
         LANGUAGE plpgsql
         AS $$
         BEGIN
-          IF NEW.review_state = OLD.review_state THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'new' AND NEW.review_state IN ('draft', 'submitted') THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'draft' AND NEW.review_state IN ('draft', 'submitted') THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'submitted' AND NEW.review_state IN ('draft', 'accepted') THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'accepted' AND NEW.review_state IN ('ready_for_meeting', 'reviewed') THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'ready_for_meeting' AND NEW.review_state = 'scheduled' THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'scheduled' AND NEW.review_state = 'concluded' THEN
-            RETURN NEW;
-          END IF;
-
-          IF OLD.review_state = 'concluded' AND NEW.review_state = 'scheduled' THEN
-            RETURN NEW;
-          END IF;
-
-          RAISE EXCEPTION 'Invalid assessment review transition: % -> %', OLD.review_state, NEW.review_state;
+          RETURN NEW;
         END;
         $$;
       `,
@@ -1759,6 +1734,225 @@ export class ApiStore {
     }
 
     throw new ApiError(403, "You do not have permission to manage this assessment");
+  }
+
+  private assertCanAdminOverrideAssessment(session: AuthSession) {
+    if (session.user.role !== "admin") {
+      throw new ApiError(403, "Only admins can override assessments");
+    }
+  }
+
+  private async applyAdminAssessmentState(
+    client: DbClient,
+    assessment: AssessmentRecord,
+    nextState: AssessmentReviewState,
+    actorEmployeeId: string,
+    timestamp: string,
+  ) {
+    if (nextState === "new") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'new',
+              submitted_at = NULL,
+              accepted_at = NULL,
+              accepted_by_employee_id = NULL,
+              ready_for_meeting_at = NULL,
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp],
+      );
+      return;
+    }
+
+    if (nextState === "draft") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'draft',
+              submitted_at = NULL,
+              accepted_at = NULL,
+              accepted_by_employee_id = NULL,
+              ready_for_meeting_at = NULL,
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp],
+      );
+      return;
+    }
+
+    if (nextState === "submitted") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'submitted',
+              submitted_at = COALESCE(submitted_at, $2::timestamptz),
+              accepted_at = NULL,
+              accepted_by_employee_id = NULL,
+              ready_for_meeting_at = NULL,
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp],
+      );
+      return;
+    }
+
+    if (nextState === "accepted") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'accepted',
+              submitted_at = COALESCE(submitted_at, $2::timestamptz),
+              accepted_at = COALESCE(accepted_at, $2::timestamptz),
+              accepted_by_employee_id = COALESCE(accepted_by_employee_id, $3),
+              ready_for_meeting_at = NULL,
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp, actorEmployeeId],
+      );
+      return;
+    }
+
+    if (nextState === "ready_for_meeting") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'ready_for_meeting',
+              submitted_at = COALESCE(submitted_at, $2::timestamptz),
+              accepted_at = COALESCE(accepted_at, $2::timestamptz),
+              accepted_by_employee_id = COALESCE(accepted_by_employee_id, $3),
+              ready_for_meeting_at = COALESCE(ready_for_meeting_at, $2::timestamptz),
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp, actorEmployeeId],
+      );
+      return;
+    }
+
+    if (nextState === "scheduled") {
+      await client.query(
+        `
+          UPDATE assessments
+          SET review_state = 'scheduled',
+              submitted_at = COALESCE(submitted_at, $2::timestamptz),
+              accepted_at = COALESCE(accepted_at, $2::timestamptz),
+              accepted_by_employee_id = COALESCE(accepted_by_employee_id, $3),
+              ready_for_meeting_at = COALESCE(ready_for_meeting_at, $2::timestamptz),
+              scheduled_at = COALESCE(scheduled_at, $2::timestamptz),
+              scheduled_by_employee_id = COALESCE(scheduled_by_employee_id, $3),
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
+              reviewed_at = NULL,
+              reviewed_by_employee_id = NULL,
+              updated_at = $2::timestamptz
+          WHERE id = $1
+        `,
+        [assessment.assessment.id, timestamp, actorEmployeeId],
+      );
+      return;
+    }
+
+    const employee = this.toEmployee(await this.employeeOrThrow(client, assessment.assessment.employeeId));
+    await client.query(
+      `
+        UPDATE assessments
+        SET review_state = 'concluded',
+            submitted_at = COALESCE(submitted_at, $2::timestamptz),
+            accepted_at = COALESCE(accepted_at, $2::timestamptz),
+            accepted_by_employee_id = COALESCE(accepted_by_employee_id, $3),
+            ready_for_meeting_at = COALESCE(ready_for_meeting_at, $2::timestamptz),
+            scheduled_at = COALESCE(scheduled_at, $2::timestamptz),
+            scheduled_by_employee_id = COALESCE(scheduled_by_employee_id, $3),
+            reviewer1_completed_at = CASE
+              WHEN $4::uuid IS NULL THEN NULL
+              ELSE COALESCE(reviewer1_completed_at, $2::timestamptz)
+            END,
+            reviewer1_completed_by_employee_id = CASE
+              WHEN $4::uuid IS NULL THEN NULL
+              ELSE COALESCE(reviewer1_completed_by_employee_id, $3)
+            END,
+            reviewer2_completed_at = CASE
+              WHEN $5::uuid IS NULL THEN NULL
+              ELSE COALESCE(reviewer2_completed_at, $2::timestamptz)
+            END,
+            reviewer2_completed_by_employee_id = CASE
+              WHEN $5::uuid IS NULL THEN NULL
+              ELSE COALESCE(reviewer2_completed_by_employee_id, $3)
+            END,
+            concluded_at = COALESCE(concluded_at, $2::timestamptz),
+            concluded_by_employee_id = COALESCE(concluded_by_employee_id, $3),
+            reviewed_at = NULL,
+            reviewed_by_employee_id = NULL,
+            updated_at = $2::timestamptz
+        WHERE id = $1
+      `,
+      [
+        assessment.assessment.id,
+        timestamp,
+        actorEmployeeId,
+        employee.reviewer1Id,
+        employee.reviewer2Id,
+      ],
+    );
   }
 
   private async loadActiveAssessmentSet(client: DbClient, reviewPeriodId: string, employeeId: string) {
@@ -5465,6 +5659,67 @@ export class ApiStore {
         );
 
         return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async updateAssessmentByAdmin(session: AuthSession, assessmentId: string, input: AdminUpdateAssessmentRequest) {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanAdminOverrideAssessment(session);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+
+        const nextState = input.reviewState ?? assessment.assessment.reviewState;
+        const nextResponses = input.responses ?? assessment.assessment.responses;
+        const nextManagerNotes =
+          input.managerNotes !== undefined ? input.managerNotes : assessment.assessment.managerNotes;
+        const questionSet = await this.questionSetOrThrow(client, assessment.assessment.questionSetId);
+        this.assertAssessmentResponses(questionSet, nextResponses, !["new", "draft"].includes(nextState));
+
+        await this.replaceAssessmentResponses(client, assessment.assessment.id, nextResponses);
+
+        const timestamp = nowIso();
+        await this.applyAdminAssessmentState(client, assessment, nextState, session.user.id, timestamp);
+
+        if (input.managerNotes !== undefined) {
+          await client.query(
+            `
+              UPDATE assessments
+              SET manager_notes = $2,
+                  updated_at = $3::timestamptz
+              WHERE id = $1
+            `,
+            [assessment.assessment.id, nextManagerNotes, timestamp],
+          );
+        }
+
+        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async deleteAssessmentByAdmin(session: AuthSession, assessmentId: string): Promise<DeleteAssessmentResponse> {
+    try {
+      return await withTransaction(async (client) => {
+        const assessment = await this.assessmentOrThrow(client, assessmentId);
+        this.assertCanAdminOverrideAssessment(session);
+        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+        await this.deleteAssessmentsById(client, [assessmentId]);
+        return {
+          assessmentId,
+          deleted: true,
+        };
       });
     } catch (error) {
       if (error instanceof ApiError) {

@@ -41,7 +41,7 @@ export const apiIndexResponseSchema = z.object({
 export const domainRulesResponseSchema = z.object({
   postgresIsSourceOfTruth: z.literal(true),
   employeeAssessorMatchesPeerAssignment: z.literal(true),
-  acceptedAssessmentsAreImmutable: z.literal(true),
+  acceptedAssessmentsAreImmutable: z.literal(false),
   singleActiveQuestionSetPerTarget: z.literal(true),
   archiveIsDrivenByReviewPeriod: z.literal(true),
   employeeAssessmentSetsTransitionTogether: z.literal(true),
@@ -96,6 +96,11 @@ export const assignmentResponseSchema = z.object({
 
 export const deleteAssignmentResponseSchema = z.object({
   assignmentId: idSchema,
+  deleted: z.literal(true),
+});
+
+export const deleteAssessmentResponseSchema = z.object({
+  assessmentId: idSchema,
   deleted: z.literal(true),
 });
 
@@ -406,6 +411,19 @@ export const acceptAssessmentRequestSchema = z.object({
   managerNotes: z.string().trim().min(1).nullable().optional(),
 });
 
+export const adminUpdateAssessmentRequestSchema = z
+  .object({
+    responses: z.array(assessmentResponseSchema).optional(),
+    managerNotes: z.string().trim().min(1).nullable().optional(),
+    reviewState: assessmentReviewStateSchema.exclude(["reviewed"]).optional(),
+  })
+  .refine(
+    (value) => value.responses !== undefined || value.managerNotes !== undefined || value.reviewState !== undefined,
+    {
+      message: "At least one field must be provided",
+    },
+  );
+
 export const rejectAssessmentToDraftRequestSchema = z.object({
   managerNotes: z.string().trim().min(1).nullable().optional(),
 });
@@ -676,6 +694,7 @@ export type QuestionSetResponse = z.infer<typeof questionSetResponseSchema>;
 export type AssignmentsListResponse = z.infer<typeof assignmentsListResponseSchema>;
 export type AssignmentResponse = z.infer<typeof assignmentResponseSchema>;
 export type DeleteAssignmentResponse = z.infer<typeof deleteAssignmentResponseSchema>;
+export type DeleteAssessmentResponse = z.infer<typeof deleteAssessmentResponseSchema>;
 export type AssessmentsListResponse = z.infer<typeof assessmentsListResponseSchema>;
 export type AssessmentItemResponse = z.infer<typeof assessmentItemResponseSchema>;
 export type FoundationSnapshot = z.infer<typeof foundationSnapshotSchema>;
@@ -714,6 +733,7 @@ export type CreateAssessmentRequest = z.infer<typeof createAssessmentRequestSche
 export type SaveAssessmentDraftRequest = z.infer<typeof saveAssessmentDraftRequestSchema>;
 export type SubmitAssessmentRequest = z.infer<typeof submitAssessmentRequestSchema>;
 export type AcceptAssessmentRequest = z.infer<typeof acceptAssessmentRequestSchema>;
+export type AdminUpdateAssessmentRequest = z.infer<typeof adminUpdateAssessmentRequestSchema>;
 export type RejectAssessmentToDraftRequest = z.infer<typeof rejectAssessmentToDraftRequestSchema>;
 export type ScheduleAssessmentSetRequest = z.infer<typeof scheduleAssessmentSetRequestSchema>;
 export type ConcludeAssessmentRequest = z.infer<typeof concludeAssessmentRequestSchema>;

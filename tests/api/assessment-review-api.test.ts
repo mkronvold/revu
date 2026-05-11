@@ -455,6 +455,211 @@ describe("assessment authoring and review API", () => {
     expect(filteredManagerAssessments.every((item) => item.reviewState === "accepted")).toBe(true);
   });
 
+  it("lets admins override assessment responses, notes, state, and deletion", async () => {
+    const app = await createApp();
+    const ada = await login(app, "ada.admin", "AdminPass123!");
+    const elliot = await login(app, "elliot.employee", "EmployeePass123!");
+    const pat = await login(app, "pat.peer", "PeerPass123!");
+
+    const assignmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assignments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        managerId: "11111111-1111-4111-8111-111111111111",
+        assessorId: elliot.user.id,
+      },
+    });
+    expect(assignmentResponse.statusCode).toBe(201);
+    const assignment = assignmentResponseSchema.parse(assignmentResponse.json()).item;
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${pat.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        target: "self",
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const createdAssessment = assessmentItemResponseSchema.parse(createResponse.json()).item;
+
+    const createPeerResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${elliot.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        target: "peer",
+        assignmentId: assignment.id,
+      },
+    });
+    expect(createPeerResponse.statusCode).toBe(201);
+    const createdPeerAssessment = assessmentItemResponseSchema.parse(createPeerResponse.json()).item;
+
+    const forbiddenUpdateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${createdAssessment.id}/admin`,
+      headers: {
+        authorization: `Bearer ${elliot.token}`,
+      },
+      payload: {
+        reviewState: "accepted",
+      },
+    });
+    expect(forbiddenUpdateResponse.statusCode).toBe(403);
+
+    const forbiddenDeleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/assessments/${createdAssessment.id}`,
+      headers: {
+        authorization: `Bearer ${elliot.token}`,
+      },
+    });
+    expect(forbiddenDeleteResponse.statusCode).toBe(403);
+
+    const acceptResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${createdAssessment.id}/admin`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa",
+            order: 1,
+            response: "strongly agree",
+          },
+          {
+            questionId: "aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa",
+            order: 2,
+            response: "Admin completed the assessment so the workflow could continue.",
+          },
+        ],
+        managerNotes: "Admin override acceptance for follow-up testing.",
+        reviewState: "accepted",
+      },
+    });
+    expect(acceptResponse.statusCode).toBe(200);
+    const acceptedAssessment = assessmentItemResponseSchema.parse(acceptResponse.json()).item;
+    expect(acceptedAssessment.reviewState).toBe("accepted");
+    expect(acceptedAssessment.managerNotes).toBe("Admin override acceptance for follow-up testing.");
+
+    const acceptPeerResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${createdPeerAssessment.id}/admin`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa",
+            order: 1,
+            response: "4",
+          },
+          {
+            questionId: "aaaaaaaa-3222-4222-8222-aaaaaaaaaaaa",
+            order: 2,
+            response: "Admin accepted the peer feedback to keep the workflow moving.",
+          },
+        ],
+        reviewState: "accepted",
+      },
+    });
+    expect(acceptPeerResponse.statusCode).toBe(200);
+
+    const scheduleResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${createdAssessment.id}/admin`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        reviewState: "scheduled",
+      },
+    });
+    expect(scheduleResponse.statusCode).toBe(200);
+    const scheduledAssessment = assessmentItemResponseSchema.parse(scheduleResponse.json()).item;
+    expect(scheduledAssessment.reviewState).toBe("scheduled");
+    expect(scheduledAssessment.scheduledByEmployeeId).toBe(ada.user.id);
+
+    const peerStillAcceptedResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+    });
+    expect(peerStillAcceptedResponse.statusCode).toBe(200);
+    const peerAfterSchedule = assessmentsListResponseSchema
+      .parse(peerStillAcceptedResponse.json())
+      .items.find((item) => item.id === createdPeerAssessment.id);
+    expect(peerAfterSchedule?.reviewState).toBe("accepted");
+
+    const concludeResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${createdAssessment.id}/admin`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        reviewState: "concluded",
+      },
+    });
+    expect(concludeResponse.statusCode).toBe(200);
+    const concludedAssessment = assessmentItemResponseSchema.parse(concludeResponse.json()).item;
+    expect(concludedAssessment.reviewState).toBe("concluded");
+    expect(concludedAssessment.concludedByEmployeeId).toBe(ada.user.id);
+    expect(concludedAssessment.reviewer1CompletedByEmployeeId).toBe(ada.user.id);
+    expect(concludedAssessment.reviewer2CompletedByEmployeeId).toBe(ada.user.id);
+
+    const peerAfterConcludeResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+    });
+    expect(peerAfterConcludeResponse.statusCode).toBe(200);
+    const peerAfterConclude = assessmentsListResponseSchema
+      .parse(peerAfterConcludeResponse.json())
+      .items.find((item) => item.id === createdPeerAssessment.id);
+    expect(peerAfterConclude?.reviewState).toBe("accepted");
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/assessments/${createdAssessment.id}`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toEqual({
+      assessmentId: createdAssessment.id,
+      deleted: true,
+    });
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(assessmentsListResponseSchema.parse(listResponse.json()).items.map((item) => item.id)).not.toContain(createdAssessment.id);
+  });
+
   it("concludes after the only assigned reviewer completes the set", async () => {
     const app = await createApp();
     const ada = await login(app, "ada.admin", "AdminPass123!");
