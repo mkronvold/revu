@@ -1176,6 +1176,27 @@ button.employee-row:focus-visible {
   flex-wrap: wrap;
 }
 
+.section-title-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.section-title-row,
+.section-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.section-title-row .section-label {
+  margin: 0;
+}
+
+.section-toggle-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
 .dialog-header-actions,
 .dialog-footer,
 .dialog-footer-start,
@@ -1216,10 +1237,48 @@ button.employee-row:focus-visible {
   background: transparent;
 }
 
+.section-toggle-button {
+  padding: 0;
+  border: none;
+  color: #0f172a;
+  background: transparent;
+}
+
 .section-toggle:hover,
 .section-toggle:focus-visible {
   color: #0f172a;
   background: transparent;
+}
+
+.section-toggle-button:hover,
+.section-toggle-button:focus-visible {
+  color: #0f172a;
+  background: transparent;
+  outline: none;
+}
+
+.refresh-icon-button {
+  padding: 0;
+  border: none;
+  color: #475569;
+  line-height: 1;
+  background: transparent;
+  transition:
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.refresh-icon-button:hover,
+.refresh-icon-button:focus-visible {
+  color: #1d4ed8;
+  transform: rotate(25deg);
+  outline: none;
+}
+
+.refresh-icon-button:disabled {
+  color: #94a3b8;
+  transform: none;
+  cursor: default;
 }
 
 .stack-form {

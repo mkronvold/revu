@@ -640,6 +640,7 @@ function App() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSavingReviewAdmin, setIsSavingReviewAdmin] = useState(false);
   const [isSavingAssessmentWorkflow, setIsSavingAssessmentWorkflow] = useState(false);
+  const [isRefreshingList, setIsRefreshingList] = useState(false);
   const [showSeededApiAccounts, setShowSeededApiAccounts] = useState(false);
   const [reviewAdmin, setReviewAdmin] = useState<ReviewAdminSnapshot | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
@@ -1679,14 +1680,53 @@ function App() {
     [sessionToken],
   );
 
-  const refreshEmployeeDirectory = async () => {
+  const refreshEmployeeDirectory = useCallback(async () => {
     if (!sessionToken || !hasEmployeeReadAccess) {
       return;
     }
 
     const response = await listEmployees(sessionToken);
     setEmployees(response.items);
-  };
+  }, [hasEmployeeReadAccess, sessionToken]);
+
+  const refreshPrimaryList = useCallback(
+    async (target: 'dashboard' | 'employees' | 'assessments') => {
+      if (!sessionToken) {
+        return;
+      }
+
+      setIsRefreshingList(true);
+      setAppError('');
+
+      try {
+        if (target === 'employees') {
+          await refreshEmployeeDirectory();
+        } else if (target === 'dashboard') {
+          await refreshFoundationSnapshot();
+        } else {
+          await Promise.all([refreshFoundationSnapshot(), refreshEmployeeDirectory()]);
+        }
+      } catch (error) {
+        setAppError(getErrorMessage(error));
+      } finally {
+        setIsRefreshingList(false);
+      }
+    },
+    [refreshEmployeeDirectory, refreshFoundationSnapshot, sessionToken],
+  );
+
+  const renderRefreshIconButton = (label: string, onClick: () => void) => (
+    <button
+      type="button"
+      className="refresh-icon-button"
+      aria-label={label}
+      title={label}
+      disabled={isRefreshingList}
+      onClick={() => void onClick()}
+    >
+      ↻
+    </button>
+  );
 
   const syncWorkflowPreviewScroll = useCallback(() => {
     const textarea = workflowTextareaRef.current;
@@ -5095,14 +5135,19 @@ function App() {
       </section>
 
       <section className="card">
-        <button
-          type="button"
-          className="section-toggle"
-          onClick={() => setAreDashboardQueuesExpanded((currentState) => !currentState)}
-        >
-          <span>Assessment Queue</span>
-          <span className="muted-copy">{areDashboardQueuesExpanded ? 'Collapse' : 'Expand'}</span>
-        </button>
+        <div className="section-toggle-row">
+          <div className="section-title-row">
+            <span>Assessment Queue</span>
+            {renderRefreshIconButton('Refresh assessment queue', () => refreshPrimaryList('dashboard'))}
+          </div>
+          <button
+            type="button"
+            className="section-toggle-button"
+            onClick={() => setAreDashboardQueuesExpanded((currentState) => !currentState)}
+          >
+            <span className="muted-copy">{areDashboardQueuesExpanded ? 'Collapse' : 'Expand'}</span>
+          </button>
+        </div>
         {areDashboardQueuesExpanded ? (
           <div className="queue-stack dashboard-queue-stack">
             {dashboardSnapshot?.queues.map((queue) => (
@@ -5512,8 +5557,11 @@ function App() {
     <main className="admin-stack">
       <section className="card">
         <div className="section-heading">
-          <div>
-            <p className="section-label">Assessment List</p>
+          <div className="section-title-stack">
+            <div className="section-title-row">
+              <p className="section-label">Assessment List</p>
+              {renderRefreshIconButton('Refresh assessment list', () => refreshPrimaryList('assessments'))}
+            </div>
             <p className="muted-copy">
               {activeAssessmentReviewPeriod
                 ? `${activeAssessmentReviewPeriod.label} • ${filteredAdminAssessmentRows.length} ${filteredAdminAssessmentRows.length === 1 ? 'assessment' : 'assessments'}`
@@ -6908,8 +6956,11 @@ function App() {
       <main className="admin-stack">
         <section className="card">
           <div className="section-heading">
-            <div>
-              <p className="section-label">Employee directory</p>
+            <div className="section-title-stack">
+              <div className="section-title-row">
+                <p className="section-label">Employee directory</p>
+                {renderRefreshIconButton('Refresh employee directory', () => refreshPrimaryList('employees'))}
+              </div>
               <p className="muted-copy">
                 {activeEmployees.length} active • {inactiveEmployees.length} inactive
               </p>

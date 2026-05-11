@@ -1705,6 +1705,37 @@ describe('workflow entry', () => {
     await waitFor(() => container.textContent?.includes('No assessments exist for the active review period yet.') ?? false);
   });
 
+  it('refreshes the assessment list from the header icon', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+
+    vi.mocked(getFoundation).mockClear();
+    vi.mocked(listEmployees).mockClear();
+
+    const refreshButton = container.querySelector('button[aria-label="Refresh assessment list"]') as HTMLButtonElement | null;
+    expect(refreshButton).toBeTruthy();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(getFoundation).mock.calls.length === 1);
+    expect(vi.mocked(listEmployees).mock.calls.length).toBe(1);
+  });
+
   it('keeps the admin assessments route admin-only', async () => {
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('draft'));
@@ -3411,6 +3442,31 @@ describe('dashboard screen', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('refreshes the dashboard assessment queue from the header icon', async () => {
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    vi.mocked(getFoundation).mockClear();
+
+    const refreshButton = container.querySelector('button[aria-label="Refresh assessment queue"]') as HTMLButtonElement | null;
+    expect(refreshButton).toBeTruthy();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(getFoundation).mock.calls.length === 1);
+  });
+
   it('uses submit to save draft changes even before an assessment is complete', async () => {
     const dashboardSnapshot = cloneQuestionSlice();
     dashboardSnapshot.assessments = dashboardSnapshot.assessments.map((assessment) =>
@@ -3782,6 +3838,34 @@ describe('employees screen', () => {
     await waitFor(() => container.textContent?.includes('One-time passcode: OneTime123!') ?? false);
 
     expect(resetEmployeePassword).toHaveBeenCalledWith('session-token', elliot.id);
+  });
+
+  it('refreshes the employee directory from the header icon', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    vi.mocked(listEmployees).mockClear();
+
+    const refreshButton = container.querySelector('button[aria-label="Refresh employee directory"]') as HTMLButtonElement | null;
+    expect(refreshButton).toBeTruthy();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(listEmployees).mock.calls.length === 1);
   });
 
   it('validates reviewer assignments before saving employee edits', async () => {
