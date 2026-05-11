@@ -14,7 +14,6 @@ describe('web shell foundation', () => {
     expect(defaultPath).toBe('/dashboard');
     expect(appSections.map((section) => section.id)).toEqual([
       'dashboard',
-      'reviews',
       'employees',
       'questions',
       'assessments',
@@ -24,7 +23,6 @@ describe('web shell foundation', () => {
     ]);
     expect(appSections.map((section) => section.path)).toEqual([
       '/dashboard',
-      '/reviews',
       '/employees',
       '/questions',
       '/assessments',
@@ -34,22 +32,16 @@ describe('web shell foundation', () => {
     ]);
   });
 
-  it('keeps the clarified assessment and review terminology', () => {
+  it('keeps the clarified dashboard and assessment terminology', () => {
+    expect(routeLegend.dashboard).toMatch(/single workflow action surface/i);
     expect(routeLegend.assessments).toMatch(/employee-authored forms/i);
-    expect(routeLegend.reviews).toMatch(/manager and admin actions/i);
   });
 
   it('keeps workflow routable for every role while limiting primary navigation to approved entries', () => {
     expect(getSectionsForRole('employee').map((section) => section.id)).toEqual(['dashboard', 'workflow']);
-    expect(getSectionsForRole('manager').map((section) => section.id)).toEqual([
-      'dashboard',
-      'reviews',
-      'employees',
-      'workflow',
-    ]);
+    expect(getSectionsForRole('manager').map((section) => section.id)).toEqual(['dashboard', 'employees', 'workflow']);
     expect(getSectionsForRole('admin').map((section) => section.id)).toEqual([
       'dashboard',
-      'reviews',
       'employees',
       'questions',
       'assessments',
@@ -59,14 +51,9 @@ describe('web shell foundation', () => {
     ]);
 
     expect(getNavigationSectionsForRole('employee').map((section) => section.id)).toEqual(['dashboard']);
-    expect(getNavigationSectionsForRole('manager').map((section) => section.id)).toEqual([
-      'dashboard',
-      'reviews',
-      'employees',
-    ]);
+    expect(getNavigationSectionsForRole('manager').map((section) => section.id)).toEqual(['dashboard', 'employees']);
     expect(getNavigationSectionsForRole('admin').map((section) => section.id)).toEqual([
       'dashboard',
-      'reviews',
       'employees',
       'questions',
       'assessments',
@@ -75,7 +62,7 @@ describe('web shell foundation', () => {
     ]);
   });
 
-  it('keeps employees copy current, redirects legacy archive routes, and preserves workflow markdown', () => {
+  it('keeps employees copy current, redirects legacy routes, and preserves workflow markdown', () => {
     expect(appSections.find((section) => section.id === 'employees')?.summary).toBe(
       'Manage employee records, reporting lines, assessor coverage, and local user transfer actions.',
     );
@@ -83,6 +70,7 @@ describe('web shell foundation', () => {
     expect(appSections.find((section) => section.id === 'fileManagement')?.path).toBe('/file-management');
     expect(normalizePath('/archive')).toBe('/review-period');
     expect(normalizePath('/backups/')).toBe('/file-management');
-    expect(workflowMarkdown).toContain('### New `Review Period` begins');
+    expect(normalizePath('/reviews')).toBe('/dashboard');
+    expect(workflowMarkdown).toContain('### Active assessment lifecycle');
   });
 });

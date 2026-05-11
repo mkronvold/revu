@@ -946,7 +946,7 @@ describe("review periods, question sets, and assignments admin API", () => {
 
     expect(restoredSelfAssessment).toMatchObject({
       archiveState: "active",
-      isReadOnly: false,
+      isReadOnly: true,
     });
     expect(restoredAcceptedPeerAssessment).toMatchObject({
       archiveState: "active",

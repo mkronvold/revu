@@ -62,7 +62,7 @@ describe('integrated dashboard snapshot', () => {
     );
 
     expect(snapshot.dueLabel).toBe('Complete by 2/21/2026');
-    expect(snapshot.reviewSummary).toMatch(/employee dashboard stays centered on assessments/i);
+    expect(snapshot.reviewSummary).toMatch(/dashboard stays centered on authored assessments/i);
     expect(snapshot.queues.map((queue) => queue.title)).toEqual(['Not Started', 'Incomplete', 'Complete but Not Submitted']);
     expect(snapshot.queues[1]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
     expect(snapshot.queues[1]?.items[0]?.dueDate).toBe('2/21/2026');
@@ -89,8 +89,9 @@ describe('integrated dashboard snapshot', () => {
       },
     ]);
 
-    expect(managerSnapshot.reviewSummary).toMatch(/manager attention/i);
+    expect(managerSnapshot.reviewSummary).toMatch(/reviewer follow-up|workflow follow-up/i);
     expect(adminSnapshot.adminSummary).toMatch(/inactive employee records/i);
+    expect(adminSnapshot.sections.map((section) => section.id)).toContain('admin-oversight');
   });
 
   it('keeps partially answered authored assessments visible in the in-progress queue', () => {

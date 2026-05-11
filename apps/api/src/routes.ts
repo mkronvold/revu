@@ -5,6 +5,7 @@ import {
   apiIndexExample,
   assessmentItemResponseSchema,
   assessmentReassignmentResponseSchema,
+  assessmentSetResponseSchema,
   assessmentsListResponseSchema,
   assessmentsListQuerySchema,
   assignmentResponseSchema,
@@ -29,6 +30,7 @@ import {
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
   clearReadyAssessmentsResponseSchema,
+  concludeAssessmentRequestSchema,
   createAssessmentRequestSchema,
   createAssignmentRequestSchema,
   createEmployeeRequestSchema,
@@ -63,7 +65,6 @@ import {
   reviewPeriodResponseSchema,
   reviewPeriodsListResponseSchema,
   reviewPeriodScopedQuerySchema,
-  reviewAssessmentRequestSchema,
   saveAssessmentDraftRequestSchema,
   setEmployeePasswordRequestSchema,
   setEmployeePasswordResponseSchema,
@@ -96,6 +97,10 @@ const exportFormatQuerySchema = z.object({
 const localUsersExportQuerySchema = exportFormatQuerySchema.extend({
   mode: localUsersExportModeSchema.default("rotate-passcodes"),
 });
+const assessmentSetParamsSchema = z.object({
+  reviewPeriodId: idSchema,
+  employeeId: idSchema,
+});
 const storedBackupParamsSchema = z.object({
   fileName: backupStoredFileNameSchema,
 });
@@ -124,12 +129,16 @@ function normalizeLocalUserTransferItem(item: {
   managerUsername: string | null;
   assessor1Username: string | null;
   assessor2Username: string | null;
+  reviewer1Username?: string | null;
+  reviewer2Username?: string | null;
   id?: string;
   credentialKind?: "password" | "password-hash" | "unset";
   passwordResetRequired?: boolean;
 }) {
   return {
     ...item,
+    reviewer1Username: item.reviewer1Username ?? null,
+    reviewer2Username: item.reviewer2Username ?? null,
     credentialKind: item.credentialKind ?? "password",
     passwordResetRequired: item.passwordResetRequired ?? false,
   };
@@ -1052,18 +1061,43 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/assessments/:id/review", async (request, reply) => {
+  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/ready-for-meeting", async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       requirePermissions(session, ["assessments:review"]);
-      const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      const body = parseWithSchema(reviewAssessmentRequestSchema, request.body);
-      return assessmentItemResponseSchema.parse({
-        item: await store.reviewAssessment(session, assessmentId, {
-          managerNotes: body.managerNotes,
-          reviewed: body.reviewed ?? false,
+      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
+      return assessmentSetResponseSchema.parse(
+        await store.markAssessmentSetReadyForMeeting(session, reviewPeriodId, employeeId),
+      );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/schedule", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      requirePermissions(session, ["assessments:review"]);
+      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
+      return assessmentSetResponseSchema.parse(
+        await store.scheduleAssessmentSet(session, reviewPeriodId, employeeId),
+      );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/conclude", async (request, reply) => {
+    try {
+      const session = await requireSession(request, store);
+      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
+      const body = parseWithSchema(concludeAssessmentRequestSchema, request.body ?? {});
+      return assessmentSetResponseSchema.parse(
+        await store.concludeAssessmentSet(session, reviewPeriodId, employeeId, {
+          ...body,
+          completed: body.completed ?? false,
         }),
-      });
+      );
     } catch (error) {
       return sendError(reply, error);
     }

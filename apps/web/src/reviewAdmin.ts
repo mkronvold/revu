@@ -59,7 +59,7 @@ export type ReviewPeriodSummary = {
   assignmentCount: number;
   assessmentCount: number;
   archivedAssessmentCount: number;
-  reviewedAssessmentCount: number;
+  completedAssessmentCount: number;
 };
 
 type MutationOptions = {
@@ -408,7 +408,9 @@ export function getReviewPeriodSummary(snapshot: ReviewAdminSnapshot, reviewPeri
     assignmentCount: snapshot.assignments.filter((assignment) => assignment.reviewPeriodId === reviewPeriodId).length,
     assessmentCount: assessments.length,
     archivedAssessmentCount: assessments.filter((assessment) => assessment.archiveState === 'archived').length,
-    reviewedAssessmentCount: assessments.filter((assessment) => assessment.reviewState === 'reviewed').length,
+    completedAssessmentCount: assessments.filter(
+      (assessment) => assessment.reviewState === 'concluded' || assessment.reviewState === 'reviewed',
+    ).length,
   };
 }
 

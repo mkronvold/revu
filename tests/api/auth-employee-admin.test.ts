@@ -174,6 +174,8 @@ describe("auth and employee admin API", () => {
         managerId: "11111111-1111-4111-8111-111111111111",
         assessor1Id: "22222222-2222-4222-8222-222222222222",
         assessor2Id: "33333333-3333-4333-8333-333333333333",
+        reviewer1Id: "11111111-1111-4111-8111-111111111111",
+        reviewer2Id: "33333333-3333-4333-8333-333333333333",
       },
     });
     expect(managerUpdateResponse.statusCode).toBe(200);
@@ -181,6 +183,8 @@ describe("auth and employee admin API", () => {
     expect(managerUpdatedEmployee.managerId).toBe("11111111-1111-4111-8111-111111111111");
     expect(managerUpdatedEmployee.assessor1Id).toBe("22222222-2222-4222-8222-222222222222");
     expect(managerUpdatedEmployee.assessor2Id).toBe("33333333-3333-4333-8333-333333333333");
+    expect(managerUpdatedEmployee.reviewer1Id).toBe("11111111-1111-4111-8111-111111111111");
+    expect(managerUpdatedEmployee.reviewer2Id).toBe("33333333-3333-4333-8333-333333333333");
 
     const forbiddenManagerRoleChange = await app.inject({
       method: "PATCH",
@@ -210,6 +214,8 @@ describe("auth and employee admin API", () => {
         managerId: "22222222-2222-4222-8222-222222222222",
         assessor1Id: "22222222-2222-4222-8222-222222222222",
         assessor2Id: "44444444-4444-4444-8444-444444444444",
+        reviewer1Id: "11111111-1111-4111-8111-111111111111",
+        reviewer2Id: "22222222-2222-4222-8222-222222222222",
         password: "OnboardPass123!",
       },
     });
@@ -218,6 +224,8 @@ describe("auth and employee admin API", () => {
     const createdEmployee = employeeResponseSchema.parse(createResponse.json()).item;
     expect(createdEmployee.username).toBe("New.Hire");
     expect(createdEmployee.auth.passwordConfigured).toBe(true);
+    expect(createdEmployee.reviewer1Id).toBe("11111111-1111-4111-8111-111111111111");
+    expect(createdEmployee.reviewer2Id).toBe("22222222-2222-4222-8222-222222222222");
 
     const newHireLogin = await login(app, "new.hire", "OnboardPass123!");
     expect(newHireLogin.statusCode).toBe(200);
@@ -240,6 +248,33 @@ describe("auth and employee admin API", () => {
       },
     });
     expect(duplicateCaseResponse.statusCode).toBe(409);
+
+    const updateReviewerResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${createdEmployee.id}`,
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        reviewer2Id: "44444444-4444-4444-8444-444444444444",
+      },
+    });
+    expect(updateReviewerResponse.statusCode).toBe(200);
+    expect(employeeResponseSchema.parse(updateReviewerResponse.json()).item.reviewer2Id).toBe(
+      "44444444-4444-4444-8444-444444444444",
+    );
+
+    const invalidSelfReviewerResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${createdEmployee.id}`,
+      headers: {
+        authorization: `Bearer ${adminLogin.session.token}`,
+      },
+      payload: {
+        reviewer1Id: createdEmployee.id,
+      },
+    });
+    expect(invalidSelfReviewerResponse.statusCode).toBe(400);
 
     const setPasswordResponse = await app.inject({
       method: "POST",
@@ -565,17 +600,6 @@ describe("auth and employee admin API", () => {
     expect(reassignAssignmentResponse.statusCode).toBe(200);
 
     const managerLogin = authLoginResponseSchema.parse((await login(app, "former.manager", "FormerManager123!")).json());
-    const acceptResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/assessments/dddddddd-dddd-4ddd-8ddd-dddddddddddd/accept",
-      headers: {
-        authorization: `Bearer ${managerLogin.session.token}`,
-      },
-      payload: {
-        managerNotes: "Accepted by the soon-to-be deleted manager.",
-      },
-    });
-    expect(acceptResponse.statusCode).toBe(200);
 
     const selfAssessmentResponse = await app.inject({
       method: "POST",
@@ -770,9 +794,6 @@ describe("auth and employee admin API", () => {
     expect(foundation.employees.some((employee) => employee.id === deletedManager.id)).toBe(false);
     expect(
       foundation.assignments.find((assignment) => assignment.id === "cccccccc-cccc-4ccc-8ccc-cccccccccccc")?.managerId,
-    ).toBe(deletedManager.id);
-    expect(
-      foundation.assessments.find((assessment) => assessment.id === "dddddddd-dddd-4ddd-8ddd-dddddddddddd")?.acceptedByEmployeeId,
     ).toBe(deletedManager.id);
     expect(foundation.assessments.some((assessment) => assessment.id === selfAssessment.id)).toBe(false);
     expect(foundation.assessments.some((assessment) => assessment.id === draftPeerAssessment.id)).toBe(false);

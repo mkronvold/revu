@@ -2,6 +2,8 @@ import {
   acceptAssessmentRequestSchema,
   apiIndexResponseSchema,
   assessmentItemResponseSchema,
+  assessmentSetRequestSchema,
+  assessmentSetResponseSchema,
   assessmentReassignmentResponseSchema,
   assessmentsListQuerySchema,
   assessmentsListResponseSchema,
@@ -17,6 +19,7 @@ import {
   backupRestoreResponseSchema,
   backupStatusResponseSchema,
   clearReadyAssessmentsResponseSchema,
+  concludeAssessmentRequestSchema,
   updateBackupStatusRequestSchema,
   updateQuestionCategoriesRequestSchema,
   authChangePasswordRequestSchema,
@@ -52,7 +55,6 @@ import {
   setEmployeePasswordRequestSchema,
   setEmployeePasswordResponseSchema,
   reviewPeriodResponseSchema,
-  reviewAssessmentRequestSchema,
   saveAssessmentDraftRequestSchema,
   submitAssessmentRequestSchema,
   syncAssessmentsResponseSchema,
@@ -63,6 +65,7 @@ import {
   updateWorkflowSettingsRequestSchema,
   workflowSettingsResponseSchema,
   type AcceptAssessmentRequest,
+  type AssessmentSetRequest,
   type AssessmentsListQuery,
   type AuthLoginRequest,
   type AuthChangePasswordRequest,
@@ -70,6 +73,7 @@ import {
   type BackupRestoreMode,
   type BackupRestoreScope,
   type BackupStoredFileRestoreRequest,
+  type ConcludeAssessmentRequest,
   type CreateAssessmentRequest,
   type CreateAssignmentRequest,
   type CreateEmployeeRequest,
@@ -82,7 +86,6 @@ import {
   type RejectAssessmentToDraftRequest,
   type ReassignAssessmentRequest,
   type ResetEmployeePasswordRequest,
-  type ReviewAssessmentRequest,
   type SaveAssessmentDraftRequest,
   type SetEmployeePasswordRequest,
   type SubmitAssessmentRequest,
@@ -770,13 +773,43 @@ export function rejectAssessmentToDraft(
   );
 }
 
-export function reviewAssessment(token: string, assessmentId: string, payload: ReviewAssessmentRequest) {
+export function markAssessmentSetReadyForMeeting(token: string, payload: AssessmentSetRequest) {
+  const requestPayload = assessmentSetRequestSchema.parse(payload);
+
   return request(
-    `/assessments/${assessmentId}/review`,
-    assessmentItemResponseSchema,
+    `/review-periods/${requestPayload.reviewPeriodId}/employees/${requestPayload.employeeId}/assessment-set/ready-for-meeting`,
+    assessmentSetResponseSchema,
     withAuthorization(token, {
       method: 'POST',
-      body: JSON.stringify(reviewAssessmentRequestSchema.parse(payload)),
+    }),
+  );
+}
+
+export function scheduleAssessmentSet(token: string, payload: AssessmentSetRequest) {
+  const requestPayload = assessmentSetRequestSchema.parse(payload);
+
+  return request(
+    `/review-periods/${requestPayload.reviewPeriodId}/employees/${requestPayload.employeeId}/assessment-set/schedule`,
+    assessmentSetResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+    }),
+  );
+}
+
+export function concludeAssessmentSet(
+  token: string,
+  payload: AssessmentSetRequest & ConcludeAssessmentRequest,
+) {
+  const { reviewPeriodId, employeeId } = assessmentSetRequestSchema.parse(payload);
+  const body = concludeAssessmentRequestSchema.parse(payload);
+
+  return request(
+    `/review-periods/${reviewPeriodId}/employees/${employeeId}/assessment-set/conclude`,
+    assessmentSetResponseSchema,
+    withAuthorization(token, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
   );
 }

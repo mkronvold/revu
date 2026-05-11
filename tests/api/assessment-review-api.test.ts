@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   assessmentItemResponseSchema,
   assessmentReassignmentResponseSchema,
+  assessmentSetResponseSchema,
   assessmentsListResponseSchema,
   assignmentResponseSchema,
   authLoginResponseSchema,
@@ -46,10 +47,27 @@ describe("assessment authoring and review API", () => {
     return authLoginResponseSchema.parse(response.json()).session;
   }
 
-  it("supports self-assessment authoring, submission, acceptance, and final review", async () => {
+  it("moves an employee assessment set through accepted, ready, scheduled, and reviewer conclusions", async () => {
     const app = await createApp();
+    const ada = await login(app, "ada.admin", "AdminPass123!");
+    const elliot = await login(app, "elliot.employee", "EmployeePass123!");
     const pat = await login(app, "pat.peer", "PeerPass123!");
     const manny = await login(app, "manny.manager", "ManagerPass123!");
+
+    const assignmentResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assignments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        managerId: manny.user.id,
+        assessorId: elliot.user.id,
+      },
+    });
+    expect(assignmentResponse.statusCode).toBe(201);
+    const assignment = assignmentResponseSchema.parse(assignmentResponse.json()).item;
 
     const createResponse = await app.inject({
       method: "POST",
@@ -63,12 +81,27 @@ describe("assessment authoring and review API", () => {
       },
     });
     expect(createResponse.statusCode).toBe(201);
-    const createdAssessment = assessmentItemResponseSchema.parse(createResponse.json()).item;
-    expect(createdAssessment.reviewState).toBe("new");
+    const createdSelfAssessment = assessmentItemResponseSchema.parse(createResponse.json()).item;
+    expect(createdSelfAssessment.reviewState).toBe("new");
+
+    const createPeerResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${elliot.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        target: "peer",
+        assignmentId: assignment.id,
+      },
+    });
+    expect(createPeerResponse.statusCode).toBe(201);
+    const createdPeerAssessment = assessmentItemResponseSchema.parse(createPeerResponse.json()).item;
 
     const saveDraftResponse = await app.inject({
       method: "PATCH",
-      url: `/api/v1/assessments/${createdAssessment.id}/save`,
+      url: `/api/v1/assessments/${createdSelfAssessment.id}/save`,
       headers: {
         authorization: `Bearer ${pat.token}`,
       },
@@ -87,7 +120,7 @@ describe("assessment authoring and review API", () => {
 
     const submitResponse = await app.inject({
       method: "POST",
-      url: `/api/v1/assessments/${createdAssessment.id}/submit`,
+      url: `/api/v1/assessments/${createdSelfAssessment.id}/submit`,
       headers: {
         authorization: `Bearer ${pat.token}`,
       },
@@ -109,9 +142,32 @@ describe("assessment authoring and review API", () => {
     expect(submitResponse.statusCode).toBe(200);
     expect(assessmentItemResponseSchema.parse(submitResponse.json()).item.reviewState).toBe("submitted");
 
-    const acceptResponse = await app.inject({
+    const submitPeerResponse = await app.inject({
       method: "POST",
-      url: `/api/v1/assessments/${createdAssessment.id}/accept`,
+      url: `/api/v1/assessments/${createdPeerAssessment.id}/submit`,
+      headers: {
+        authorization: `Bearer ${elliot.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa",
+            order: 1,
+            response: "5",
+          },
+          {
+            questionId: "aaaaaaaa-3222-4222-8222-aaaaaaaaaaaa",
+            order: 2,
+            response: "Pat regularly improved team handoffs and follow-through.",
+          },
+        ],
+      },
+    });
+    expect(submitPeerResponse.statusCode).toBe(200);
+
+    const acceptSelfResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${createdSelfAssessment.id}/accept`,
       headers: {
         authorization: `Bearer ${manny.token}`,
       },
@@ -119,56 +175,128 @@ describe("assessment authoring and review API", () => {
         managerNotes: "Clear self-reflection and examples.",
       },
     });
-    expect(acceptResponse.statusCode).toBe(200);
-    const acceptedAssessment = assessmentItemResponseSchema.parse(acceptResponse.json()).item;
-    expect(acceptedAssessment.reviewState).toBe("accepted");
-    expect(acceptedAssessment.managerNotes).toBe("Clear self-reflection and examples.");
-    expect(acceptedAssessment.isReadOnly).toBe(true);
+    expect(acceptSelfResponse.statusCode).toBe(200);
+    expect(assessmentItemResponseSchema.parse(acceptSelfResponse.json()).item.reviewState).toBe("accepted");
 
-    const blockedEditResponse = await app.inject({
-      method: "PATCH",
-      url: `/api/v1/assessments/${createdAssessment.id}/save`,
+    const acceptPeerResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${createdPeerAssessment.id}/accept`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+      payload: {
+        managerNotes: "Peer feedback accepted for meeting prep.",
+      },
+    });
+    expect(acceptPeerResponse.statusCode).toBe(200);
+    expect(assessmentItemResponseSchema.parse(acceptPeerResponse.json()).item.reviewState).toBe("accepted");
+
+    const patVisibleAcceptedResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
       headers: {
         authorization: `Bearer ${pat.token}`,
       },
-      payload: {
-        responses: [],
+    });
+    expect(patVisibleAcceptedResponse.statusCode).toBe(200);
+    expect(
+      assessmentsListResponseSchema.parse(patVisibleAcceptedResponse.json()).items
+        .filter((item) => item.employeeId === pat.user.id)
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual([createdPeerAssessment.id, createdSelfAssessment.id].sort());
+
+    const adaVisibleAcceptedResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
+      headers: {
+        authorization: `Bearer ${ada.token}`,
       },
     });
-    expect(blockedEditResponse.statusCode).toBe(409);
+    expect(adaVisibleAcceptedResponse.statusCode).toBe(200);
+    expect(
+      assessmentsListResponseSchema.parse(adaVisibleAcceptedResponse.json()).items
+        .filter((item) => item.employeeId === pat.user.id)
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual([createdPeerAssessment.id, createdSelfAssessment.id].sort());
 
-    const saveReviewNotesResponse = await app.inject({
+    const readyForMeetingResponse = await app.inject({
       method: "POST",
-      url: `/api/v1/assessments/${createdAssessment.id}/review`,
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/ready-for-meeting`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+    });
+    expect(readyForMeetingResponse.statusCode).toBe(200);
+    const readyAssessmentSet = assessmentSetResponseSchema.parse(readyForMeetingResponse.json());
+    expect(readyAssessmentSet.items.every((item) => item.reviewState === "ready_for_meeting")).toBe(true);
+
+    const scheduleResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/schedule`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+    });
+    expect(scheduleResponse.statusCode).toBe(200);
+    const scheduledAssessmentSet = assessmentSetResponseSchema.parse(scheduleResponse.json());
+    expect(scheduledAssessmentSet.items.every((item) => item.reviewState === "scheduled")).toBe(true);
+    expect(scheduledAssessmentSet.items.every((item) => item.scheduledByEmployeeId === manny.user.id)).toBe(true);
+
+    const reviewer1CompleteResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/conclude`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        reviewerRole: "reviewer1",
+        reviewerNotes: "Ada signed off after reviewing the meeting notes.",
+        completed: true,
+      },
+    });
+    expect(reviewer1CompleteResponse.statusCode).toBe(200);
+    const reviewer1CompletedSet = assessmentSetResponseSchema.parse(reviewer1CompleteResponse.json());
+    expect(reviewer1CompletedSet.items.every((item) => item.reviewState === "scheduled")).toBe(true);
+    expect(reviewer1CompletedSet.items.every((item) => item.reviewer1CompletedByEmployeeId === ada.user.id)).toBe(true);
+    expect(reviewer1CompletedSet.items.every((item) => item.reviewer2CompletedByEmployeeId === null)).toBe(true);
+
+    const reviewer2CompleteResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/conclude`,
       headers: {
         authorization: `Bearer ${manny.token}`,
       },
       payload: {
-        managerNotes: "Discuss growth opportunities in the 1:1.",
-        reviewed: false,
+        reviewerRole: "reviewer2",
+        reviewerNotes: "Manny documented the agreed follow-up goals.",
+        completed: true,
       },
     });
-    expect(saveReviewNotesResponse.statusCode).toBe(200);
-    const acceptedWithNotes = assessmentItemResponseSchema.parse(saveReviewNotesResponse.json()).item;
-    expect(acceptedWithNotes.reviewState).toBe("accepted");
-    expect(acceptedWithNotes.managerNotes).toBe("Discuss growth opportunities in the 1:1.");
+    expect(reviewer2CompleteResponse.statusCode).toBe(200);
+    const concludedAssessmentSet = assessmentSetResponseSchema.parse(reviewer2CompleteResponse.json());
+    expect(concludedAssessmentSet.items.every((item) => item.reviewState === "concluded")).toBe(true);
+    expect(concludedAssessmentSet.items.every((item) => item.concludedByEmployeeId === manny.user.id)).toBe(true);
 
-    const markReviewedResponse = await app.inject({
+    const reopenResponse = await app.inject({
       method: "POST",
-      url: `/api/v1/assessments/${createdAssessment.id}/review`,
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/conclude`,
       headers: {
-        authorization: `Bearer ${manny.token}`,
+        authorization: `Bearer ${ada.token}`,
       },
       payload: {
-        managerNotes: "Finalized in the 1:1.",
-        reviewed: true,
+        reviewerRole: "reviewer1",
+        reviewerNotes: "Ada reopened after requesting one more follow-up note.",
+        completed: false,
       },
     });
-    expect(markReviewedResponse.statusCode).toBe(200);
-    const reviewedAssessment = assessmentItemResponseSchema.parse(markReviewedResponse.json()).item;
-    expect(reviewedAssessment.reviewState).toBe("reviewed");
-    expect(reviewedAssessment.reviewedByEmployeeId).toBe(manny.user.id);
-    expect(reviewedAssessment.managerNotes).toBe("Finalized in the 1:1.");
+    expect(reopenResponse.statusCode).toBe(200);
+    const reopenedAssessmentSet = assessmentSetResponseSchema.parse(reopenResponse.json());
+    expect(reopenedAssessmentSet.items.every((item) => item.reviewState === "scheduled")).toBe(true);
+    expect(reopenedAssessmentSet.items.every((item) => item.reviewer1CompletedByEmployeeId === null)).toBe(true);
+    expect(reopenedAssessmentSet.items.every((item) => item.reviewer2CompletedByEmployeeId === manny.user.id)).toBe(true);
+    expect(reopenedAssessmentSet.items.every((item) => item.concludedByEmployeeId === null)).toBe(true);
   });
 
   it("supports peer rejection back to draft, reassignment, and role-aware assessment visibility", async () => {
@@ -313,7 +441,7 @@ describe("assessment authoring and review API", () => {
     const elliotVisibleAssessments = assessmentsListResponseSchema.parse(elliotVisibleAssessmentsResponse.json()).items;
     expect(elliotVisibleAssessments.some((item) => item.id === assessment.id)).toBe(true);
     expect(elliotVisibleAssessments.some((item) => item.id === "dddddddd-dddd-4ddd-8ddd-dddddddddddd")).toBe(true);
-    expect(elliotVisibleAssessments.some((item) => item.id === "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")).toBe(false);
+    expect(elliotVisibleAssessments.some((item) => item.id === "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")).toBe(true);
 
     const filteredManagerAssessmentsResponse = await app.inject({
       method: "GET",
@@ -325,6 +453,113 @@ describe("assessment authoring and review API", () => {
     expect(filteredManagerAssessmentsResponse.statusCode).toBe(200);
     const filteredManagerAssessments = assessmentsListResponseSchema.parse(filteredManagerAssessmentsResponse.json()).items;
     expect(filteredManagerAssessments.every((item) => item.reviewState === "accepted")).toBe(true);
+  });
+
+  it("concludes after the only assigned reviewer completes the set", async () => {
+    const app = await createApp();
+    const ada = await login(app, "ada.admin", "AdminPass123!");
+    const pat = await login(app, "pat.peer", "PeerPass123!");
+    const manny = await login(app, "manny.manager", "ManagerPass123!");
+
+    const reviewerUpdateResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/employees/${pat.user.id}`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        reviewer1Id: ada.user.id,
+        reviewer2Id: null,
+      },
+    });
+    expect(reviewerUpdateResponse.statusCode).toBe(200);
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/assessments",
+      headers: {
+        authorization: `Bearer ${pat.token}`,
+      },
+      payload: {
+        employeeId: pat.user.id,
+        target: "self",
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const createdAssessment = assessmentItemResponseSchema.parse(createResponse.json()).item;
+
+    const submitResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${createdAssessment.id}/submit`,
+      headers: {
+        authorization: `Bearer ${pat.token}`,
+      },
+      payload: {
+        responses: [
+          {
+            questionId: "aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa",
+            order: 1,
+            response: "I kept projects on track and helped unblock teammates.",
+          },
+          {
+            questionId: "aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa",
+            order: 2,
+            response: "I improved planning and team communication.",
+          },
+        ],
+      },
+    });
+    expect(submitResponse.statusCode).toBe(200);
+
+    const acceptResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${createdAssessment.id}/accept`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+      payload: {
+        managerNotes: "Ready for the meeting phase.",
+      },
+    });
+    expect(acceptResponse.statusCode).toBe(200);
+
+    const readyResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/ready-for-meeting`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+    });
+    expect(readyResponse.statusCode).toBe(200);
+
+    const scheduleResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/schedule`,
+      headers: {
+        authorization: `Bearer ${manny.token}`,
+      },
+    });
+    expect(scheduleResponse.statusCode).toBe(200);
+
+    const concludeResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/review-periods/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/employees/${pat.user.id}/assessment-set/conclude`,
+      headers: {
+        authorization: `Bearer ${ada.token}`,
+      },
+      payload: {
+        reviewerRole: "reviewer1",
+        reviewerNotes: "Only the assigned reviewer needed to conclude this set.",
+        completed: true,
+      },
+    });
+    expect(concludeResponse.statusCode).toBe(200);
+
+    const concludedAssessmentSet = assessmentSetResponseSchema.parse(concludeResponse.json());
+    expect(concludedAssessmentSet.items).toHaveLength(1);
+    expect(concludedAssessmentSet.items[0]?.reviewState).toBe("concluded");
+    expect(concludedAssessmentSet.items[0]?.reviewer1CompletedByEmployeeId).toBe(ada.user.id);
+    expect(concludedAssessmentSet.items[0]?.reviewer2CompletedByEmployeeId).toBeNull();
   });
 
   it("enforces archive-aware read-only behavior for assessment creation and updates", async () => {
@@ -365,18 +600,19 @@ describe("assessment authoring and review API", () => {
     expect(archivedAssessmentResponse.statusCode).toBe(200);
     expect(assessmentItemResponseSchema.parse(archivedAssessmentResponse.json()).item.archiveState).toBe("archived");
 
-    const blockedArchivedReviewResponse = await app.inject({
+    const blockedArchivedConclusionResponse = await app.inject({
       method: "POST",
-      url: "/api/v1/assessments/ffffffff-ffff-4fff-8fff-ffffffffffff/review",
+      url: "/api/v1/review-periods/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/employees/33333333-3333-4333-8333-333333333333/assessment-set/conclude",
       headers: {
         authorization: `Bearer ${admin.token}`,
       },
       payload: {
-        managerNotes: "Should stay read-only.",
-        reviewed: true,
+        reviewerRole: "reviewer1",
+        reviewerNotes: "Should stay read-only.",
+        completed: true,
       },
     });
-    expect(blockedArchivedReviewResponse.statusCode).toBe(409);
+    expect(blockedArchivedConclusionResponse.statusCode).toBe(409);
   });
 
   it("captures assessment workflow protections in SQL", () => {

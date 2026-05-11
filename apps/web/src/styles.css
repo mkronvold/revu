@@ -837,7 +837,7 @@ button.employee-row:focus-visible {
 }
 
 .employee-roster-table-scroll {
-  overflow-x: hidden;
+  overflow-x: auto;
   padding: 0.85rem 0.95rem;
   border: 1px solid rgba(148, 163, 184, 0.32);
   border-radius: 1rem;
@@ -845,8 +845,8 @@ button.employee-row:focus-visible {
 }
 
 .employee-roster-table {
-  --employee-roster-columns: minmax(0, 1.35fr) fit-content(7rem) minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr)
-    fit-content(7rem);
+  --employee-roster-columns: minmax(0, 1.25fr) fit-content(7rem) minmax(0, 1.15fr) minmax(0, 0.9fr) minmax(0, 1fr)
+    minmax(0, 1fr) fit-content(7rem);
   --employee-roster-column-gap: 0.75rem;
   width: 100%;
   min-width: 0;
@@ -876,7 +876,7 @@ button.employee-row:focus-visible {
 }
 
 .assessments-table {
-  --assessments-columns: minmax(0, 1.55fr) fit-content(10rem) minmax(0, 1fr) fit-content(10rem) fit-content(11rem);
+  --assessments-columns: minmax(0, 1.7fr) fit-content(9rem) minmax(0, 1fr) fit-content(11rem) minmax(0, 1.2fr) minmax(0, 1.3fr);
   width: 100%;
   min-width: 0;
   display: grid;
@@ -932,6 +932,22 @@ button.employee-row:focus-visible {
 .assessment-row-primary {
   display: grid;
   gap: 0.15rem;
+}
+
+.assessment-row-lifecycle {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.assessment-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.assessment-row-actions button {
+  white-space: nowrap;
 }
 
 .employee-row-card {
@@ -1537,6 +1553,43 @@ button.employee-row:focus-visible {
 
 .review-notes-actions {
   padding-top: 0.25rem;
+}
+
+.workflow-reviewer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.workflow-reviewer-card,
+.workflow-set-assessment-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workflow-reviewer-card h4,
+.workflow-set-assessment-card h4 {
+  margin: 0;
+}
+
+.workflow-reviewer-card-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.workflow-reviewer-note {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.workflow-reviewer-note p {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .compact-detail-grid {
@@ -2240,7 +2293,8 @@ button.employee-row:focus-visible {
 
   .review-queue-header,
   .review-response-header,
-  .employee-roster-header {
+  .employee-roster-header,
+  .assessments-header {
     display: none;
   }
 
@@ -2248,7 +2302,9 @@ button.employee-row:focus-visible {
   .review-queue-item,
   .review-response-row,
   .employee-row-card,
-  .employee-row-summary {
+  .employee-row-summary,
+  .assessment-row-card,
+  .assessment-row {
     grid-template-columns: 1fr;
   }
 

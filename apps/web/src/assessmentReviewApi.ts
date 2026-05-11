@@ -1,24 +1,33 @@
 import type {
   AcceptAssessmentRequest,
+  AssessmentReviewerRole,
   AssessmentResponse,
+  ConcludeAssessmentRequest,
   RejectAssessmentToDraftRequest,
   ReassignAssessmentRequest,
-  ReviewAssessmentRequest,
 } from '@revu/contracts';
 
 import {
   acceptAssessment,
+  concludeAssessmentSet,
+  markAssessmentSetReadyForMeeting,
   reassignAssessment,
   rejectAssessmentToDraft,
-  reviewAssessment,
   saveAssessmentDraft,
+  scheduleAssessmentSet,
   submitAssessment,
 } from './api';
-import type { AssessmentEditor, ReviewPanel } from './assessmentReview';
+import type { AssessmentEditor, AssessmentSetQueueItem, ReviewPanel } from './assessmentReview';
+
+type AssessmentSetEndpointTarget = Pick<AssessmentSetQueueItem, 'reviewPeriodId' | 'employeeId'>;
 
 function normalizeOptionalNotes(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function getReviewerRoleLabel(reviewerRole: AssessmentReviewerRole) {
+  return reviewerRole === 'reviewer1' ? 'Reviewer 1' : 'Reviewer 2';
 }
 
 export function buildAssessmentResponsePayload(
@@ -70,7 +79,7 @@ export async function acceptReviewToApi(token: string, panel: ReviewPanel, notes
 
   return {
     assessment: response.item,
-    notice: 'Assessment accepted and moved into the review stage.',
+    notice: 'Assessment accepted. The dashboard now tracks the set in the ready-for-meeting queue.',
   };
 }
 
@@ -82,33 +91,51 @@ export async function rejectReviewToApi(token: string, panel: ReviewPanel, notes
 
   return {
     assessment: response.item,
-    notice: 'Assessment returned to draft so the employee can edit it again.',
+    notice: 'Assessment returned to incomplete so the employee can edit it again.',
   };
 }
 
-export async function saveReviewNotesToApi(token: string, panel: ReviewPanel, notes: string) {
-  const payload: ReviewAssessmentRequest = {
-    managerNotes: notes.trim(),
-    reviewed: false,
-  };
-  const response = await reviewAssessment(token, panel.assessmentId, payload);
+export async function markAssessmentSetReadyForMeetingInApi(token: string, item: AssessmentSetEndpointTarget) {
+  const response = await markAssessmentSetReadyForMeeting(token, {
+    reviewPeriodId: item.reviewPeriodId,
+    employeeId: item.employeeId,
+  });
 
   return {
-    assessment: response.item,
-    notice: 'Review notes saved.',
+    assessmentSet: response,
+    notice: 'Assessment set marked ready for meeting.',
   };
 }
 
-export async function markReviewReviewedInApi(token: string, panel: ReviewPanel, notes: string) {
-  const payload: ReviewAssessmentRequest = {
-    managerNotes: notes.trim(),
-    reviewed: true,
-  };
-  const response = await reviewAssessment(token, panel.assessmentId, payload);
+export async function scheduleAssessmentSetInApi(token: string, item: AssessmentSetEndpointTarget) {
+  const response = await scheduleAssessmentSet(token, {
+    reviewPeriodId: item.reviewPeriodId,
+    employeeId: item.employeeId,
+  });
 
   return {
-    assessment: response.item,
-    notice: 'Review marked complete.',
+    assessmentSet: response,
+    notice: 'Review meeting marked as scheduled.',
+  };
+}
+
+export async function concludeAssessmentSetInApi(
+  token: string,
+  item: AssessmentSetEndpointTarget,
+  reviewerRole: AssessmentReviewerRole,
+  options: Partial<Pick<ConcludeAssessmentRequest, 'completed' | 'reviewerNotes'>> = {},
+) {
+  const response = await concludeAssessmentSet(token, {
+    reviewPeriodId: item.reviewPeriodId,
+    employeeId: item.employeeId,
+    reviewerRole,
+    completed: options.completed ?? true,
+    reviewerNotes: options.reviewerNotes ?? null,
+  });
+
+  return {
+    assessmentSet: response,
+    notice: `${getReviewerRoleLabel(reviewerRole)} conclusion ${options.completed === false ? 'reopened' : 'recorded'}.`,
   };
 }
 

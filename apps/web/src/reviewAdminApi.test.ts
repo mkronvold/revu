@@ -279,6 +279,8 @@ describe('review admin API orchestration', () => {
           managerUsername: 'manny.manager',
           assessor1Username: 'manny.manager',
           assessor2Username: 'pat.peer',
+          reviewer1Username: 'ada.admin',
+          reviewer2Username: 'manny.manager',
           password: 'tmp-passcode-123',
           credentialKind: 'password' as const,
           passwordResetRequired: true,
@@ -297,6 +299,7 @@ describe('review admin API orchestration', () => {
       mode: 'rotate-passcodes',
       items: exportResponse.items,
     });
+    expect(csvPayload).toContain('reviewer1Username,reviewer2Username');
     expect(buildLocalUsersImportPayload('csv', csvPayload)).toEqual({
       format: 'csv',
       items: exportResponse.items,
@@ -379,6 +382,8 @@ describe('review admin API orchestration', () => {
       managerUsername: 'manny.manager',
       assessor1Username: 'manny.manager',
       assessor2Username: 'pat.peer',
+      reviewer1Username: 'ada.admin',
+      reviewer2Username: 'manny.manager',
       password: 'tmp-passcode-123',
       credentialKind: 'password' as const,
       passwordResetRequired: true,
@@ -457,7 +462,7 @@ describe('review admin API orchestration', () => {
         assignmentCount: 3,
         assessmentCount: 5,
         archivedAssessmentCount: 0,
-        reviewedAssessmentCount: 1,
+        completedAssessmentCount: 1,
       }),
     ).toContain('This is the active review period.');
 

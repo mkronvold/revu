@@ -110,7 +110,7 @@ describe("API/domain foundation", () => {
         .every((assessment) => assessment.archiveState === "archived" && assessment.isReadOnly),
     ).toBe(true);
     expect(snapshot.workflow.visibility).toBe("all");
-    expect(snapshot.workflow.markdown).toContain("Managers accept and review submitted Assessments");
+    expect(snapshot.workflow.markdown).toContain("Dashboard follow-up moves the set through `ready_for_meeting` and then `scheduled`");
   });
 
   it("requires auth for the foundation snapshot and filters assessments by viewer visibility", async () => {
@@ -138,7 +138,11 @@ describe("API/domain foundation", () => {
 
     expect(foundationResponse.statusCode).toBe(200);
     const snapshot = foundationSnapshotSchema.parse(foundationResponse.json());
-    expect(snapshot.assessments.map((assessment) => assessment.id)).toEqual(["dddddddd-dddd-4ddd-8ddd-dddddddddddd"]);
+    expect(snapshot.assessments.map((assessment) => assessment.id)).toEqual([
+      "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    ]);
   });
 
   it("captures database invariants in the migration", () => {

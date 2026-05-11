@@ -1,17 +1,29 @@
 # Revu
 
-Revu is an API-first TypeScript monorepo for employee assessments, manager/admin review workflows, and review-period administration.
+Revu is an API-first TypeScript monorepo for employee assessments, workflow follow-up, and review-period administration.
 
 See `LCM.md` for the lifecycle-management model covering CVE mitigation, scheduled image refreshes, dependency automation, and host redeploy patterns.
 
 ## Current app state
 
-- API and web foundations are in place for auth, employee admin, review periods, question sets, assignments, assessments, and manager/admin review actions.
-- The API currently serves seeded in-memory demo data for local workflow development. Restarting the API resets that data.
-- PostgreSQL migrations in `prisma/migrations/` define the intended schema and can be applied locally for schema validation and future persistence work.
-- Local user, question-set, and assignment transfers now support real JSON/CSV downloads plus browser-selected JSON/CSV imports from the File Management admin UI.
-- Local user import/export is available from the employee admin UI. Exporting local users rotates every exported account to a generated one-time passcode and immediately signs those users out.
+- API and web flows are in place for auth, employee admin, review periods, question sets, assignments, assessments, workflow settings, backups, and file transfers.
+- The active assessment lifecycle is `new`, `draft`, `submitted`, `accepted`, `ready_for_meeting`, `scheduled`, and `concluded`.
+- `Dashboard` is the operational workflow surface for employees, managers, reviewers, and day-to-day non-admin follow-up. The legacy `/reviews` route is gone.
+- Admin `Assessments` remains the separate override and visibility surface for the active review period.
+- The app persists to PostgreSQL for development, tests, and deployment; use `./reset-to-example.sh` to restore the seeded demo dataset.
+- Local user, question-set, and assignment transfers support real JSON/CSV downloads plus browser-selected JSON/CSV imports from the File Management admin UI.
+- Exporting local users rotates every exported account to a generated one-time passcode and immediately signs those users out.
 - GitHub Actions publishes deployment images to `ghcr.io/mkronvold/revu-api` and `ghcr.io/mkronvold/revu-web`.
+
+## Workflow overview
+
+1. Admin creates the active review period plus self and peer question sets.
+2. Managers configure peer assignments and reviewer 1 / reviewer 2 coverage.
+3. Employees use Dashboard to complete assessments and move them from `new` to `draft` to `submitted`.
+4. Managers or admins accept submitted assessments, then move each employee assessment set to `ready_for_meeting` and `scheduled`.
+5. Reviewer 1 and reviewer 2 each record conclusions; once both complete, the set becomes `concluded`.
+6. Admins use the Assessments page for override visibility while Dashboard remains the shared workflow surface.
+7. Admins archive the review period when the cycle is complete.
 
 ## Requirements
 

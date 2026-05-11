@@ -26,7 +26,6 @@ import {
   reassignAssessment,
   restoreBackup,
   restoreStoredBackup,
-  reviewAssessment,
   submitAssessment,
   updateBackupStatus,
   uploadStoredBackup,
@@ -150,9 +149,6 @@ describe('web api client', () => {
         new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[1] }), { status: 200 }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[1] }), { status: 200 }),
-      )
-      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             assessment: foundationSnapshotExample.assessments[1],
@@ -181,10 +177,6 @@ describe('web api client', () => {
     });
     await acceptAssessment('session-token', foundationSnapshotExample.assessments[1]!.id, {
       managerNotes: 'Looks good.',
-    });
-    await reviewAssessment('session-token', foundationSnapshotExample.assessments[1]!.id, {
-      managerNotes: 'Captured review notes.',
-      reviewed: true,
     });
     await reassignAssessment('session-token', foundationSnapshotExample.assessments[1]!.id, {
       managerId: foundationSnapshotExample.employees[0]!.id,
@@ -222,14 +214,14 @@ describe('web api client', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      5,
       `${apiBaseUrl}/assessments/${foundationSnapshotExample.assessments[1]!.id}/reassign`,
       expect.objectContaining({
         method: 'POST',
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+      6,
       `${apiBaseUrl}/workflow-settings`,
       expect.objectContaining({
         method: 'PATCH',
@@ -301,19 +293,21 @@ describe('web api client', () => {
               exportedAt: '2026-06-01T12:00:00.000Z',
               itemCount: 1,
               items: [
-              {
-                username: 'elliot.employee',
-                fullName: 'Elliot Employee',
-                email: 'elliot.employee@example.com',
-                role: 'employee',
-                status: 'active',
-                managerUsername: 'manny.manager',
-                assessor1Username: 'manny.manager',
-                assessor2Username: 'pat.peer',
-                password: 'tmp-passcode-123',
-                credentialKind: 'password',
-                passwordResetRequired: true,
-                },
+               {
+                 username: 'elliot.employee',
+                 fullName: 'Elliot Employee',
+                 email: 'elliot.employee@example.com',
+                 role: 'employee',
+                 status: 'active',
+                 managerUsername: 'manny.manager',
+                 assessor1Username: 'manny.manager',
+                 assessor2Username: 'pat.peer',
+                 reviewer1Username: 'ada.admin',
+                 reviewer2Username: 'manny.manager',
+                 password: 'tmp-passcode-123',
+                 credentialKind: 'password',
+                 passwordResetRequired: true,
+                 },
               ],
           }),
           { status: 200 },
@@ -350,6 +344,8 @@ describe('web api client', () => {
           managerUsername: 'manny.manager',
           assessor1Username: 'manny.manager',
           assessor2Username: 'pat.peer',
+          reviewer1Username: 'ada.admin',
+          reviewer2Username: 'manny.manager',
           password: 'tmp-passcode-123',
           passwordResetRequired: true,
         },
@@ -488,6 +484,8 @@ describe('web api client', () => {
             managerUsername: null,
             assessor1Username: null,
             assessor2Username: null,
+            reviewer1Username: null,
+            reviewer2Username: null,
             password: '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
             credentialKind: 'password-hash' as const,
             passwordResetRequired: false,

@@ -196,7 +196,7 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
         items: [{ title: '2025 Peer-Assessment for Elliot Employee', actionLabel: 'View', detail: 'Read-only historical example.' }],
       },
     ],
-    reviewSummary: '4 submitted or accepted assessments need manager/admin attention.',
+    reviewSummary: '4 submitted assessments or accepted sets need dashboard follow-up.',
     adminSummary: '3 employee records have pending directory or password follow-up tasks.',
   },
   '22222222-2222-4222-8222-222222222222': {
@@ -223,7 +223,7 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
         items: [{ title: '2025 Peer-Assessment for Casey Contributor', actionLabel: 'View', detail: 'Finished example kept on the dashboard.' }],
       },
     ],
-    reviewSummary: '2 accepted assessments are waiting for final review notes.',
+    reviewSummary: '2 accepted assessment sets are ready for meeting follow-up.',
     adminSummary: null,
   },
   '33333333-3333-4333-8333-333333333333': {
@@ -250,7 +250,7 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
         items: [],
       },
     ],
-    reviewSummary: 'No review work assigned. Employee dashboard stays centered on assessments.',
+    reviewSummary: 'No workflow follow-up is assigned right now. Dashboard stays centered on authored assessments.',
     adminSummary: null,
   },
   '44444444-4444-4444-8444-444444444444': {
@@ -277,7 +277,7 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
         items: [{ title: '2025 Peer-Assessment for Manny Manager', actionLabel: 'View', detail: 'Finished example kept in the demo data.' }],
       },
     ],
-    reviewSummary: 'No manager review actions. Peer reviewer dashboard remains employee-focused.',
+    reviewSummary: 'No dashboard workflow actions are assigned right now. Peer reviewer dashboard remains employee-focused.',
     adminSummary: null,
   },
   '55555555-5555-4555-8555-555555555555': {
@@ -304,7 +304,7 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
         items: [],
       },
     ],
-    reviewSummary: 'No review work assigned.',
+    reviewSummary: 'No workflow follow-up is assigned right now.',
     adminSummary: null,
   },
 };

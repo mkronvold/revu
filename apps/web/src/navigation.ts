@@ -6,7 +6,7 @@ export type AppRole = 'employee' | 'manager' | 'admin';
 export type WorkflowVisibility = SharedWorkflowVisibility;
 
 export type AppSection = {
-  id: 'dashboard' | 'reviews' | 'employees' | 'questions' | 'assessments' | 'reviewPeriod' | 'fileManagement' | 'workflow';
+  id: 'dashboard' | 'employees' | 'questions' | 'assessments' | 'reviewPeriod' | 'fileManagement' | 'workflow';
   path: `/${string}`;
   group: NavGroup;
   title: string;
@@ -20,8 +20,8 @@ export type AppSection = {
 };
 
 export const routeLegend = {
+  dashboard: 'Dashboard is the single workflow action surface for authored assessments, manager follow-up, reviewer work, and admin oversight.',
   assessments: 'Assessments are employee-authored forms that staff complete before any review work begins.',
-  reviews: 'Reviews are manager and admin actions taken after an assessment is accepted.',
 } as const;
 
 export const workflowMarkdown = defaultWorkflowMarkdown;
@@ -32,32 +32,16 @@ export const appSections: AppSection[] = [
     path: '/dashboard',
     group: 'Workspace',
     title: 'Dashboard',
-    summary: 'A shared landing page for employee assessment work, due dates, and role-based shortcuts into manager and admin areas.',
+    summary: 'The shared operational surface for employee assessment work, due dates, submissions, and role-based workflow actions.',
     audience: ['Employee', 'Manager', 'Admin'],
     highlights: [
-      'Reserve space for profile details plus assessment queues grouped by status.',
-      'Expose manager and admin shortcuts without mixing them into employee-authored assessment tasks.',
-      'Keep the dashboard language centered on assignments, drafts, and submissions.',
+      'Keep authored assessment work, manager actions, reviewer follow-up, and admin oversight on one operational surface.',
+      'Expose role-aware workflow sections without sending non-admin users to a separate review route.',
+      'Keep the dashboard language centered on assignments, submissions, readiness, scheduling, and conclusion work.',
     ],
-    placeholderTitle: 'Assessment queues and profile summary',
-    placeholderDescription: 'Placeholder cards mark where personal profile details, self assessments, and peer assessments will render once assignment data is wired in.',
-    nextSlice: 'Connect the dashboard placeholders to assignment and assessment summary endpoints.',
-  },
-  {
-    id: 'reviews',
-    path: '/reviews',
-    group: 'Workspace',
-    title: 'Reviews',
-    summary: 'Manager and admin review actions live here, separate from employee-authored assessments and drafts.',
-    audience: ['Manager', 'Admin'],
-    highlights: [
-      'Track accepted assessments that still need review work.',
-      'Preserve clear transitions from submitted to accepted to reviewed.',
-      'Hold space for accept, reject, review, and archive actions without implementing them yet.',
-    ],
-    placeholderTitle: 'Review inbox and action rail',
-    placeholderDescription: 'This slice will later host review queues, compact response views, and workflow actions for managers and admins.',
-    nextSlice: 'Add data-backed review lists and review panel scaffolding after the API contracts land.',
+    placeholderTitle: 'Workflow dashboard and profile summary',
+    placeholderDescription: 'Dashboard sections keep authored assessment queues, manager actions, reviewer follow-up, and admin oversight together.',
+    nextSlice: 'Continue wiring the dashboard sections to the remaining scheduling and reviewer conclusion workflows.',
   },
   {
     id: 'employees',
@@ -96,11 +80,11 @@ export const appSections: AppSection[] = [
     path: '/assessments',
     group: 'Administration',
     title: 'Assessments',
-    summary: 'Admin-only visibility into every assessment in the active review period, separate from the manager review queue.',
+    summary: 'Admin-only visibility into every assessment in the active review period, separate from the dashboard workflow sections.',
     audience: ['Admin'],
     highlights: [
       'Show self and peer assessments together for the current active cycle.',
-      'Keep assessment status visibility separate from review actions on the Reviews page.',
+      'Keep the admin assessment listing separate from the role-based action queues on the dashboard.',
       'Give admins one place to confirm assignment sync results and current progress.',
     ],
     placeholderTitle: 'Active review period assessments',
@@ -144,14 +128,14 @@ export const appSections: AppSection[] = [
     path: '/workflow',
     group: 'Workspace',
     title: 'Workflow',
-    summary: 'Reference the full review lifecycle from review-period setup through assessment submission, review, finalization, and archive.',
+    summary: 'Reference the current lifecycle from review-period setup through submission, acceptance, meeting readiness, scheduling, conclusion, and archive.',
     audience: ['Employee', 'Manager', 'Admin'],
     highlights: [
-      'Show the shared review lifecycle in one place for employees, managers, and admins.',
+      'Show the shared assessment lifecycle in one place for employees, managers, reviewers, and admins.',
       'Keep workflow guidance available from the primary sidebar navigation.',
       'Render the approved workflow copy as markdown so future edits can stay content-driven.',
     ],
-    placeholderTitle: 'Review workflow reference',
+    placeholderTitle: 'Assessment lifecycle reference',
     placeholderDescription: 'This route renders the complete workflow markdown and keeps it accessible from the main sidebar navigation.',
     nextSlice: 'Add deeper links from each workflow step once the destination views are fully implemented.',
   },
@@ -164,6 +148,7 @@ const appSectionByPath = new Map<string, AppSection>(appSections.map((section) =
 const legacyPathRedirects = new Map<string, AppSection['path']>([
   ['/archive', '/review-period'],
   ['/backups', '/file-management'],
+  ['/reviews', '/dashboard'],
 ]);
 
 export function normalizePath(pathname: string): string {
@@ -217,7 +202,7 @@ function canSeeWorkflowNavigation(role: AppRole, workflowVisibility?: WorkflowVi
 }
 
 export function getNavigationSectionsForRole(role: AppRole, workflowVisibility?: WorkflowVisibility): AppSection[] {
-  const visibleSections = getSectionsForRole(role).filter((section) => {
+  return getSectionsForRole(role).filter((section) => {
     if (section.showInNavigation === false) {
       return false;
     }
@@ -228,21 +213,4 @@ export function getNavigationSectionsForRole(role: AppRole, workflowVisibility?:
 
     return true;
   });
-
-  const workflowSection = visibleSections.find((section) => section.id === 'workflow');
-  if (!workflowSection) {
-    return visibleSections;
-  }
-
-  const sectionsWithoutWorkflow = visibleSections.filter((section) => section.id !== 'workflow');
-  const reviewsIndex = sectionsWithoutWorkflow.findIndex((section) => section.id === 'reviews');
-  if (reviewsIndex < 0) {
-    return [...sectionsWithoutWorkflow, workflowSection];
-  }
-
-  return [
-    ...sectionsWithoutWorkflow.slice(0, reviewsIndex + 1),
-    workflowSection,
-    ...sectionsWithoutWorkflow.slice(reviewsIndex + 1),
-  ];
 }

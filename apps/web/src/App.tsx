@@ -45,7 +45,7 @@ import {
   updateQuestionCategories,
   updateWorkflowSettings,
 } from './api';
-import { buildDashboardSnapshot } from './dashboard';
+import { buildDashboardSnapshot, type DashboardActionItem } from './dashboard';
 import {
   appSections,
   defaultPath,
@@ -60,21 +60,24 @@ import {
 } from './navigation';
 import {
   buildAdminAssessmentSummary,
+  type AdminAssessmentRow,
   type AssessmentEditorQuestion,
   buildAdminAssessmentRows,
   buildReviewQueues,
   createAssessmentWorkflowSnapshot,
   formatSubjectiveResponse,
   getAssessmentEditor,
+  getAssessmentSetWorkflowPanel,
   groupAssessmentEditorQuestions,
   getReviewPanel,
 } from './assessmentReview';
 import {
   acceptReviewToApi,
-  markReviewReviewedInApi,
+  concludeAssessmentSetInApi,
+  markAssessmentSetReadyForMeetingInApi,
   rejectReviewToApi,
   saveAssessmentDraftToApi,
-  saveReviewNotesToApi,
+  scheduleAssessmentSetInApi,
   submitAssessmentToApi,
 } from './assessmentReviewApi';
 import {
@@ -163,6 +166,20 @@ type BackupDownloadDialogState = {
 type BackupRestoreDialogState = {
   file: BackupStoredFile;
 };
+
+type AssessmentSetDialogState = {
+  reviewPeriodId: string;
+  employeeId: string;
+};
+
+type ReviewerNotesDraft = Record<'reviewer1' | 'reviewer2', string>;
+
+function createEmptyReviewerNotesDraft(): ReviewerNotesDraft {
+  return {
+    reviewer1: '',
+    reviewer2: '',
+  };
+}
 
 const questionTypeHelperOptions = {
   subjective: ['Strongly agree', 'Somewhat agree', 'Neutral', 'Somewhat disagree', 'Strongly disagree'],
@@ -332,6 +349,8 @@ type EmployeeDraft = {
   managerId: string;
   assessor1Id: string;
   assessor2Id: string;
+  reviewer1Id: string;
+  reviewer2Id: string;
   initialPassword: string;
 };
 
@@ -506,6 +525,8 @@ function toDraft(employee: Employee | EmployeeAdmin): EmployeeDraft {
     managerId: employee.managerId ?? '',
     assessor1Id: employee.assessor1Id ?? '',
     assessor2Id: employee.assessor2Id ?? '',
+    reviewer1Id: employee.reviewer1Id ?? '',
+    reviewer2Id: employee.reviewer2Id ?? '',
     initialPassword: '',
   };
 }
@@ -625,12 +646,17 @@ function App() {
   const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
   const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
+  const [assessmentLifecycleFilter, setAssessmentLifecycleFilter] = useState<'all' | AdminAssessmentRow['summaryBucket']>('all');
+  const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<'all' | AdminAssessmentRow['target']>('all');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
   const [workflowNotice, setWorkflowNotice] = useState('');
   const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
+  const [selectedAssessmentSetDialog, setSelectedAssessmentSetDialog] = useState<AssessmentSetDialogState | null>(null);
+  const [reviewerNotesDraft, setReviewerNotesDraft] = useState<ReviewerNotesDraft>(() => createEmptyReviewerNotesDraft());
+  const [isReturnToIncompleteDialogOpen, setIsReturnToIncompleteDialogOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getStoredSidebarCollapsed());
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
@@ -831,6 +857,8 @@ function App() {
             employee.managerId ? employeeNamesById.get(employee.managerId) ?? deletedUserLabel : '',
             employee.assessor1Id ? employeeNamesById.get(employee.assessor1Id) ?? deletedUserLabel : '',
             employee.assessor2Id ? employeeNamesById.get(employee.assessor2Id) ?? deletedUserLabel : '',
+            employee.reviewer1Id ? employeeNamesById.get(employee.reviewer1Id) ?? deletedUserLabel : '',
+            employee.reviewer2Id ? employeeNamesById.get(employee.reviewer2Id) ?? deletedUserLabel : '',
           ];
 
           return searchFields.some((value) => value.toLowerCase().includes(normalizedQuery));
@@ -902,27 +930,69 @@ function App() {
         : [],
     [activeAssessmentReviewPeriod, assessmentWorkflow, workflowEmployees],
   );
+  const adminAssessmentIds = useMemo(
+    () => adminAssessmentRows.map((item) => item.assessmentId),
+    [adminAssessmentRows],
+  );
   const filteredAdminAssessmentRows = useMemo(() => {
     const normalizedQuery = assessmentSearchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return adminAssessmentRows;
-    }
-
     return adminAssessmentRows.filter((item) =>
+      (assessmentLifecycleFilter === 'all' || item.summaryBucket === assessmentLifecycleFilter) &&
+      (assessmentTargetFilter === 'all' || item.target === assessmentTargetFilter) &&
       [
         item.subjectName,
         item.title,
         item.targetLabel,
         item.assessorLabel,
+        item.detail,
         item.assessmentStatusLabel,
-        item.reviewStatusLabel,
-      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
+        item.lifecycleLabel,
+        item.nextStepLabel,
+        item.openAssessmentLabel,
+        item.reviewActionLabel ?? '',
+        item.workflowActionLabel ?? '',
+      ].some((value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery)),
     );
-  }, [adminAssessmentRows, assessmentSearchQuery]);
+  }, [adminAssessmentRows, assessmentLifecycleFilter, assessmentSearchQuery, assessmentTargetFilter]);
   const adminAssessmentSummary = useMemo(
     () => buildAdminAssessmentSummary(filteredAdminAssessmentRows),
     [filteredAdminAssessmentRows],
   );
+  const overallAdminAssessmentSummary = useMemo(
+    () =>
+      adminAssessmentSummary.reduce(
+        (summary, item) => ({
+          total: summary.total + item.total,
+          drafting: summary.drafting + item.drafting,
+          submitted: summary.submitted + item.submitted,
+          accepted: summary.accepted + item.accepted,
+          readyForMeeting: summary.readyForMeeting + item.readyForMeeting,
+          scheduled: summary.scheduled + item.scheduled,
+          concluded: summary.concluded + item.concluded,
+        }),
+        {
+          total: 0,
+          drafting: 0,
+          submitted: 0,
+          accepted: 0,
+          readyForMeeting: 0,
+          scheduled: 0,
+          concluded: 0,
+        },
+      ),
+    [adminAssessmentSummary],
+  );
+  const areAssessmentFiltersActive =
+    assessmentSearchQuery.trim().length > 0 || assessmentLifecycleFilter !== 'all' || assessmentTargetFilter !== 'all';
+  const viewableAssessmentIds = useMemo(() => {
+    const assessmentIds = new Set(authoredAssessmentIds);
+
+    if (sessionUser?.role === 'admin') {
+      adminAssessmentIds.forEach((assessmentId) => assessmentIds.add(assessmentId));
+    }
+
+    return Array.from(assessmentIds);
+  }, [adminAssessmentIds, authoredAssessmentIds, sessionUser]);
   const reviewAssessmentIds = useMemo(
     () => reviewQueues.map((item) => item.assessmentId),
     [reviewQueues],
@@ -940,6 +1010,19 @@ function App() {
         ? getReviewPanel(sessionUser, assessmentWorkflow, workflowEmployees, selectedReviewAssessmentId)
         : null,
     [assessmentWorkflow, selectedReviewAssessmentId, sessionUser, workflowEmployees],
+  );
+  const selectedAssessmentSetWorkflowPanel = useMemo(
+    () =>
+      sessionUser && assessmentWorkflow && selectedAssessmentSetDialog
+        ? getAssessmentSetWorkflowPanel(
+            sessionUser,
+            assessmentWorkflow,
+            workflowEmployees,
+            selectedAssessmentSetDialog.reviewPeriodId,
+            selectedAssessmentSetDialog.employeeId,
+          )
+        : null,
+    [assessmentWorkflow, selectedAssessmentSetDialog, sessionUser, workflowEmployees],
   );
   const selectedReviewPeriod = useMemo(
     () => reviewAdmin?.reviewPeriods.find((period) => period.id === selectedReviewPeriodId) ?? null,
@@ -1362,10 +1445,10 @@ function App() {
   }, [selectedEmployeeId]);
 
   useEffect(() => {
-    if (selectedAssessmentId && !authoredAssessmentIds.includes(selectedAssessmentId)) {
+    if (selectedAssessmentId && !viewableAssessmentIds.includes(selectedAssessmentId)) {
       setSelectedAssessmentId(null);
     }
-  }, [authoredAssessmentIds, selectedAssessmentId]);
+  }, [selectedAssessmentId, viewableAssessmentIds]);
 
   useEffect(() => {
     if (!selectedAssessmentEditor) {
@@ -1391,6 +1474,35 @@ function App() {
     }
 
     setReviewNotesDraft(selectedReviewPanel.managerNotes);
+  }, [selectedReviewPanel]);
+
+  useEffect(() => {
+    if (selectedAssessmentSetDialog && !selectedAssessmentSetWorkflowPanel) {
+      setSelectedAssessmentSetDialog(null);
+    }
+  }, [selectedAssessmentSetDialog, selectedAssessmentSetWorkflowPanel]);
+
+  useEffect(() => {
+    if (!selectedAssessmentSetWorkflowPanel) {
+      setReviewerNotesDraft(createEmptyReviewerNotesDraft());
+      return;
+    }
+
+    const reviewer1Notes =
+      selectedAssessmentSetWorkflowPanel.reviewerActions.find((action) => action.role === 'reviewer1')?.notes ?? '';
+    const reviewer2Notes =
+      selectedAssessmentSetWorkflowPanel.reviewerActions.find((action) => action.role === 'reviewer2')?.notes ?? '';
+
+    setReviewerNotesDraft({
+      reviewer1: reviewer1Notes,
+      reviewer2: reviewer2Notes,
+    });
+  }, [selectedAssessmentSetWorkflowPanel]);
+
+  useEffect(() => {
+    if (!selectedReviewPanel) {
+      setIsReturnToIncompleteDialogOpen(false);
+    }
   }, [selectedReviewPanel]);
 
   useEffect(() => {
@@ -1456,24 +1568,43 @@ function App() {
       name: getEmployeeName(entry.id),
     }));
 
-  const renderAssessorList = (
-    employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>,
+  const getReviewerNames = (employee: Pick<Employee, 'reviewer1Id' | 'reviewer2Id'>) =>
+    [
+      { label: 'Reviewer 1', id: employee.reviewer1Id },
+      { label: 'Reviewer 2', id: employee.reviewer2Id },
+    ].map((entry) => ({
+      ...entry,
+      name: getEmployeeName(entry.id),
+    }));
+
+  const renderRelationshipList = (
+    relationships: Array<{ label: string; name: string }>,
     options: { showLabels?: boolean } = {},
   ) => (
     <span className="stacked-relationship-list">
-      {getAssessorNames(employee).map((assessor) => (
-        <span key={assessor.label}>
+      {relationships.map((relationship) => (
+        <span key={relationship.label}>
           {options.showLabels === false ? (
-            assessor.name
+            relationship.name
           ) : (
             <>
-              <strong>{assessor.label}:</strong> {assessor.name}
+              <strong>{relationship.label}:</strong> {relationship.name}
             </>
           )}
         </span>
       ))}
     </span>
   );
+
+  const renderAssessorList = (
+    employee: Pick<Employee, 'assessor1Id' | 'assessor2Id'>,
+    options: { showLabels?: boolean } = {},
+  ) => renderRelationshipList(getAssessorNames(employee), options);
+
+  const renderReviewerList = (
+    employee: Pick<Employee, 'reviewer1Id' | 'reviewer2Id'>,
+    options: { showLabels?: boolean } = {},
+  ) => renderRelationshipList(getReviewerNames(employee), options);
 
   const refreshFoundationSnapshot = useCallback(
     async (options?: { apply?: boolean }) => {
@@ -1717,6 +1848,22 @@ function App() {
 
   const closeReviewDialog = () => {
     setSelectedReviewAssessmentId(null);
+    setIsReturnToIncompleteDialogOpen(false);
+  };
+
+  const closeAssessmentSetDialog = () => {
+    setSelectedAssessmentSetDialog(null);
+  };
+
+  const handleSelectAssessment = (assessmentId: string) => {
+    setSelectedAssessmentId(assessmentId);
+  };
+
+  const openAssessmentSetWorkflowDialog = (reviewPeriodId: string, employeeId: string) => {
+    setSelectedAssessmentSetDialog({
+      reviewPeriodId,
+      employeeId,
+    });
   };
 
   const openWorkflowEditor = () => {
@@ -1796,6 +1943,24 @@ function App() {
     setSelectedReviewAssessmentId(assessmentId);
   };
 
+  const handleDashboardWorkflowAction = async (item: DashboardActionItem) => {
+    if (item.actionKind === 'open-assessment' && item.assessmentId) {
+      handleSelectAssessment(item.assessmentId);
+      return;
+    }
+
+    if (item.actionKind === 'open-review' && item.assessmentId) {
+      handleSelectReviewAssessment(item.assessmentId);
+      return;
+    }
+
+    if (item.kind !== 'assessment-set' || !item.reviewPeriodId || !item.employeeId) {
+      return;
+    }
+
+    openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId);
+  };
+
   const clearSession = (options?: {
     authNotice?: string;
   }) => {
@@ -1837,11 +2002,16 @@ function App() {
     setPasswordStatus('');
     setTemporaryPassword(null);
     setAssessmentSearchQuery('');
+    setAssessmentLifecycleFilter('all');
+    setAssessmentTargetFilter('all');
     setIsSavingAssessmentWorkflow(false);
     setSelectedAssessmentId(null);
     setAssessmentResponsesDraft({});
     setSelectedReviewAssessmentId(null);
     setReviewNotesDraft('');
+    setSelectedAssessmentSetDialog(null);
+    setReviewerNotesDraft(createEmptyReviewerNotesDraft());
+    setIsReturnToIncompleteDialogOpen(false);
     setWorkflowNotice('');
     setWorkflowDraft(null);
     setWorkflowVisibilityDraft(null);
@@ -2437,6 +2607,8 @@ function App() {
       managerId: sessionUser?.id ?? '',
       assessor1Id: sessionUser?.id ?? '',
       assessor2Id: '',
+      reviewer1Id: sessionUser?.id ?? '',
+      reviewer2Id: '',
       initialPassword: '',
     });
     setFormError('');
@@ -2482,6 +2654,25 @@ function App() {
       return;
     }
 
+    if (draftEmployee.id && draftEmployee.reviewer1Id === draftEmployee.id) {
+      setFormError('Reviewer 1 cannot be the employee.');
+      return;
+    }
+
+    if (draftEmployee.id && draftEmployee.reviewer2Id === draftEmployee.id) {
+      setFormError('Reviewer 2 cannot be the employee.');
+      return;
+    }
+
+    if (
+      draftEmployee.reviewer1Id &&
+      draftEmployee.reviewer2Id &&
+      draftEmployee.reviewer1Id === draftEmployee.reviewer2Id
+    ) {
+      setFormError('Reviewer 1 and reviewer 2 must be different users.');
+      return;
+    }
+
     setIsSavingEmployee(true);
     setFormError('');
 
@@ -2495,6 +2686,8 @@ function App() {
         managerId: draftEmployee.managerId || null,
         assessor1Id: draftEmployee.assessor1Id || null,
         assessor2Id: draftEmployee.assessor2Id || null,
+        reviewer1Id: draftEmployee.reviewer1Id || null,
+        reviewer2Id: draftEmployee.reviewer2Id || null,
       } as const;
 
       const response = draftEmployee.id
@@ -2697,6 +2890,7 @@ function App() {
 
     try {
       const { notice } = await rejectReviewToApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
+      setIsReturnToIncompleteDialogOpen(false);
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -2706,13 +2900,8 @@ function App() {
     }
   };
 
-  const handleSaveReviewNotes = async () => {
-    if (!selectedReviewPanel || !sessionToken) {
-      return;
-    }
-
-    if (!reviewNotesDraft.trim()) {
-      setAppError('Review notes are required before saving them.');
+  const handleMarkAssessmentSetReady = async () => {
+    if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
       return;
     }
 
@@ -2721,7 +2910,11 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await saveReviewNotesToApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
+      const { notice } = await markAssessmentSetReadyForMeetingInApi(sessionToken, {
+        reviewPeriodId: selectedAssessmentSetWorkflowPanel.reviewPeriodId,
+        employeeId: selectedAssessmentSetWorkflowPanel.employeeId,
+      });
+      setSelectedAssessmentSetDialog(null);
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -2731,13 +2924,8 @@ function App() {
     }
   };
 
-  const handleCompleteReview = async () => {
-    if (!selectedReviewPanel || !sessionToken) {
-      return;
-    }
-
-    if (!reviewNotesDraft.trim()) {
-      setAppError('Review notes are required before marking an assessment reviewed.');
+  const handleScheduleAssessmentSet = async () => {
+    if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
       return;
     }
 
@@ -2746,7 +2934,43 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await markReviewReviewedInApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
+      const { notice } = await scheduleAssessmentSetInApi(sessionToken, {
+        reviewPeriodId: selectedAssessmentSetWorkflowPanel.reviewPeriodId,
+        employeeId: selectedAssessmentSetWorkflowPanel.employeeId,
+      });
+      setSelectedAssessmentSetDialog(null);
+      await refreshFoundationSnapshot();
+      setWorkflowNotice(notice);
+    } catch (error) {
+      setAppError(getErrorMessage(error));
+    } finally {
+      setIsSavingAssessmentWorkflow(false);
+    }
+  };
+
+  const handleReviewerConclusion = async (reviewerRole: 'reviewer1' | 'reviewer2', completed: boolean) => {
+    if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
+      return;
+    }
+
+    setIsSavingAssessmentWorkflow(true);
+    setAppError('');
+    setWorkflowNotice('');
+
+    try {
+      const { notice } = await concludeAssessmentSetInApi(
+        sessionToken,
+        {
+          reviewPeriodId: selectedAssessmentSetWorkflowPanel.reviewPeriodId,
+          employeeId: selectedAssessmentSetWorkflowPanel.employeeId,
+        },
+        reviewerRole,
+        {
+          completed,
+          reviewerNotes: reviewerNotesDraft[reviewerRole],
+        },
+      );
+      setSelectedAssessmentSetDialog(null);
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -4441,7 +4665,7 @@ function App() {
                       <strong>{reviewPeriod.label}</strong>
                       <p className="muted-copy">
                         Archived at {reviewPeriod.archivedAt ?? 'unknown'} by {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
-                        {summary.archivedAssessmentCount} archived assessments • {summary.reviewedAssessmentCount} reviewed
+                        {summary.archivedAssessmentCount} archived assessments • {summary.completedAssessmentCount} completed
                       </p>
                     </div>
                     <button
@@ -4477,8 +4701,8 @@ function App() {
           </div>
         </div>
         <p className="muted-copy">
-          Export or import employee accounts here. The employee directory stays focused on editing people, roles, and
-          passwords.
+          Export or import employee accounts here, including manager, assessor, and reviewer assignments. The employee
+          directory stays focused on editing people, roles, and passwords.
         </p>
         <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
           {localUserExportModeOptions.map((option) => (
@@ -4654,6 +4878,7 @@ function App() {
         </div>
         {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
         {appError ? <p className="form-error">{appError}</p> : null}
+        {workflowNotice ? <p className="muted-copy">{workflowNotice}</p> : null}
         <div className="dashboard-identity-grid" aria-label="Signed-in user summary">
           <div className="dashboard-identity-field">
             <span className="dashboard-identity-label">Role</span>
@@ -4677,6 +4902,26 @@ function App() {
               {sessionUser ? renderAssessorList(sessionUser, { showLabels: false }) : '—'}
             </span>
           </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Reviewers</span>
+            <span className="dashboard-identity-value">
+              {sessionUser ? renderReviewerList(sessionUser, { showLabels: false }) : '—'}
+            </span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Current cycle</span>
+            <span className="dashboard-identity-value">{dashboardSnapshot?.dueLabel ?? '—'}</span>
+          </div>
+          <div className="dashboard-identity-field">
+            <span className="dashboard-identity-label">Workflow summary</span>
+            <span className="dashboard-identity-value">{dashboardSnapshot?.reviewSummary ?? '—'}</span>
+          </div>
+          {dashboardSnapshot?.adminSummary ? (
+            <div className="dashboard-identity-field">
+              <span className="dashboard-identity-label">Admin note</span>
+              <span className="dashboard-identity-value">{dashboardSnapshot.adminSummary}</span>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -4692,7 +4937,7 @@ function App() {
         {areDashboardQueuesExpanded ? (
           <div className="queue-stack dashboard-queue-stack">
             {dashboardSnapshot?.queues.map((queue) => (
-              <article className="dashboard-queue-group" key={queue.title}>
+              <article className="dashboard-queue-group" key={queue.id}>
                 <div className="dashboard-queue-group-heading">
                   <strong>{queue.title}</strong>
                   <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
@@ -4706,41 +4951,107 @@ function App() {
                     <div className="review-queue-table dashboard-queue-table" aria-label={`${queue.title} assessments`}>
                       <div className="review-queue-header">
                         <span>Name</span>
-                        <span>Assessment type</span>
-                        <span>Assessor</span>
+                        <span>Work</span>
+                        <span>Responsibility</span>
                         <span>Due</span>
                         <span>Status</span>
+                        <span>Action</span>
                       </div>
                       {queue.items.map((item) => (
                         <div className="review-queue-row-card" key={item.assessmentId}>
                           <button
                             type="button"
                             className={`review-queue-item dashboard-queue-item${item.assessmentId === selectedAssessmentId ? ' admin-list-item-active' : ''}`}
-                            onClick={() => setSelectedAssessmentId(item.assessmentId)}
+                            onClick={() => void handleDashboardWorkflowAction(item)}
                           >
                             <span className="employee-row-cell review-queue-primary">
                               <strong>{item.subjectName}</strong>
                               <span className="muted-copy review-queue-subcopy">{item.title}</span>
                             </span>
-                            <span className="employee-row-cell">{item.targetLabel}</span>
-                            <span className="employee-row-cell">{item.assessorLabel}</span>
+                            <span className="employee-row-cell">{item.workLabel}</span>
+                            <span className="employee-row-cell">{item.responsibilityLabel}</span>
                             <span className="employee-row-cell">{item.dueDate}</span>
                             <span className="employee-row-cell review-queue-step-cell">
                               <span className="pill">{item.statusLabel}</span>
                             </span>
+                            <span className="employee-row-cell">{item.actionLabel}</span>
                           </button>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <p className="muted-copy">none</p>
+                  <p className="muted-copy">{queue.emptyMessage}</p>
                 )}
               </article>
             )) ?? <p className="muted-copy">Loading assessment queue...</p>}
           </div>
         ) : null}
       </section>
+
+      {dashboardSnapshot?.sections.map((section) => (
+        <section className="card" key={section.id}>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">{section.title}</p>
+              <p className="muted-copy">{section.description}</p>
+            </div>
+          </div>
+          <div className="queue-stack dashboard-queue-stack">
+            {section.queues.map((queue) => (
+              <article className="dashboard-queue-group" key={queue.id}>
+                <div className="dashboard-queue-group-heading">
+                  <strong>{queue.title}</strong>
+                  <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
+                </div>
+                {queue.items.length ? (
+                  <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label={queue.title}>
+                    <div className="review-queue-table dashboard-queue-table" aria-label={queue.title}>
+                      <div className="review-queue-header">
+                        <span>Name</span>
+                        <span>Work</span>
+                        <span>Responsibility</span>
+                        <span>Due</span>
+                        <span>Status</span>
+                        <span>Action</span>
+                      </div>
+                        {queue.items.map((item) => (
+                          <div className="review-queue-row-card" key={item.id}>
+                            <button
+                              type="button"
+                              className={`review-queue-item${
+                                selectedAssessmentSetDialog?.reviewPeriodId === item.reviewPeriodId &&
+                                selectedAssessmentSetDialog.employeeId === item.employeeId
+                                  ? ' admin-list-item-active'
+                                  : ''
+                              }`}
+                              disabled={isSavingAssessmentWorkflow}
+                              onClick={() => void handleDashboardWorkflowAction(item)}
+                            >
+                            <span className="employee-row-cell review-queue-primary">
+                              <strong>{item.subjectName}</strong>
+                              <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                            </span>
+                            <span className="employee-row-cell">{item.workLabel}</span>
+                            <span className="employee-row-cell">{item.responsibilityLabel}</span>
+                            <span className="employee-row-cell">{item.dueDate}</span>
+                            <span className="employee-row-cell review-queue-step-cell">
+                              <span className="pill">{item.statusLabel}</span>
+                            </span>
+                            <span className="employee-row-cell">{item.actionLabel}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted-copy">{queue.emptyMessage}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
     </main>
   );
 
@@ -5034,16 +5345,51 @@ function App() {
                 placeholder="Search assessments"
               />
             </label>
+            <label className="inline-field">
+              <span>Workflow stage</span>
+              <select
+                value={assessmentLifecycleFilter}
+                onChange={(event) =>
+                  setAssessmentLifecycleFilter(event.target.value as 'all' | AdminAssessmentRow['summaryBucket'])
+                }
+              >
+                <option value="all">All stages</option>
+                <option value="drafting">Not started / incomplete</option>
+                <option value="submitted">Submitted</option>
+                <option value="accepted">Accepted</option>
+                <option value="ready-for-meeting">Ready for meeting</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="concluded">Concluded</option>
+              </select>
+            </label>
+            <label className="inline-field">
+              <span>Assessment type</span>
+              <select
+                value={assessmentTargetFilter}
+                onChange={(event) => setAssessmentTargetFilter(event.target.value as 'all' | AdminAssessmentRow['target'])}
+              >
+                <option value="all">All assessments</option>
+                <option value="self">Self assessments</option>
+                <option value="peer">Peer assessments</option>
+              </select>
+            </label>
           </div>
         ) : null}
 
         {activeAssessmentReviewPeriod ? (
           <div className="assessment-list-summary" aria-label="Assessment summary">
+            <p className="muted-copy">
+              Showing {overallAdminAssessmentSummary.total}{' '}
+              {overallAdminAssessmentSummary.total === 1 ? 'assessment' : 'assessments'} •{' '}
+              {overallAdminAssessmentSummary.drafting} not started / incomplete • {overallAdminAssessmentSummary.submitted} submitted •{' '}
+              {overallAdminAssessmentSummary.accepted} accepted • {overallAdminAssessmentSummary.readyForMeeting} ready for meeting •{' '}
+              {overallAdminAssessmentSummary.scheduled} scheduled • {overallAdminAssessmentSummary.concluded} concluded
+            </p>
             {adminAssessmentSummary.map((summary) => (
               <p className="muted-copy" key={summary.target}>
-                {summary.total} {summary.total === 1 ? `${summary.target}-assessment` : `${summary.target}-assessments`},{' '}
-                {summary.notStarted} not started, {summary.incomplete} incomplete,{' '}
-                {summary.submittedWaitingReview} submitted waiting review, {summary.reviewed} reviewed
+                {summary.total} {summary.total === 1 ? `${summary.target}-assessment` : `${summary.target}-assessments`} •{' '}
+                {summary.drafting} not started / incomplete • {summary.submitted} submitted • {summary.accepted} accepted •{' '}
+                {summary.readyForMeeting} ready for meeting • {summary.scheduled} scheduled • {summary.concluded} concluded
               </p>
             ))}
           </div>
@@ -5058,7 +5404,8 @@ function App() {
                   <span>Assessment type</span>
                   <span>Assessor</span>
                   <span>Assessment status</span>
-                  <span>Review status</span>
+                  <span>Workflow stage</span>
+                  <span>Override actions</span>
                 </div>
                 {filteredAdminAssessmentRows.map((item) => (
                   <div className="assessment-row-card" key={item.assessmentId}>
@@ -5066,20 +5413,42 @@ function App() {
                       <span className="employee-row-cell assessment-row-primary">
                         <strong>{item.subjectName}</strong>
                         <span className="muted-copy employee-row-subcopy">{item.title}</span>
+                        <span className="muted-copy employee-row-subcopy">{item.detail}</span>
                       </span>
                       <span className="employee-row-cell">{item.targetLabel}</span>
                       <span className="employee-row-cell">{item.assessorLabel}</span>
                       <span className="employee-row-cell">
                         <span className="pill">{item.assessmentStatusLabel}</span>
                       </span>
-                      <span className="employee-row-cell">{item.reviewStatusLabel}</span>
+                      <span className="employee-row-cell assessment-row-lifecycle">
+                        <span className="pill">{item.lifecycleLabel}</span>
+                        <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
+                      </span>
+                      <span className="employee-row-cell assessment-row-actions">
+                        <button type="button" className="secondary-button" onClick={() => handleSelectAssessment(item.assessmentId)}>
+                          {item.openAssessmentLabel}
+                        </button>
+                        {item.reviewActionLabel ? (
+                          <button type="button" onClick={() => handleSelectReviewAssessment(item.assessmentId)}>
+                            {item.reviewActionLabel}
+                          </button>
+                        ) : null}
+                        {item.workflowActionLabel ? (
+                          <button
+                            type="button"
+                            onClick={() => openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId)}
+                          >
+                            {item.workflowActionLabel}
+                          </button>
+                        ) : null}
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : assessmentSearchQuery.trim() ? (
-            <p className="muted-copy">No assessments match this search.</p>
+          ) : areAssessmentFiltersActive ? (
+            <p className="muted-copy">No assessments match the current filters.</p>
           ) : (
             <p className="muted-copy">No assessments exist for the active review period yet.</p>
           )
@@ -5095,14 +5464,14 @@ function App() {
       <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeReviewDialog}>
         <section
           aria-modal="true"
-          className="card modal-card review-dialog-card assessment-review-dialog-card"
-          role="dialog"
-          aria-labelledby="review-dialog-title"
-          onClick={(event) => event.stopPropagation()}
+            className="card modal-card review-dialog-card assessment-review-dialog-card"
+            role="dialog"
+            aria-labelledby="review-dialog-title"
+            onClick={(event) => event.stopPropagation()}
         >
             <div className="section-heading">
               <div>
-                <p className="section-label">Assessment review</p>
+                <p className="section-label">Assessment submission</p>
                 <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
               </div>
               <div className="dialog-header-actions">
@@ -5121,7 +5490,7 @@ function App() {
                 <dd>{selectedReviewPanel.subjectName}</dd>
               </div>
               <div>
-                <dt>Review type</dt>
+                <dt>Assessment type</dt>
                 <dd>{selectedReviewPanel.targetLabel}</dd>
               </div>
               <div>
@@ -5133,11 +5502,11 @@ function App() {
                 <dd>{selectedReviewPanel.managerName}</dd>
               </div>
               <div>
-                <dt>Review period</dt>
+                <dt>Cycle</dt>
                 <dd>{selectedReviewPanel.reviewPeriodLabel}</dd>
               </div>
               <div>
-                <dt>Review due date</dt>
+                <dt>Meeting due date</dt>
                 <dd>{selectedReviewPanel.dueDate}</dd>
               </div>
               <div>
@@ -5145,7 +5514,7 @@ function App() {
                 <dd>{selectedReviewPanel.assessmentStatusLabel}</dd>
               </div>
               <div>
-                <dt>Review status</dt>
+                <dt>Workflow status</dt>
                 <dd>{selectedReviewPanel.reviewStatusLabel}</dd>
               </div>
             </dl>
@@ -5181,18 +5550,13 @@ function App() {
           </section>
 
           <section className="review-dialog-section">
-            <p className="section-label">Review notes</p>
+            <p className="section-label">Manager notes</p>
             <div className="review-notes-form">
               <label className="stack-form">
                 <textarea
-                  aria-label="Review notes"
+                  aria-label="Manager notes"
                   rows={5}
-                  readOnly={
-                    selectedReviewPanel.isArchived ||
-                    (!selectedReviewPanel.canAccept &&
-                      !selectedReviewPanel.canRejectToDraft &&
-                      !selectedReviewPanel.canMarkReviewed)
-                  }
+                  readOnly={selectedReviewPanel.isArchived || (!selectedReviewPanel.canAccept && !selectedReviewPanel.canRejectToDraft)}
                   value={reviewNotesDraft}
                   onChange={(event) => setReviewNotesDraft(event.target.value)}
                 />
@@ -5204,45 +5568,275 @@ function App() {
                     disabled={!selectedReviewPanel.canAccept || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
                     onClick={() => void handleAcceptReview()}
                   >
-                    Accept
+                    Accept assessment
                   </button>
                   <button
                     type="button"
                     className="secondary-button"
                     disabled={!selectedReviewPanel.canRejectToDraft || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
-                    onClick={() => void handleRejectReview()}
+                    onClick={() => setIsReturnToIncompleteDialogOpen(true)}
                   >
-                    Reject to draft
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={
-                      !selectedReviewPanel.canMarkReviewed ||
-                      selectedReviewPanel.isArchived ||
-                      isSavingAssessmentWorkflow ||
-                      !reviewNotesDraft.trim()
-                    }
-                    onClick={() => void handleSaveReviewNotes()}
-                  >
-                    Save notes
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      !selectedReviewPanel.canMarkReviewed ||
-                      selectedReviewPanel.isArchived ||
-                      isSavingAssessmentWorkflow ||
-                      !reviewNotesDraft.trim()
-                    }
-                    onClick={() => void handleCompleteReview()}
-                  >
-                    Mark reviewed
+                    Return to incomplete
                   </button>
                 </div>
               </div>
             </div>
           </section>
+        </section>
+      </div>
+    ) : null;
+
+  const renderAssessmentSetDialog = () =>
+    selectedAssessmentSetWorkflowPanel ? (
+      <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeAssessmentSetDialog}>
+        <section
+          aria-modal="true"
+          className="card modal-card review-dialog-card assessment-review-dialog-card"
+          role="dialog"
+          aria-labelledby="assessment-set-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">
+                {selectedAssessmentSetWorkflowPanel.dialogKind === 'ready-for-meeting'
+                  ? 'Ready for meeting'
+                  : selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting'
+                    ? 'Schedule review meeting'
+                    : 'Conclude review'}
+              </p>
+              <h3 id="assessment-set-dialog-title">{selectedAssessmentSetWorkflowPanel.title}</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <span className="pill">{selectedAssessmentSetWorkflowPanel.statusLabel}</span>
+              <button type="button" className="secondary-button" onClick={closeAssessmentSetDialog}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <section className="review-dialog-section">
+            <p className="review-dialog-copy">{selectedAssessmentSetWorkflowPanel.detail}</p>
+            <dl className="detail-grid compact-detail-grid">
+              <div>
+                <dt>Subject</dt>
+                <dd>{selectedAssessmentSetWorkflowPanel.subjectName}</dd>
+              </div>
+              <div>
+                <dt>Cycle</dt>
+                <dd>{selectedAssessmentSetWorkflowPanel.reviewPeriodLabel}</dd>
+              </div>
+              <div>
+                <dt>Meeting due date</dt>
+                <dd>{selectedAssessmentSetWorkflowPanel.dueDate}</dd>
+              </div>
+              <div>
+                <dt>Workflow status</dt>
+                <dd>{selectedAssessmentSetWorkflowPanel.statusLabel}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="review-dialog-section">
+            <p className="section-label">Assessments in this set</p>
+            <div className="workflow-reviewer-grid">
+              {selectedAssessmentSetWorkflowPanel.assessments.map((assessment) => (
+                <article className="subcard workflow-set-assessment-card" key={assessment.assessmentId}>
+                  <div className="workflow-reviewer-card-header">
+                    <div>
+                      <h4>{assessment.targetLabel}</h4>
+                      <p className="muted-copy">{assessment.assessorLabel}</p>
+                    </div>
+                    <span className="pill">{assessment.statusLabel}</span>
+                  </div>
+                  <p className="muted-copy">{assessment.title}</p>
+                  {assessment.managerNotes ? (
+                    <div className="workflow-reviewer-note">
+                      <strong>Manager notes</strong>
+                      <p>{assessment.managerNotes}</p>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="review-dialog-section">
+            <p className="section-label">
+              {selectedAssessmentSetWorkflowPanel.dialogKind === 'conclude-review'
+                ? 'Reviewer conclusions'
+                : 'Reviewer responsibilities'}
+            </p>
+            <div className="workflow-reviewer-grid">
+              {selectedAssessmentSetWorkflowPanel.reviewerActions.map((action) => (
+                <article className="subcard workflow-reviewer-card" key={action.role}>
+                  <div className="workflow-reviewer-card-header">
+                    <div>
+                      <p className="section-label">{action.label}</p>
+                      <h4>{action.assignedReviewerName}</h4>
+                    </div>
+                    <span className="pill">{action.statusLabel}</span>
+                  </div>
+                  <p className="muted-copy">{action.responsibilityLabel}</p>
+                  {action.completedAt ? (
+                    <p className="muted-copy">Last updated {formatLocalizedDateTime(action.completedAt)}</p>
+                  ) : null}
+
+                  {selectedAssessmentSetWorkflowPanel.dialogKind === 'conclude-review' ? (
+                    <>
+                      <label className="stack-form">
+                        <span>{action.label} notes</span>
+                        <textarea
+                          aria-label={`${action.label} notes`}
+                          rows={4}
+                          readOnly={!action.canConclude && !action.canReopen}
+                          value={reviewerNotesDraft[action.role]}
+                          onChange={(event) =>
+                            setReviewerNotesDraft((currentDraft) => ({
+                              ...currentDraft,
+                              [action.role]: event.target.value,
+                            }))
+                          }
+                          placeholder={
+                            action.assignedReviewerId
+                              ? `Capture ${action.label.toLowerCase()} follow-up after the meeting.`
+                              : 'No reviewer is assigned yet.'
+                          }
+                        />
+                      </label>
+                      {action.assignedReviewerId === null ? (
+                        <p className="muted-copy">No reviewer is assigned yet.</p>
+                      ) : !action.isCurrentUserResponsible ? (
+                        <p className="muted-copy">
+                          Assigned to {action.assignedReviewerName}. Only that reviewer or an admin can update this step.
+                        </p>
+                      ) : action.canConclude || action.canReopen ? (
+                        <div className="dialog-footer">
+                          <div className="dialog-footer-end">
+                            {action.canReopen ? (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={isSavingAssessmentWorkflow}
+                                onClick={() => void handleReviewerConclusion(action.role, false)}
+                              >
+                                Reopen {action.label} conclusion
+                              </button>
+                            ) : null}
+                            {action.canConclude ? (
+                              <button
+                                type="button"
+                                disabled={isSavingAssessmentWorkflow}
+                                onClick={() => void handleReviewerConclusion(action.role, true)}
+                              >
+                                Record {action.label} conclusion
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="muted-copy">This reviewer step is already up to date.</p>
+                      )}
+                    </>
+                  ) : action.notes ? (
+                    <div className="workflow-reviewer-note">
+                      <strong>{action.label} notes</strong>
+                      <p>{action.notes}</p>
+                    </div>
+                  ) : (
+                    <p className="muted-copy">
+                      {action.assignedReviewerId ? 'No reviewer notes recorded yet.' : 'No reviewer is assigned yet.'}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          {selectedAssessmentSetWorkflowPanel.dialogKind !== 'conclude-review' ? (
+            <div className="dialog-footer">
+              <div className="dialog-footer-end">
+                {selectedAssessmentSetWorkflowPanel.dialogKind === 'ready-for-meeting' ? (
+                  <button
+                    type="button"
+                    disabled={!selectedAssessmentSetWorkflowPanel.canMarkReady || isSavingAssessmentWorkflow}
+                    onClick={() => void handleMarkAssessmentSetReady()}
+                  >
+                    Mark ready for meeting
+                  </button>
+                ) : null}
+                {selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting' ? (
+                  <button
+                    type="button"
+                    disabled={!selectedAssessmentSetWorkflowPanel.canSchedule || isSavingAssessmentWorkflow}
+                    onClick={() => void handleScheduleAssessmentSet()}
+                  >
+                    Mark meeting scheduled
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    ) : null;
+
+  const renderReturnToIncompleteDialog = () =>
+    selectedReviewPanel && isReturnToIncompleteDialogOpen ? (
+      <div
+        className="modal-backdrop assessment-review-dialog-backdrop"
+        role="presentation"
+        onClick={() => setIsReturnToIncompleteDialogOpen(false)}
+      >
+        <section
+          aria-modal="true"
+          className="card modal-card review-dialog-card assessment-review-dialog-card"
+          role="dialog"
+          aria-labelledby="return-to-incomplete-dialog-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Return to incomplete</p>
+              <h3 id="return-to-incomplete-dialog-title">{selectedReviewPanel.title}</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsReturnToIncompleteDialogOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <section className="review-dialog-section">
+            <p className="review-dialog-copy">
+              Send this assessment back so the employee can revise the response set and submit it again.
+            </p>
+            <p className="muted-copy">
+              {reviewNotesDraft.trim()
+                ? 'Your manager notes will be saved with the return message.'
+                : 'You can add optional manager notes in the submission dialog before sending it back.'}
+            </p>
+          </section>
+
+          <div className="dialog-footer">
+            <div className="dialog-footer-end">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSavingAssessmentWorkflow}
+                onClick={() => setIsReturnToIncompleteDialogOpen(false)}
+              >
+                Cancel
+              </button>
+              <button type="button" disabled={isSavingAssessmentWorkflow} onClick={() => void handleRejectReview()}>
+                Return to incomplete
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     ) : null;
@@ -5641,15 +6235,21 @@ function App() {
     }
 
     if (draftEmployee && editingEmployeeId) {
-      const employeeAssessorOptions = activeEmployees.filter((employee) => employee.id !== draftEmployee.id);
+      const employeeRelationshipOptions = activeEmployees.filter((employee) => employee.id !== draftEmployee.id);
       const selectedManagerId = managerOptions.some((employee) => employee.id === draftEmployee.managerId)
         ? draftEmployee.managerId
         : '';
-      const selectedAssessor1Id = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessor1Id)
+      const selectedAssessor1Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.assessor1Id)
         ? draftEmployee.assessor1Id
         : '';
-      const selectedAssessor2Id = employeeAssessorOptions.some((employee) => employee.id === draftEmployee.assessor2Id)
+      const selectedAssessor2Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.assessor2Id)
         ? draftEmployee.assessor2Id
+        : '';
+      const selectedReviewer1Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.reviewer1Id)
+        ? draftEmployee.reviewer1Id
+        : '';
+      const selectedReviewer2Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.reviewer2Id)
+        ? draftEmployee.reviewer2Id
         : '';
 
       return (
@@ -5714,7 +6314,7 @@ function App() {
                   onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor1Id: event.target.value })}
                 >
                   <option value="">Not assigned</option>
-                  {employeeAssessorOptions.map((employee) => (
+                  {employeeRelationshipOptions.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.fullName}
                     </option>
@@ -5728,13 +6328,45 @@ function App() {
                   onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor2Id: event.target.value })}
                 >
                   <option value="">Not assigned</option>
-                  {employeeAssessorOptions.map((employee) => (
+                  {employeeRelationshipOptions.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.fullName}
                     </option>
                   ))}
                 </select>
               </label>
+              <label>
+                Reviewer 1
+                <select
+                  value={selectedReviewer1Id}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, reviewer1Id: event.target.value })}
+                >
+                  <option value="">Not assigned</option>
+                  {employeeRelationshipOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Reviewer 2
+                <select
+                  value={selectedReviewer2Id}
+                  onChange={(event) => setDraftEmployee({ ...draftEmployee, reviewer2Id: event.target.value })}
+                >
+                  <option value="">Not assigned</option>
+                  {employeeRelationshipOptions.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="muted-copy">
+                Reviewer 1 and reviewer 2 must be different people and cannot be the employee. Reviewers may also be the
+                manager or an assessor.
+              </p>
               <label>
                 App role
                 <select
@@ -5851,6 +6483,10 @@ function App() {
                 <div>
                   <dt>Assessors</dt>
                   <dd>{renderAssessorList(detailEmployee)}</dd>
+                </div>
+                <div>
+                  <dt>Reviewers</dt>
+                  <dd>{renderReviewerList(detailEmployee)}</dd>
                 </div>
                 <div>
                   <dt>Role</dt>
@@ -6011,6 +6647,7 @@ function App() {
             <span className="employee-row-cell">{employee.email}</span>
             <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
             <span className="employee-row-cell">{renderAssessorList(employee, { showLabels: false })}</span>
+            <span className="employee-row-cell">{renderReviewerList(employee, { showLabels: false })}</span>
             <span className="employee-row-cell">
               <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
             </span>
@@ -6059,6 +6696,7 @@ function App() {
                   <span>Email</span>
                   <span>Manager</span>
                   <span>Assessors</span>
+                  <span>Reviewers</span>
                   <span>Status</span>
                 </div>
                 {directoryEmployees.map(renderEmployeeRosterRow)}
@@ -6327,9 +6965,7 @@ function App() {
 
         {pathname === '/dashboard'
           ? renderDashboard()
-          : pathname === '/reviews'
-            ? renderReviews()
-            : pathname === '/assessments'
+          : pathname === '/assessments'
               ? renderAssessments()
           : pathname === '/employees'
             ? renderEmployees()
@@ -6348,6 +6984,10 @@ function App() {
                       : renderPlaceholderSection()}
 
         {renderReviewDialog()}
+
+        {renderReturnToIncompleteDialog()}
+
+        {renderAssessmentSetDialog()}
 
         {renderAssessmentDialog()}
 

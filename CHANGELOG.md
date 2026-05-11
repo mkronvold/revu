@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased
+- Updated workflow docs and default workflow content so README, navigation copy, and seeded markdown now describe the dashboard-led `new` → `draft` → `submitted` → `accepted` → `ready_for_meeting` → `scheduled` → `concluded` lifecycle without the old review-queue wording
+- Refreshed the admin-only Assessments page around the new workflow lifecycle so summaries, filters, row details, and override actions now track not started / incomplete, submitted, accepted, ready for meeting, scheduled, and concluded work without the old reviewed terminology
+- Reworked dashboard workflow dialogs so accepted sets open a Ready for meeting summary, ready sets open a status-only Schedule review meeting dialog, reviewer/admin follow-up uses role-aware conclusion and reopen dialogs, and submitted assessments now confirm Return to incomplete before sending work back
+- Removed the dedicated Reviews route, redirected legacy `/reviews` links back to Dashboard, and folded manager/reviewer/admin workflow actions into new dashboard sections that reflect submitted, accepted, ready-for-meeting, scheduled, and concluded lifecycle work
+- Added the next workflow schema migration for employee reviewer assignments, meeting-phase assessment states, reviewer-specific conclusion columns, and stricter archived/read-only assessment guards
+- Extended the shared workflow contracts and examples for reviewer1/reviewer2 assignments, meeting-driven assessment statuses, and reviewer-specific conclusion metadata so downstream overhaul work can build on the new model
+- Wired the API store and routes into the workflow-overhaul lifecycle so employee reviewer assignments persist, review subjects/reviewers gain the right visibility, assessment sets move together through ready/scheduled/concluded, and reviewer 1 / reviewer 2 can conclude independently
+- Fixed set conclusion gating so employees with only one assigned reviewer can still advance to `Concluded` once that reviewer completes every active assessment
+- Added reviewer 1 / reviewer 2 to the employee directory, detail dialog, edit validation, dashboard assignment summary, and employee import/export transfer payloads so reviewer assignments are managed alongside managers and assessors
 - Stacked the workflow editor textarea above its preview and synced preview scrolling to the editor scroll position
 - Renamed the subjective response option from “Don’t know” to “Neutral” in the workflow/question editor and subjective assessment displays
 - Simplified workflow page and editor copy, hid sidebar-visibility details from non-editors, and tuned the workflow editor textarea to use more of the dialog height with vertical-only resizing
@@ -15,7 +24,7 @@
 - Removed the deployment web port from `docker-compose.yml` and documented that direct host bindings should only come from a separate override when the stack is not staying behind the reverse proxy
 - Updated `autoupdate.sh` to verify the full Compose stack is already running on launch and start it through `up.sh` before entering the update loop when needed
 - Renamed the admin Assessments page from **Assessment Queue** to **Assessment List** and added a live search box to filter the list
-- Added self and peer assessment summary totals above the admin Assessment List so admins can see not started, incomplete, submitted waiting review, and reviewed counts at a glance
+- Added self and peer assessment summary totals above the admin Assessment List so admins can see not started, incomplete, submitted, accepted, ready-for-meeting, scheduled, and concluded counts at a glance
 - Added a live employee-directory search box and renamed the employee detail action to **Make Inactive** so it matches the existing inactive-status behavior
 - Added Review Period page removal controls so admins can delete a period after a confirmation summary that spells out how many question sets, assessments, and assignments will be removed with it
 - Replaced File Management's direct backup-now and restore cards with a Show backups dialog that lists stored backup files and supports immediate snapshot creation, upload, download, restore, and delete actions from one place
@@ -32,7 +41,7 @@
 - Added a `Make active` action for inactive review periods on Questions, and added a confirmed `Delete set` reset inside the question-set editor that clears a set back to a blank question set with no questions
 - Moved question-set copying into the edit dialog, now show it for archived periods too, rename the action to the active review period label, standardize modal action placement around a universal upper-right Close button, let assessment Submit save partial draft changes when needed, and relax review-period deadline validation so assessment/review due dates can fall outside the review window
 - Removed the bottom dismiss button from the Questions question-set editor so the dialog closes only from the header control or backdrop
-- Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard and review queues
+- Added end, assessment due, and review due dates to review periods, updated the Questions admin editor labels, and surfaced the new due dates in the dashboard workflow sections
 - Tightened assessment syncing so inactive employees and inactive assessors no longer get new assessments, stale not-started pairings are removed during sync, employee deactivation clears active not-started assessments immediately, and the Assessments action now says `Clear not started assessments`
 - Deleting an employee now removes assessments where they were the review subject while preserving completed peer feedback they authored for other employees, which remains linked to the tombstone and renders as `deleted user`
 - Removed the `Assessor 1:` and `Assessor 2:` prefixes from the dashboard hero assessor summary

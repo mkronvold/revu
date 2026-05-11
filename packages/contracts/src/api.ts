@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   assessmentReviewStateSchema,
   assessmentArchiveStateSchema,
+  assessmentReviewerRoleSchema,
   assessmentResponseSchema,
   assessmentSchema,
   assignmentSchema,
@@ -43,12 +44,21 @@ export const domainRulesResponseSchema = z.object({
   acceptedAssessmentsAreImmutable: z.literal(true),
   singleActiveQuestionSetPerTarget: z.literal(true),
   archiveIsDrivenByReviewPeriod: z.literal(true),
+  employeeAssessmentSetsTransitionTogether: z.literal(true),
+  assessmentSchedulingIsStatusOnly: z.literal(true),
+  reviewerCommentsLiveOnAssessments: z.literal(true),
+  allReviewersMustConcludeBeforeFullyConcluded: z.literal(true),
+  reviewersDistinctFromReviewee: z.literal(true),
+  reviewersMayOverlapManagerOrAssessor: z.literal(true),
   assessmentReviewTransitions: z.object({
     new: z.array(assessmentReviewStateSchema),
     draft: z.array(assessmentReviewStateSchema),
     submitted: z.array(assessmentReviewStateSchema),
     accepted: z.array(assessmentReviewStateSchema),
-    reviewed: z.array(assessmentReviewStateSchema),
+    ready_for_meeting: z.array(assessmentReviewStateSchema),
+    scheduled: z.array(assessmentReviewStateSchema),
+    concluded: z.array(assessmentReviewStateSchema),
+    reviewed: z.array(assessmentReviewStateSchema).optional(),
   }),
 });
 
@@ -187,6 +197,25 @@ export const authUpdateProfileRequestSchema = z
 
 export const authUpdateProfileResponseSchema = authLoginResponseSchema;
 
+const validateDistinctReviewerIds = (
+  value: { reviewer1Id?: string | null; reviewer2Id?: string | null },
+  context: z.RefinementCtx,
+) => {
+  if (
+    value.reviewer1Id !== undefined &&
+    value.reviewer1Id !== null &&
+    value.reviewer2Id !== undefined &&
+    value.reviewer2Id !== null &&
+    value.reviewer1Id === value.reviewer2Id
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["reviewer2Id"],
+      message: "Reviewer 1 and reviewer 2 must be different users",
+    });
+  }
+};
+
 export const createEmployeeRequestSchema = z.object({
   username: usernameSchema,
   fullName: z.string().min(1),
@@ -196,8 +225,10 @@ export const createEmployeeRequestSchema = z.object({
   managerId: idSchema.nullable().optional(),
   assessor1Id: idSchema.nullable().optional(),
   assessor2Id: idSchema.nullable().optional(),
+  reviewer1Id: idSchema.nullable().optional(),
+  reviewer2Id: idSchema.nullable().optional(),
   password: z.string().min(8).optional(),
-});
+}).superRefine(validateDistinctReviewerIds);
 
 export const updateEmployeeRequestSchema = z
   .object({
@@ -209,8 +240,11 @@ export const updateEmployeeRequestSchema = z
     managerId: idSchema.nullable(),
     assessor1Id: idSchema.nullable(),
     assessor2Id: idSchema.nullable(),
+    reviewer1Id: idSchema.nullable(),
+    reviewer2Id: idSchema.nullable(),
   })
   .partial()
+  .superRefine(validateDistinctReviewerIds)
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field must be provided",
   });
@@ -343,6 +377,17 @@ export const assessmentsListQuerySchema = z.object({
   archiveState: assessmentArchiveStateSchema.optional(),
 });
 
+export const assessmentSetRequestSchema = z.object({
+  reviewPeriodId: idSchema,
+  employeeId: idSchema,
+});
+
+export const assessmentSetResponseSchema = z.object({
+  reviewPeriodId: idSchema,
+  employeeId: idSchema,
+  items: z.array(assessmentSchema).min(1),
+});
+
 export const createAssessmentRequestSchema = z.object({
   employeeId: idSchema,
   target: questionSetSchema.shape.target,
@@ -365,9 +410,12 @@ export const rejectAssessmentToDraftRequestSchema = z.object({
   managerNotes: z.string().trim().min(1).nullable().optional(),
 });
 
-export const reviewAssessmentRequestSchema = z.object({
-  managerNotes: z.string().trim().min(1),
-  reviewed: z.boolean().default(false),
+export const scheduleAssessmentSetRequestSchema = assessmentSetRequestSchema;
+
+export const concludeAssessmentRequestSchema = z.object({
+  reviewerRole: assessmentReviewerRoleSchema,
+  reviewerNotes: z.string().trim().min(1).nullable().optional(),
+  completed: z.boolean().default(false),
 });
 
 export const reassignAssessmentRequestSchema = z
@@ -660,12 +708,15 @@ export type CreateAssignmentRequest = z.infer<typeof createAssignmentRequestSche
 export type UpdateAssignmentRequest = z.infer<typeof updateAssignmentRequestSchema>;
 export type ReviewPeriodScopedQuery = z.infer<typeof reviewPeriodScopedQuerySchema>;
 export type AssessmentsListQuery = z.infer<typeof assessmentsListQuerySchema>;
+export type AssessmentSetRequest = z.infer<typeof assessmentSetRequestSchema>;
+export type AssessmentSetResponse = z.infer<typeof assessmentSetResponseSchema>;
 export type CreateAssessmentRequest = z.infer<typeof createAssessmentRequestSchema>;
 export type SaveAssessmentDraftRequest = z.infer<typeof saveAssessmentDraftRequestSchema>;
 export type SubmitAssessmentRequest = z.infer<typeof submitAssessmentRequestSchema>;
 export type AcceptAssessmentRequest = z.infer<typeof acceptAssessmentRequestSchema>;
 export type RejectAssessmentToDraftRequest = z.infer<typeof rejectAssessmentToDraftRequestSchema>;
-export type ReviewAssessmentRequest = z.infer<typeof reviewAssessmentRequestSchema>;
+export type ScheduleAssessmentSetRequest = z.infer<typeof scheduleAssessmentSetRequestSchema>;
+export type ConcludeAssessmentRequest = z.infer<typeof concludeAssessmentRequestSchema>;
 export type ReassignAssessmentRequest = z.infer<typeof reassignAssessmentRequestSchema>;
 export type AssessmentReassignmentResponse = z.infer<typeof assessmentReassignmentResponseSchema>;
 export type LocalUsersExportResponse = z.infer<typeof localUsersExportResponseSchema>;

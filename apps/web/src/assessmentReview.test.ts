@@ -4,13 +4,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptAssessmentReview,
+  buildAdminOversightQueues,
   buildAdminAssessmentSummary,
   buildAdminAssessmentRows,
   buildAssessmentQueues,
+  buildReadyForMeetingQueues,
   buildReviewQueues,
+  buildReviewerScheduledQueues,
   completeAssessmentReview,
   createAssessmentWorkflowSnapshot,
   formatSubjectiveResponse,
+  getAssessmentSetWorkflowPanel,
   reassignAssessmentRelationships,
   rejectAssessmentToDraft,
   saveAssessmentDraft,
@@ -56,9 +60,36 @@ describe('assessment and review helpers', () => {
     expect(submittedQueues.every((queue) => queue.items.every((item) => item.assessmentId !== selfAssessmentId))).toBe(true);
   });
 
-  it('tracks manager review queues across accept, reject-to-draft, and reviewed transitions', () => {
-    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const initialQueue = buildReviewQueues(manny, snapshot, employeesListExample.items);
+  it('tracks manager acceptance queues plus ready-for-meeting set transitions', () => {
+    const submittedSnapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          ? {
+              ...assessment,
+              archiveState: 'active',
+              reviewState: 'submitted',
+              acceptedAt: null,
+              acceptedByEmployeeId: null,
+              readyForMeetingAt: null,
+              scheduledAt: null,
+              scheduledByEmployeeId: null,
+              reviewer1Notes: null,
+              reviewer1CompletedAt: null,
+              reviewer1CompletedByEmployeeId: null,
+              reviewer2Notes: null,
+              reviewer2CompletedAt: null,
+              reviewer2CompletedByEmployeeId: null,
+              concludedAt: null,
+              concludedByEmployeeId: null,
+              reviewedAt: null,
+              reviewedByEmployeeId: null,
+              isReadOnly: true,
+            }
+          : assessment,
+      ),
+    });
+    const initialQueue = buildReviewQueues(manny, submittedSnapshot, employeesListExample.items);
 
     expect(initialQueue.map((item) => item.assessmentId)).toEqual([selfAssessmentId, peerAssessmentId]);
     expect(initialQueue[0]).toMatchObject({
@@ -67,7 +98,7 @@ describe('assessment and review helpers', () => {
       targetLabel: 'Self assessment',
       assessorLabel: 'self',
       dueDate: '2/28/2026',
-      nextStepLabel: 'waiting to be accepted',
+      nextStepLabel: 'waiting for acceptance',
       statusLabel: 'Submitted',
     });
     expect(initialQueue[1]).toMatchObject({
@@ -75,31 +106,31 @@ describe('assessment and review helpers', () => {
       targetLabel: 'Peer assessment',
       assessorLabel: 'Pat Peer',
       dueDate: '2/28/2026',
-      nextStepLabel: 'waiting to be reviewed',
-      statusLabel: 'Accepted',
+      nextStepLabel: 'waiting for acceptance',
+      statusLabel: 'Submitted',
     });
 
-    const acceptedSnapshot = acceptAssessmentReview(snapshot, selfAssessmentId, 'Ready for final notes.', {
+    const acceptedSelfSnapshot = acceptAssessmentReview(submittedSnapshot, selfAssessmentId, 'Ready for meeting.', {
       actorId: manny.id,
       now: '2026-02-16T08:00:00.000Z',
     });
+    const acceptedSnapshot = acceptAssessmentReview(acceptedSelfSnapshot, peerAssessmentId, 'Ready for meeting.', {
+      actorId: manny.id,
+      now: '2026-02-16T08:05:00.000Z',
+    });
     const acceptedQueue = buildReviewQueues(manny, acceptedSnapshot, employeesListExample.items);
-    expect(acceptedQueue.find((item) => item.assessmentId === selfAssessmentId)).toMatchObject({
-      nextStepLabel: 'waiting to be reviewed',
+    expect(acceptedQueue).toHaveLength(0);
+
+    const readyQueues = buildReadyForMeetingQueues(manny, acceptedSnapshot, employeesListExample.items);
+    expect(readyQueues).toHaveLength(1);
+    expect(readyQueues[0]).toMatchObject({
+      employeeId: elliot.id,
+      actionLabel: 'Ready for meeting',
+      responsibilityLabel: 'Manager readiness',
       statusLabel: 'Accepted',
     });
 
-    const reviewedSnapshot = completeAssessmentReview(acceptedSnapshot, selfAssessmentId, 'Closed out.', {
-      actorId: manny.id,
-      now: '2026-02-18T15:30:00.000Z',
-    });
-    const reviewedQueue = buildReviewQueues(manny, reviewedSnapshot, employeesListExample.items);
-    expect(reviewedQueue.find((item) => item.assessmentId === selfAssessmentId)).toMatchObject({
-      nextStepLabel: 'review complete',
-      statusLabel: 'Review Complete',
-    });
-
-    const rejectedSnapshot = rejectAssessmentToDraft(snapshot, selfAssessmentId, 'Please expand the self-review examples.');
+    const rejectedSnapshot = rejectAssessmentToDraft(submittedSnapshot, selfAssessmentId, 'Please expand the self-review examples.');
     const rejectedQueue = buildReviewQueues(manny, rejectedSnapshot, employeesListExample.items);
     expect(rejectedQueue.map((item) => item.assessmentId)).not.toContain(selfAssessmentId);
   });
@@ -111,18 +142,28 @@ describe('assessment and review helpers', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       assessmentId: selfAssessmentId,
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: elliot.id,
       subjectName: 'Elliot Employee',
       targetLabel: 'Self assessment',
       assessorLabel: 'self',
-      assessmentStatusLabel: 'Submitted',
-      reviewStatusLabel: 'Waiting for acceptance',
+      detail: 'Scheduled and waiting for reviewer follow-up.',
+      assessmentStatusLabel: 'Scheduled',
+      lifecycleLabel: 'Scheduled',
+      nextStepLabel: 'Assigned reviewers or an admin can record reviewer conclusions.',
+      openAssessmentLabel: 'View assessment',
+      reviewActionLabel: null,
+      workflowActionLabel: 'Conclude review',
+      summaryBucket: 'scheduled',
     });
     expect(rows[1]).toMatchObject({
       assessmentId: peerAssessmentId,
+      employeeId: elliot.id,
       targetLabel: 'Peer assessment',
       assessorLabel: 'Pat Peer',
-      assessmentStatusLabel: 'Accepted',
-      reviewStatusLabel: 'In review',
+      assessmentStatusLabel: 'Scheduled',
+      lifecycleLabel: 'Scheduled',
+      workflowActionLabel: 'Conclude review',
     });
   });
 
@@ -136,7 +177,7 @@ describe('assessment and review helpers', () => {
     });
   });
 
-  it('builds admin assessment summary buckets for draft and reviewed rows', () => {
+  it('builds admin assessment summary buckets for draft and concluded rows', () => {
     const readyToSubmitSnapshot = rejectAssessmentToDraft(
       createAssessmentWorkflowSnapshot(foundationSnapshotExample),
       selfAssessmentId,
@@ -155,18 +196,22 @@ describe('assessment and review helpers', () => {
       {
         target: 'self',
         total: 1,
-        notStarted: 0,
-        incomplete: 1,
-        submittedWaitingReview: 0,
-        reviewed: 0,
+        drafting: 1,
+        submitted: 0,
+        accepted: 0,
+        readyForMeeting: 0,
+        scheduled: 0,
+        concluded: 0,
       },
       {
         target: 'peer',
         total: 1,
-        notStarted: 0,
-        incomplete: 0,
-        submittedWaitingReview: 0,
-        reviewed: 1,
+        drafting: 0,
+        submitted: 0,
+        accepted: 0,
+        readyForMeeting: 0,
+        scheduled: 0,
+        concluded: 1,
       },
     ]);
   });
@@ -183,6 +228,8 @@ describe('assessment and review helpers', () => {
       managerId: ada.id,
       assessor1Id: null,
       assessor2Id: null,
+      reviewer1Id: null,
+      reviewer2Id: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T12:00:00.000Z',
     };
@@ -205,15 +252,40 @@ describe('assessment and review helpers', () => {
     const assignmentManagerQueue = buildReviewQueues(riley, snapshot, employees);
 
     expect(employeeManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
-      nextStepLabel: 'waiting to be accepted',
+      nextStepLabel: 'waiting for acceptance',
     });
     expect(assignmentManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
-      nextStepLabel: 'waiting to be accepted',
+      nextStepLabel: 'waiting for acceptance',
     });
   });
 
   it('sorts review rows by next step and employee name', () => {
-    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const snapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          ? {
+              ...assessment,
+              reviewState: 'submitted',
+              acceptedAt: null,
+              acceptedByEmployeeId: null,
+              readyForMeetingAt: null,
+              scheduledAt: null,
+              scheduledByEmployeeId: null,
+              reviewer1Notes: null,
+              reviewer1CompletedAt: null,
+              reviewer1CompletedByEmployeeId: null,
+              reviewer2Notes: null,
+              reviewer2CompletedAt: null,
+              reviewer2CompletedByEmployeeId: null,
+              concludedAt: null,
+              concludedByEmployeeId: null,
+              reviewedAt: null,
+              reviewedByEmployeeId: null,
+            }
+          : assessment,
+      ),
+    });
     const bea: Employee = {
       id: '66666666-6666-4666-8666-666666666666',
       username: 'bea.employee',
@@ -224,6 +296,8 @@ describe('assessment and review helpers', () => {
       managerId: manny.id,
       assessor1Id: null,
       assessor2Id: null,
+      reviewer1Id: null,
+      reviewer2Id: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T12:00:00.000Z',
     };
@@ -237,6 +311,8 @@ describe('assessment and review helpers', () => {
       managerId: manny.id,
       assessor1Id: null,
       assessor2Id: null,
+      reviewer1Id: null,
+      reviewer2Id: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-02-01T12:00:00.000Z',
     };
@@ -269,11 +345,126 @@ describe('assessment and review helpers', () => {
     const queue = buildReviewQueues(manny, snapshot, employees);
 
     expect(queue.map((item) => item.assessmentId)).toEqual([
-      selfAssessmentId,
-      zaraAssessmentId,
       beaAssessmentId,
+      selfAssessmentId,
       peerAssessmentId,
+      zaraAssessmentId,
     ]);
+  });
+
+  it('builds reviewer and admin set queues from the scheduled lifecycle state', () => {
+    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+
+    const reviewerQueue = buildReviewerScheduledQueues(manny, snapshot, employeesListExample.items);
+    const adminQueues = buildAdminOversightQueues(snapshot, employeesListExample.items);
+
+    expect(reviewerQueue).toHaveLength(1);
+    expect(reviewerQueue[0]).toMatchObject({
+      employeeId: elliot.id,
+      actionLabel: 'Conclude review',
+      responsibilityLabel: 'Reviewer 2',
+      statusLabel: 'Scheduled',
+    });
+    expect(adminQueues.readyForMeeting).toHaveLength(0);
+    expect(adminQueues.scheduled).toHaveLength(1);
+    expect(adminQueues.concluded).toHaveLength(0);
+  });
+
+  it('builds workflow panels that explain reviewer responsibilities and admin reopen controls', () => {
+    const readyForMeetingSnapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          ? {
+              ...assessment,
+              reviewState: 'ready_for_meeting' as const,
+              readyForMeetingAt: '2026-02-17T08:00:00.000Z',
+              scheduledAt: null,
+              scheduledByEmployeeId: null,
+              reviewer1Notes: null,
+              reviewer1CompletedAt: null,
+              reviewer1CompletedByEmployeeId: null,
+              reviewer2Notes: null,
+              reviewer2CompletedAt: null,
+              reviewer2CompletedByEmployeeId: null,
+              concludedAt: null,
+              concludedByEmployeeId: null,
+            }
+          : assessment,
+      ),
+    });
+    const readyForMeetingPanel = getAssessmentSetWorkflowPanel(
+      ada,
+      readyForMeetingSnapshot,
+      employeesListExample.items,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      elliot.id,
+    );
+    const scheduledPanel = getAssessmentSetWorkflowPanel(
+      manny,
+      createAssessmentWorkflowSnapshot(foundationSnapshotExample),
+      employeesListExample.items,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      elliot.id,
+    );
+    const concludedSnapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          ? {
+              ...assessment,
+              reviewState: 'concluded' as const,
+              reviewer1Notes: 'Reviewer 1 wrapped up the first pass.',
+              reviewer1CompletedAt: '2026-02-19T08:00:00.000Z',
+              reviewer1CompletedByEmployeeId: ada.id,
+              reviewer2Notes: 'Reviewer 2 wrapped up final follow-up.',
+              reviewer2CompletedAt: '2026-02-20T08:00:00.000Z',
+              reviewer2CompletedByEmployeeId: manny.id,
+              concludedAt: '2026-02-20T09:00:00.000Z',
+              concludedByEmployeeId: ada.id,
+            }
+          : assessment,
+      ),
+    });
+    const concludedPanel = getAssessmentSetWorkflowPanel(
+      ada,
+      concludedSnapshot,
+      employeesListExample.items,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      elliot.id,
+    );
+
+    expect(scheduledPanel).toMatchObject({
+      dialogKind: 'conclude-review',
+      currentUserReviewerRole: 'reviewer2',
+    });
+    expect(readyForMeetingPanel).toMatchObject({
+      dialogKind: 'schedule-meeting',
+      canSchedule: true,
+      statusLabel: 'Ready for meeting',
+    });
+    expect(scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer1')).toMatchObject({
+      canConclude: false,
+      canReopen: false,
+      isCurrentUserResponsible: false,
+      statusLabel: 'Pending',
+    });
+    expect(scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer2')).toMatchObject({
+      canConclude: true,
+      canReopen: false,
+      isCurrentUserResponsible: true,
+      statusLabel: 'Pending',
+    });
+    expect(concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer1')).toMatchObject({
+      canConclude: false,
+      canReopen: true,
+      statusLabel: 'Concluded',
+    });
+    expect(concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer2')).toMatchObject({
+      canConclude: false,
+      canReopen: true,
+      statusLabel: 'Concluded',
+    });
   });
 
   it('updates assignment routing without rewriting the authored assessment record', () => {

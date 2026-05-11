@@ -3,27 +3,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./api', () => ({
   acceptAssessment: vi.fn(),
+  concludeAssessmentSet: vi.fn(),
+  markAssessmentSetReadyForMeeting: vi.fn(),
   reassignAssessment: vi.fn(),
   rejectAssessmentToDraft: vi.fn(),
-  reviewAssessment: vi.fn(),
   saveAssessmentDraft: vi.fn(),
+  scheduleAssessmentSet: vi.fn(),
   submitAssessment: vi.fn(),
 }));
 
 import {
   acceptAssessment,
+  concludeAssessmentSet,
+  markAssessmentSetReadyForMeeting,
   reassignAssessment,
-  reviewAssessment,
   saveAssessmentDraft,
+  scheduleAssessmentSet,
   submitAssessment,
 } from './api';
 import {
   acceptReviewToApi,
   buildAssessmentResponsePayload,
-  markReviewReviewedInApi,
+  concludeAssessmentSetInApi,
+  markAssessmentSetReadyForMeetingInApi,
   reassignAssessmentInApi,
   saveAssessmentDraftToApi,
-  saveReviewNotesToApi,
+  scheduleAssessmentSetInApi,
   submitAssessmentToApi,
 } from './assessmentReviewApi';
 import { createAssessmentWorkflowSnapshot, getAssessmentEditor, getReviewPanel } from './assessmentReview';
@@ -66,30 +71,104 @@ describe('assessment review API orchestration', () => {
     expect(result.notice).toBe('Assessment saved for later.');
   });
 
-  it('routes accepted-review note saves and completion through the review endpoint', async () => {
-    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const manager = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
-    const panel = getReviewPanel(manager, snapshot, employeesListExample.items, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')!;
-
-    vi.mocked(reviewAssessment).mockResolvedValue({
-      item: foundationSnapshotExample.assessments[1]!,
+  it('routes ready, schedule, and reviewer completion actions through the assessment-set endpoints', async () => {
+    vi.mocked(markAssessmentSetReadyForMeeting).mockResolvedValue({
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+      items: foundationSnapshotExample.assessments.slice(0, 2),
+    });
+    vi.mocked(scheduleAssessmentSet).mockResolvedValue({
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+      items: foundationSnapshotExample.assessments.slice(0, 2),
+    });
+    vi.mocked(concludeAssessmentSet).mockResolvedValue({
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+      items: foundationSnapshotExample.assessments.slice(0, 2),
     });
 
-    await saveReviewNotesToApi('session-token', panel, '  Capture this for calibration.  ');
-    await markReviewReviewedInApi('session-token', panel, '  Finalized in 1:1.  ');
+    const readyResult = await markAssessmentSetReadyForMeetingInApi('session-token', {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+    });
+    const scheduleResult = await scheduleAssessmentSetInApi('session-token', {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+    });
+    const concludeResult = await concludeAssessmentSetInApi(
+      'session-token',
+      {
+        reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        employeeId: '33333333-3333-4333-8333-333333333333',
+      },
+      'reviewer2',
+      {
+        completed: true,
+        reviewerNotes: '  Wrapped up after the meeting.  ',
+      },
+    );
+    const reopenResult = await concludeAssessmentSetInApi(
+      'session-token',
+      {
+        reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        employeeId: '33333333-3333-4333-8333-333333333333',
+      },
+      'reviewer1',
+      {
+        completed: false,
+        reviewerNotes: 'Need one more follow-up.',
+      },
+    );
 
-    expect(reviewAssessment).toHaveBeenNthCalledWith(1, 'session-token', panel.assessmentId, {
-      managerNotes: 'Capture this for calibration.',
-      reviewed: false,
+    expect(markAssessmentSetReadyForMeeting).toHaveBeenCalledWith('session-token', {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
     });
-    expect(reviewAssessment).toHaveBeenNthCalledWith(2, 'session-token', panel.assessmentId, {
-      managerNotes: 'Finalized in 1:1.',
-      reviewed: true,
+    expect(scheduleAssessmentSet).toHaveBeenCalledWith('session-token', {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
     });
+    expect(concludeAssessmentSet).toHaveBeenCalledWith('session-token', {
+      reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      employeeId: '33333333-3333-4333-8333-333333333333',
+      reviewerRole: 'reviewer2',
+      completed: true,
+      reviewerNotes: '  Wrapped up after the meeting.  ',
+    });
+    expect(readyResult.notice).toBe('Assessment set marked ready for meeting.');
+    expect(scheduleResult.notice).toBe('Review meeting marked as scheduled.');
+    expect(concludeResult.notice).toBe('Reviewer 2 conclusion recorded.');
+    expect(reopenResult.notice).toBe('Reviewer 1 conclusion reopened.');
   });
 
   it('routes submit, accept, and reassignment actions through the matching assessment endpoints', async () => {
-    const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
+    const snapshot = createAssessmentWorkflowSnapshot({
+      ...foundationSnapshotExample,
+      assessments: foundationSnapshotExample.assessments.map((assessment) =>
+        assessment.id === 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+          ? {
+              ...assessment,
+              reviewState: 'submitted',
+              acceptedAt: null,
+              acceptedByEmployeeId: null,
+              readyForMeetingAt: null,
+              scheduledAt: null,
+              scheduledByEmployeeId: null,
+              reviewer1Notes: null,
+              reviewer1CompletedAt: null,
+              reviewer1CompletedByEmployeeId: null,
+              reviewer2Notes: null,
+              reviewer2CompletedAt: null,
+              reviewer2CompletedByEmployeeId: null,
+              concludedAt: null,
+              concludedByEmployeeId: null,
+              reviewedAt: null,
+              reviewedByEmployeeId: null,
+            }
+          : assessment,
+      ),
+    });
     const employeeEditor = getAssessmentEditor(snapshot, employeesListExample.items, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!;
     const manager = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
     const reviewPanel = getReviewPanel(manager, snapshot, employeesListExample.items, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')!;

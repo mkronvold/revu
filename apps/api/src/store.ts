@@ -5,8 +5,10 @@ import { basename, dirname, extname, join } from "node:path";
 import type {
   Assessment,
   AssessmentArchiveState,
+  AssessmentReviewerRole,
   AssessmentResponse,
   AssessmentReviewState,
+  AssessmentSetResponse,
   AssessmentsListQuery,
   Assignment,
   AssignmentsExportResponse,
@@ -37,13 +39,13 @@ import type {
   LocalUsersExportResponse,
   LocalUsersImportResponse,
   BackupStoredFile,
+  ConcludeAssessmentRequest,
   QuestionSet,
   QuestionSetTransferItem,
   QuestionSetsExportResponse,
   QuestionSetsImportResponse,
   ResetEmployeePasswordResponse,
   ReassignAssessmentRequest,
-  ReviewAssessmentRequest,
   ReviewPeriod,
   SaveAssessmentDraftRequest,
   SetEmployeePasswordResponse,
@@ -88,6 +90,8 @@ type EmployeeRow = {
   manager_employee_id: string | null;
   assessor1_employee_id: string | null;
   assessor2_employee_id: string | null;
+  reviewer1_employee_id: string | null;
+  reviewer2_employee_id: string | null;
   password_hash: string | null;
   password_reset_required: boolean;
   password_changed_at: Date | string | null;
@@ -161,6 +165,17 @@ type AssessmentRow = {
   submitted_at: Date | string | null;
   accepted_at: Date | string | null;
   accepted_by_employee_id: string | null;
+  ready_for_meeting_at: Date | string | null;
+  scheduled_at: Date | string | null;
+  scheduled_by_employee_id: string | null;
+  reviewer1_notes: string | null;
+  reviewer1_completed_at: Date | string | null;
+  reviewer1_completed_by_employee_id: string | null;
+  reviewer2_notes: string | null;
+  reviewer2_completed_at: Date | string | null;
+  reviewer2_completed_by_employee_id: string | null;
+  concluded_at: Date | string | null;
+  concluded_by_employee_id: string | null;
   reviewed_at: Date | string | null;
   reviewed_by_employee_id: string | null;
   manager_notes: string | null;
@@ -168,6 +183,8 @@ type AssessmentRow = {
   updated_at: Date | string;
   assignment_manager_employee_id: string | null;
   employee_manager_employee_id: string | null;
+  employee_reviewer1_employee_id: string | null;
+  employee_reviewer2_employee_id: string | null;
 };
 
 type AssessmentResponseRow = {
@@ -181,6 +198,8 @@ type AssessmentRecord = {
   assessment: Assessment;
   assignmentManagerId: string | null;
   employeeManagerId: string | null;
+  employeeReviewer1Id: string | null;
+  employeeReviewer2Id: string | null;
 };
 
 type NotStartedAssessmentRow = {
@@ -434,6 +453,7 @@ function rethrowDatabaseError(error: unknown): never {
 
 export class ApiStore {
   private readonly pool = getPool();
+  private assessmentWorkflowColumnsEnsured = false;
 
   constructor() {}
 
@@ -448,6 +468,8 @@ export class ApiStore {
       managerId: row.manager_employee_id,
       assessor1Id: row.assessor1_employee_id,
       assessor2Id: row.assessor2_employee_id,
+      reviewer1Id: row.reviewer1_employee_id,
+      reviewer2Id: row.reviewer2_employee_id,
       createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
       updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
     };
@@ -499,8 +521,237 @@ export class ApiStore {
     );
   }
 
+  private async ensureEmployeeReviewerColumns(client: DbClient) {
+    await client.query(
+      `
+        ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS reviewer1_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS reviewer2_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL
+      `,
+    );
+  }
+
+  private async ensureAssessmentWorkflowColumns(client: DbClient) {
+    if (this.assessmentWorkflowColumnsEnsured) {
+      return;
+    }
+
+    await client.query(
+      `
+        ALTER TYPE assessment_review_state ADD VALUE IF NOT EXISTS 'ready_for_meeting'
+      `,
+    );
+    await client.query(
+      `
+        ALTER TYPE assessment_review_state ADD VALUE IF NOT EXISTS 'scheduled'
+      `,
+    );
+    await client.query(
+      `
+        ALTER TYPE assessment_review_state ADD VALUE IF NOT EXISTS 'concluded'
+      `,
+    );
+    await client.query(
+      `
+        ALTER TABLE assessments
+        ADD COLUMN IF NOT EXISTS ready_for_meeting_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS scheduled_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS reviewer1_notes TEXT,
+        ADD COLUMN IF NOT EXISTS reviewer1_completed_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS reviewer1_completed_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS reviewer2_notes TEXT,
+        ADD COLUMN IF NOT EXISTS reviewer2_completed_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS reviewer2_completed_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS concluded_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS concluded_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL
+      `,
+    );
+    await client.query(
+      `
+        ALTER TABLE assessments
+        DROP CONSTRAINT IF EXISTS assessment_submit_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_accept_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_review_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_ready_for_meeting_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_scheduled_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_reviewer1_completion_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_reviewer2_completion_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_concluded_timestamp_consistency,
+        DROP CONSTRAINT IF EXISTS assessment_concluded_requires_reviewer_completion
+      `,
+    );
+    await client.query(
+      `
+        ALTER TABLE assessments
+        ADD CONSTRAINT assessment_submit_timestamp_consistency CHECK (
+          (review_state IN ('new', 'draft') AND submitted_at IS NULL)
+          OR
+          (review_state NOT IN ('new', 'draft') AND submitted_at IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_accept_timestamp_consistency CHECK (
+          (review_state IN ('new', 'draft', 'submitted') AND accepted_at IS NULL AND accepted_by_employee_id IS NULL)
+          OR
+          (review_state NOT IN ('new', 'draft', 'submitted') AND accepted_at IS NOT NULL AND accepted_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_ready_for_meeting_timestamp_consistency CHECK (
+          (review_state IN ('new', 'draft', 'submitted', 'accepted', 'reviewed') AND ready_for_meeting_at IS NULL)
+          OR
+          (review_state IN ('ready_for_meeting', 'scheduled', 'concluded') AND ready_for_meeting_at IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_scheduled_timestamp_consistency CHECK (
+          (review_state IN ('new', 'draft', 'submitted', 'accepted', 'ready_for_meeting', 'reviewed')
+            AND scheduled_at IS NULL
+            AND scheduled_by_employee_id IS NULL)
+          OR
+          (review_state IN ('scheduled', 'concluded')
+            AND scheduled_at IS NOT NULL
+            AND scheduled_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_reviewer1_completion_consistency CHECK (
+          (reviewer1_completed_at IS NULL AND reviewer1_completed_by_employee_id IS NULL)
+          OR
+          (reviewer1_completed_at IS NOT NULL AND reviewer1_completed_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_reviewer2_completion_consistency CHECK (
+          (reviewer2_completed_at IS NULL AND reviewer2_completed_by_employee_id IS NULL)
+          OR
+          (reviewer2_completed_at IS NOT NULL AND reviewer2_completed_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_concluded_timestamp_consistency CHECK (
+          (review_state <> 'concluded' AND concluded_at IS NULL AND concluded_by_employee_id IS NULL)
+          OR
+          (review_state = 'concluded' AND concluded_at IS NOT NULL AND concluded_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_review_timestamp_consistency CHECK (
+          (reviewed_at IS NULL AND reviewed_by_employee_id IS NULL)
+          OR
+          (reviewed_at IS NOT NULL AND reviewed_by_employee_id IS NOT NULL)
+        ),
+        ADD CONSTRAINT assessment_concluded_requires_reviewer_completion CHECK (review_state <> 'concluded' OR concluded_at IS NOT NULL)
+      `,
+    );
+    await client.query(
+      `
+        CREATE OR REPLACE FUNCTION enforce_employee_assessment_set_conclusion()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+          v_reviewer1_employee_id UUID;
+          v_reviewer2_employee_id UUID;
+        BEGIN
+          SELECT reviewer1_employee_id, reviewer2_employee_id
+          INTO v_reviewer1_employee_id, v_reviewer2_employee_id
+          FROM employees
+          WHERE id = NEW.employee_id;
+
+          IF EXISTS (
+            SELECT 1
+            FROM assessments a
+            WHERE a.review_period_id = NEW.review_period_id
+              AND a.employee_id = NEW.employee_id
+              AND a.archive_state = 'active'
+              AND a.review_state = 'concluded'
+          ) THEN
+            IF EXISTS (
+              SELECT 1
+              FROM assessments a
+              WHERE a.review_period_id = NEW.review_period_id
+                AND a.employee_id = NEW.employee_id
+                AND a.archive_state = 'active'
+                AND (
+                  a.review_state <> 'concluded'
+                  OR (
+                    v_reviewer1_employee_id IS NOT NULL
+                    AND (
+                      a.reviewer1_completed_at IS NULL
+                      OR a.reviewer1_completed_by_employee_id IS NULL
+                    )
+                  )
+                  OR (
+                    v_reviewer2_employee_id IS NOT NULL
+                    AND (
+                      a.reviewer2_completed_at IS NULL
+                      OR a.reviewer2_completed_by_employee_id IS NULL
+                    )
+                  )
+                )
+            ) THEN
+              RAISE EXCEPTION 'Employee assessment sets can only be concluded after every active assessment records each assigned reviewer conclusion';
+            END IF;
+          END IF;
+
+          RETURN NULL;
+        END;
+        $$;
+      `,
+    );
+    await client.query(
+      `
+        CREATE OR REPLACE FUNCTION enforce_assessment_review_transition()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          IF NEW.review_state = OLD.review_state THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'new' AND NEW.review_state IN ('draft', 'submitted') THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'draft' AND NEW.review_state IN ('draft', 'submitted') THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'submitted' AND NEW.review_state IN ('draft', 'accepted') THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'accepted' AND NEW.review_state IN ('ready_for_meeting', 'reviewed') THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'ready_for_meeting' AND NEW.review_state = 'scheduled' THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'scheduled' AND NEW.review_state = 'concluded' THEN
+            RETURN NEW;
+          END IF;
+
+          IF OLD.review_state = 'concluded' AND NEW.review_state = 'scheduled' THEN
+            RETURN NEW;
+          END IF;
+
+          RAISE EXCEPTION 'Invalid assessment review transition: % -> %', OLD.review_state, NEW.review_state;
+        END;
+        $$;
+      `,
+    );
+    await client.query(
+      `
+        DROP TRIGGER IF EXISTS assessments_enforce_employee_set_conclusion ON assessments
+      `,
+    );
+    await client.query(
+      `
+        CREATE CONSTRAINT TRIGGER assessments_enforce_employee_set_conclusion
+        AFTER INSERT OR UPDATE OF review_state, reviewer1_completed_at, reviewer1_completed_by_employee_id, reviewer2_completed_at, reviewer2_completed_by_employee_id, archive_state
+        ON assessments
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_employee_assessment_set_conclusion()
+      `,
+    );
+    this.assessmentWorkflowColumnsEnsured = true;
+  }
+
   private async ensureEmployeeTombstoneStorage(client: DbClient) {
     await this.ensureEmployeeDeletedColumn(client);
+    await this.ensureEmployeeReviewerColumns(client);
     await client.query(
       `
         ALTER TABLE employees
@@ -577,6 +828,7 @@ export class ApiStore {
     } = {},
   ) {
     await this.ensureEmployeeDeletedColumn(client);
+    await this.ensureEmployeeReviewerColumns(client);
 
     const clauses: string[] = [];
     const values: Array<string | readonly string[]> = [];
@@ -613,6 +865,8 @@ export class ApiStore {
           manager_employee_id,
           assessor1_employee_id,
           assessor2_employee_id,
+          reviewer1_employee_id,
+          reviewer2_employee_id,
           password_hash,
           password_reset_required,
           password_changed_at,
@@ -864,6 +1118,8 @@ export class ApiStore {
       archiveState?: AssessmentArchiveState;
     } = {},
   ) {
+    await this.ensureAssessmentWorkflowColumns(client);
+
     const clauses: string[] = [];
     const values: string[] = [];
 
@@ -923,13 +1179,26 @@ export class ApiStore {
           a.submitted_at,
           a.accepted_at,
           a.accepted_by_employee_id,
+          a.ready_for_meeting_at,
+          a.scheduled_at,
+          a.scheduled_by_employee_id,
+          a.reviewer1_notes,
+          a.reviewer1_completed_at,
+          a.reviewer1_completed_by_employee_id,
+          a.reviewer2_notes,
+          a.reviewer2_completed_at,
+          a.reviewer2_completed_by_employee_id,
+          a.concluded_at,
+          a.concluded_by_employee_id,
           a.reviewed_at,
           a.reviewed_by_employee_id,
           a.manager_notes,
           a.created_at,
           a.updated_at,
           assignment.manager_employee_id AS assignment_manager_employee_id,
-          employee.manager_employee_id AS employee_manager_employee_id
+          employee.manager_employee_id AS employee_manager_employee_id,
+          employee.reviewer1_employee_id AS employee_reviewer1_employee_id,
+          employee.reviewer2_employee_id AS employee_reviewer2_employee_id
         FROM assessments a
         LEFT JOIN review_period_assignments assignment ON assignment.id = a.assignment_id
         JOIN employees employee ON employee.id = a.employee_id
@@ -969,29 +1238,42 @@ export class ApiStore {
     }
 
     return assessmentsResult.rows.map((row) => ({
-      assessment: {
-        id: row.id,
-        reviewPeriodId: row.review_period_id,
-        questionSetId: row.question_set_id,
+        assessment: {
+          id: row.id,
+          reviewPeriodId: row.review_period_id,
+          questionSetId: row.question_set_id,
         assignmentId: row.assignment_id,
         target: row.target,
-        employeeId: row.employee_id,
-        assessorId: row.assessor_employee_id,
-        reviewState: row.review_state,
-        archiveState: row.archive_state,
-        isReadOnly: row.archive_state === "archived" || ["accepted", "reviewed"].includes(row.review_state),
-        responses: responsesByAssessmentId.get(row.id) ?? [],
-        submittedAt: toIsoTimestamp(row.submitted_at),
-        acceptedAt: toIsoTimestamp(row.accepted_at),
-        acceptedByEmployeeId: row.accepted_by_employee_id,
-        managerNotes: row.manager_notes,
-        reviewedAt: toIsoTimestamp(row.reviewed_at),
-        reviewedByEmployeeId: row.reviewed_by_employee_id,
-        createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+          employeeId: row.employee_id,
+          assessorId: row.assessor_employee_id,
+          reviewState: row.review_state,
+          archiveState: row.archive_state,
+          isReadOnly: row.archive_state === "archived" || ["accepted", "ready_for_meeting", "scheduled", "concluded", "reviewed"].includes(row.review_state),
+          responses: responsesByAssessmentId.get(row.id) ?? [],
+          submittedAt: toIsoTimestamp(row.submitted_at),
+          acceptedAt: toIsoTimestamp(row.accepted_at),
+          acceptedByEmployeeId: row.accepted_by_employee_id,
+          readyForMeetingAt: toIsoTimestamp(row.ready_for_meeting_at),
+          managerNotes: row.manager_notes,
+          scheduledAt: toIsoTimestamp(row.scheduled_at),
+          scheduledByEmployeeId: row.scheduled_by_employee_id,
+          reviewer1Notes: row.reviewer1_notes,
+          reviewer1CompletedAt: toIsoTimestamp(row.reviewer1_completed_at),
+          reviewer1CompletedByEmployeeId: row.reviewer1_completed_by_employee_id,
+          reviewer2Notes: row.reviewer2_notes,
+          reviewer2CompletedAt: toIsoTimestamp(row.reviewer2_completed_at),
+          reviewer2CompletedByEmployeeId: row.reviewer2_completed_by_employee_id,
+          concludedAt: toIsoTimestamp(row.concluded_at),
+          concludedByEmployeeId: row.concluded_by_employee_id,
+          reviewedAt: toIsoTimestamp(row.reviewed_at),
+          reviewedByEmployeeId: row.reviewed_by_employee_id,
+          createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
         updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
       },
       assignmentManagerId: row.assignment_manager_employee_id,
       employeeManagerId: row.employee_manager_employee_id,
+      employeeReviewer1Id: row.employee_reviewer1_employee_id,
+      employeeReviewer2Id: row.employee_reviewer2_employee_id,
     } satisfies AssessmentRecord));
   }
 
@@ -1210,12 +1492,23 @@ export class ApiStore {
 
   private async assertRelationships(
     client: DbClient,
-    candidate: { id: string; managerId: string | null; assessor1Id: string | null; assessor2Id: string | null },
+    candidate: {
+      id: string;
+      managerId: string | null;
+      assessor1Id: string | null;
+      assessor2Id: string | null;
+      reviewer1Id?: string | null;
+      reviewer2Id?: string | null;
+    },
     options: { allowDeletedIds?: readonly string[] } = {},
   ) {
-    const relationshipIds = [candidate.managerId, candidate.assessor1Id, candidate.assessor2Id].filter(
-      (value): value is string => value !== null,
-    );
+    const relationshipIds = [
+      candidate.managerId,
+      candidate.assessor1Id,
+      candidate.assessor2Id,
+      candidate.reviewer1Id ?? null,
+      candidate.reviewer2Id ?? null,
+    ].filter((value): value is string => value !== null);
     const allowDeletedIds = new Set(options.allowDeletedIds ?? []);
     const result = relationshipIds.length > 0
       ? await client.query<RelationshipRow>(
@@ -1271,6 +1564,37 @@ export class ApiStore {
 
     if (candidate.assessor1Id && candidate.assessor2Id && candidate.assessor1Id === candidate.assessor2Id) {
       throw new ApiError(400, "Assessor 1 and assessor 2 must be different users");
+    }
+
+    for (const [label, reviewerId] of [
+      ["Reviewer 1", candidate.reviewer1Id ?? null],
+      ["Reviewer 2", candidate.reviewer2Id ?? null],
+    ] as const) {
+      if (!reviewerId) {
+        continue;
+      }
+
+      const reviewer = employeeById.get(reviewerId);
+      if (!reviewer) {
+        throw new ApiError(400, `${label} not found`);
+      }
+      if (reviewer.deleted_at !== null && !allowDeletedIds.has(reviewer.id)) {
+        throw new ApiError(400, `${label} not found`);
+      }
+      if (reviewer.id === candidate.id) {
+        throw new ApiError(400, `${label} cannot be the employee`);
+      }
+      if (reviewer.deleted_at === null && reviewer.status !== "active") {
+        throw new ApiError(400, `${label} must be active`);
+      }
+    }
+
+    if (
+      candidate.reviewer1Id &&
+      candidate.reviewer2Id &&
+      candidate.reviewer1Id === candidate.reviewer2Id
+    ) {
+      throw new ApiError(400, "Reviewer 1 and reviewer 2 must be different users");
     }
   }
 
@@ -1361,16 +1685,48 @@ export class ApiStore {
     return assessment.assignmentManagerId === actorEmployeeId || assessment.employeeManagerId === actorEmployeeId;
   }
 
+  private reviewerRoleForAssessment(
+    actorEmployeeId: string,
+    assessment: Pick<AssessmentRecord, "employeeReviewer1Id" | "employeeReviewer2Id">,
+  ): AssessmentReviewerRole | null {
+    if (assessment.employeeReviewer1Id === actorEmployeeId) {
+      return "reviewer1";
+    }
+
+    if (assessment.employeeReviewer2Id === actorEmployeeId) {
+      return "reviewer2";
+    }
+
+    return null;
+  }
+
+  private canReadReviewSubjectAssessment(assessment: Assessment) {
+    return assessment.archiveState === "archived" || ["accepted", "ready_for_meeting", "scheduled", "concluded", "reviewed"].includes(assessment.reviewState);
+  }
+
   private canReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (session.user.role === "admin") {
       return true;
     }
 
-    if (session.user.role === "manager") {
-      return this.isManagerForAssessment(session.user.id, assessment) && !["new", "draft"].includes(assessment.assessment.reviewState);
+    if (assessment.assessment.assessorId === session.user.id) {
+      return true;
     }
 
-    return assessment.assessment.assessorId === session.user.id;
+    if (
+      session.user.role === "manager"
+      && this.isManagerForAssessment(session.user.id, assessment)
+      && !["new", "draft"].includes(assessment.assessment.reviewState)
+    ) {
+      return true;
+    }
+
+    if (assessment.assessment.employeeId === session.user.id) {
+      return this.canReadReviewSubjectAssessment(assessment.assessment);
+    }
+
+    return this.reviewerRoleForAssessment(session.user.id, assessment) !== null
+      && this.canReadReviewSubjectAssessment(assessment.assessment);
   }
 
   private assertCanReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
@@ -1403,6 +1759,80 @@ export class ApiStore {
     }
 
     throw new ApiError(403, "You do not have permission to manage this assessment");
+  }
+
+  private async loadActiveAssessmentSet(client: DbClient, reviewPeriodId: string, employeeId: string) {
+    const items = (await this.loadAssessmentRecords(client, { reviewPeriodId, employeeId }))
+      .filter((item) => item.assessment.archiveState === "active");
+
+    if (items.length === 0) {
+      throw new ApiError(404, "Assessment set not found");
+    }
+
+    return items;
+  }
+
+  private toAssessmentSetResponse(items: AssessmentRecord[]): AssessmentSetResponse {
+    const [first] = items;
+    if (!first) {
+      throw new ApiError(500, "Assessment set is unexpectedly empty");
+    }
+
+    return {
+      reviewPeriodId: first.assessment.reviewPeriodId,
+      employeeId: first.assessment.employeeId,
+      items: clone(items.map((item) => item.assessment)),
+    };
+  }
+
+  private assertAssessmentSetState(
+    items: AssessmentRecord[],
+    expectedState: AssessmentReviewState,
+    message: string,
+  ) {
+    if (items.some((item) => item.assessment.reviewState !== expectedState)) {
+      throw new ApiError(409, message);
+    }
+  }
+
+  private assertCanManageAssessmentSet(session: AuthSession, items: AssessmentRecord[]) {
+    if (session.user.role === "admin") {
+      return;
+    }
+
+    if (
+      session.user.role === "manager"
+      && items.every((item) => this.isManagerForAssessment(session.user.id, item))
+    ) {
+      return;
+    }
+
+    throw new ApiError(403, "You do not have permission to manage this assessment set");
+  }
+
+  private reviewerEmployeeIdForRole(employee: Employee, reviewerRole: AssessmentReviewerRole) {
+    return reviewerRole === "reviewer1" ? employee.reviewer1Id : employee.reviewer2Id;
+  }
+
+  private assertCanConcludeAssessmentSet(
+    session: AuthSession,
+    employee: Employee,
+    reviewerRole: AssessmentReviewerRole,
+  ) {
+    const reviewerEmployeeId = this.reviewerEmployeeIdForRole(employee, reviewerRole);
+    if (!reviewerEmployeeId) {
+      throw new ApiError(409, `${reviewerRole === "reviewer1" ? "Reviewer 1" : "Reviewer 2"} is not assigned`);
+    }
+
+    if (session.user.role === "admin") {
+      return reviewerEmployeeId;
+    }
+
+    if (session.user.id === reviewerEmployeeId) {
+      return reviewerEmployeeId;
+    }
+
+    throw new ApiError(403, "You do not have permission to conclude this assessment set");
   }
 
   private assertAssessmentResponses(questionSet: QuestionSet, responses: AssessmentResponse[], complete: boolean) {
@@ -1498,6 +1928,15 @@ export class ApiStore {
               submitted_at = NULL,
               accepted_at = NULL,
               accepted_by_employee_id = NULL,
+              ready_for_meeting_at = NULL,
+              scheduled_at = NULL,
+              scheduled_by_employee_id = NULL,
+              reviewer1_completed_at = NULL,
+              reviewer1_completed_by_employee_id = NULL,
+              reviewer2_completed_at = NULL,
+              reviewer2_completed_by_employee_id = NULL,
+              concluded_at = NULL,
+              concluded_by_employee_id = NULL,
               reviewed_at = NULL,
               reviewed_by_employee_id = NULL
           WHERE id = $1
@@ -1566,6 +2005,8 @@ export class ApiStore {
       managerUsername: this.usernameForEmployee(employee.managerId, employeesById),
       assessor1Username: this.usernameForEmployee(employee.assessor1Id, employeesById),
       assessor2Username: this.usernameForEmployee(employee.assessor2Id, employeesById),
+      reviewer1Username: this.usernameForEmployee(employee.reviewer1Id, employeesById),
+      reviewer2Username: this.usernameForEmployee(employee.reviewer2Id, employeesById),
       password: this.passwordForTransfer(auth, credentialKind, password),
       credentialKind,
       passwordResetRequired: auth.passwordResetRequired,
@@ -2044,6 +2485,8 @@ export class ApiStore {
               manager_employee_id,
               assessor1_employee_id,
               assessor2_employee_id,
+              reviewer1_employee_id,
+              reviewer2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -2081,6 +2524,8 @@ export class ApiStore {
           managerId: input.managerId ?? null,
           assessor1Id: input.assessor1Id ?? null,
           assessor2Id: input.assessor2Id ?? null,
+          reviewer1Id: input.reviewer1Id ?? null,
+          reviewer2Id: input.reviewer2Id ?? null,
         });
 
         const timestamp = nowIso();
@@ -2096,6 +2541,8 @@ export class ApiStore {
               manager_employee_id,
               assessor1_employee_id,
               assessor2_employee_id,
+              reviewer1_employee_id,
+              reviewer2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -2112,10 +2559,12 @@ export class ApiStore {
               $8,
               $9,
               $10,
-              FALSE,
               $11,
-              $12::timestamptz,
-              $12::timestamptz
+              $12,
+              FALSE,
+              $13,
+              $14::timestamptz,
+              $14::timestamptz
             )
             RETURNING
               id,
@@ -2127,6 +2576,8 @@ export class ApiStore {
               manager_employee_id,
               assessor1_employee_id,
               assessor2_employee_id,
+              reviewer1_employee_id,
+              reviewer2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -2144,6 +2595,8 @@ export class ApiStore {
             input.managerId ?? null,
             input.assessor1Id ?? null,
             input.assessor2Id ?? null,
+            input.reviewer1Id ?? null,
+            input.reviewer2Id ?? null,
             input.password ? hashPassword(input.password) : null,
             input.password ? timestamp : null,
             timestamp,
@@ -2187,8 +2640,16 @@ export class ApiStore {
           managerId: nextEmployee.managerId,
           assessor1Id: nextEmployee.assessor1Id,
           assessor2Id: nextEmployee.assessor2Id,
+          reviewer1Id: nextEmployee.reviewer1Id,
+          reviewer2Id: nextEmployee.reviewer2Id,
         }, {
-          allowDeletedIds: [existing.managerId, existing.assessor1Id, existing.assessor2Id].filter(
+          allowDeletedIds: [
+            existing.managerId,
+            existing.assessor1Id,
+            existing.assessor2Id,
+            existing.reviewer1Id,
+            existing.reviewer2Id,
+          ].filter(
             (value): value is string => value !== null,
           ),
         });
@@ -2203,7 +2664,9 @@ export class ApiStore {
                 status = $6,
                 manager_employee_id = $7,
                 assessor1_employee_id = $8,
-                assessor2_employee_id = $9
+                assessor2_employee_id = $9,
+                reviewer1_employee_id = $10,
+                reviewer2_employee_id = $11
             WHERE id = $1
             RETURNING
               id,
@@ -2215,6 +2678,8 @@ export class ApiStore {
               manager_employee_id,
               assessor1_employee_id,
               assessor2_employee_id,
+              reviewer1_employee_id,
+              reviewer2_employee_id,
               password_hash,
               password_reset_required,
               password_changed_at,
@@ -2232,6 +2697,8 @@ export class ApiStore {
             nextEmployee.managerId,
             nextEmployee.assessor1Id,
             nextEmployee.assessor2Id,
+            nextEmployee.reviewer1Id,
+            nextEmployee.reviewer2Id,
           ],
         );
 
@@ -3384,7 +3851,14 @@ export class ApiStore {
         const referencedUsernames = Array.from(
           new Set(
             items
-              .flatMap((item) => [item.username, item.managerUsername, item.assessor1Username, item.assessor2Username])
+              .flatMap((item) => [
+                item.username,
+                item.managerUsername,
+                item.assessor1Username,
+                item.assessor2Username,
+                item.reviewer1Username,
+                item.reviewer2Username,
+              ])
               .filter((value): value is string => value !== null),
           ),
         );
@@ -3414,12 +3888,24 @@ export class ApiStore {
             : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
                 throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
               })();
+          const reviewer1Id = item.reviewer1Username === null
+            ? null
+            : finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ?? (() => {
+                throw new ApiError(400, `Reviewer 1 username not found: ${item.reviewer1Username}`);
+              })();
+          const reviewer2Id = item.reviewer2Username === null
+            ? null
+            : finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ?? (() => {
+                throw new ApiError(400, `Reviewer 2 username not found: ${item.reviewer2Username}`);
+              })();
 
           await this.assertRelationships(client, {
             id: employee.id,
             managerId,
             assessor1Id,
             assessor2Id,
+            reviewer1Id,
+            reviewer2Id,
           });
 
           await client.query(
@@ -3428,9 +3914,11 @@ export class ApiStore {
               SET manager_employee_id = $2,
                   assessor1_employee_id = $3,
                   assessor2_employee_id = $4,
-                  password_hash = $5,
-                  password_reset_required = $6,
-                  password_changed_at = $7::timestamptz,
+                  reviewer1_employee_id = $5,
+                  reviewer2_employee_id = $6,
+                  password_hash = $7,
+                  password_reset_required = $8,
+                  password_changed_at = $9::timestamptz,
                   password_changed_by_employee_id = NULL
               WHERE id = $1
             `,
@@ -3439,6 +3927,8 @@ export class ApiStore {
               managerId,
               assessor1Id,
               assessor2Id,
+              reviewer1Id,
+              reviewer2Id,
               this.passwordHashForTransferItem(item),
               item.passwordResetRequired,
               importedAt,
@@ -4039,6 +4529,10 @@ export class ApiStore {
             item.employeeId,
             item.assessorId,
             item.acceptedByEmployeeId,
+            item.scheduledByEmployeeId,
+            item.reviewer1CompletedByEmployeeId,
+            item.reviewer2CompletedByEmployeeId,
+            item.concludedByEmployeeId,
             item.reviewedByEmployeeId,
           ]),
         ].filter((value): value is string => value !== null),
@@ -4262,6 +4756,8 @@ export class ApiStore {
   }
 
   private async insertAssessmentsSnapshot(client: DbClient, assessments: Assessment[]) {
+    await this.ensureAssessmentWorkflowColumns(client);
+
     for (const assessment of assessments) {
       await client.query(
         `
@@ -4277,13 +4773,28 @@ export class ApiStore {
             submitted_at,
             accepted_at,
             accepted_by_employee_id,
+            ready_for_meeting_at,
+            scheduled_at,
+            scheduled_by_employee_id,
+            reviewer1_notes,
+            reviewer1_completed_at,
+            reviewer1_completed_by_employee_id,
+            reviewer2_notes,
+            reviewer2_completed_at,
+            reviewer2_completed_by_employee_id,
+            concluded_at,
+            concluded_by_employee_id,
             reviewed_at,
             reviewed_by_employee_id,
             manager_notes,
             archive_state,
             created_at,
             updated_at
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz,$11,$12::timestamptz,$13,$14,$15,$16::timestamptz,$17::timestamptz)
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz,$11,$12::timestamptz,
+            $13::timestamptz,$14,$15,$16::timestamptz,$17,$18,$19::timestamptz,$20,$21::timestamptz,
+            $22,$23,$24,$25,$26,$27::timestamptz,$28::timestamptz
+          )
         `,
         [
           assessment.id,
@@ -4297,6 +4808,17 @@ export class ApiStore {
           assessment.submittedAt,
           assessment.acceptedAt,
           assessment.acceptedByEmployeeId,
+          assessment.readyForMeetingAt,
+          assessment.scheduledAt,
+          assessment.scheduledByEmployeeId,
+          assessment.reviewer1Notes,
+          assessment.reviewer1CompletedAt,
+          assessment.reviewer1CompletedByEmployeeId,
+          assessment.reviewer2Notes,
+          assessment.reviewer2CompletedAt,
+          assessment.reviewer2CompletedByEmployeeId,
+          assessment.concludedAt,
+          assessment.concludedByEmployeeId,
           assessment.reviewedAt,
           assessment.reviewedByEmployeeId,
           assessment.managerNotes,
@@ -4486,12 +5008,24 @@ export class ApiStore {
         : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
             throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
           })();
+      const reviewer1Id = item.reviewer1Username === null
+        ? null
+        : finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ?? (() => {
+            throw new ApiError(400, `Reviewer 1 username not found: ${item.reviewer1Username}`);
+          })();
+      const reviewer2Id = item.reviewer2Username === null
+        ? null
+        : finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ?? (() => {
+            throw new ApiError(400, `Reviewer 2 username not found: ${item.reviewer2Username}`);
+          })();
 
       await this.assertRelationships(client, {
         id: employee.id,
         managerId,
         assessor1Id,
         assessor2Id,
+        reviewer1Id,
+        reviewer2Id,
       });
 
       await client.query(
@@ -4499,10 +5033,12 @@ export class ApiStore {
           UPDATE employees
           SET manager_employee_id = $2,
               assessor1_employee_id = $3,
-              assessor2_employee_id = $4
+              assessor2_employee_id = $4,
+              reviewer1_employee_id = $5,
+              reviewer2_employee_id = $6
           WHERE id = $1
         `,
-        [employee.id, managerId, assessor1Id, assessor2Id],
+        [employee.id, managerId, assessor1Id, assessor2Id, reviewer1Id, reviewer2Id],
       );
     }
   }
@@ -4533,13 +5069,21 @@ export class ApiStore {
           FROM employees
           WHERE assessor1_employee_id = ANY($1::uuid[])
           UNION ALL
-          SELECT assessor2_employee_id
-          FROM employees
-          WHERE assessor2_employee_id = ANY($1::uuid[])
-          UNION ALL
-          SELECT employee_id
-          FROM review_period_assignments
-          WHERE employee_id = ANY($1::uuid[])
+           SELECT assessor2_employee_id
+           FROM employees
+           WHERE assessor2_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT reviewer1_employee_id
+           FROM employees
+           WHERE reviewer1_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT reviewer2_employee_id
+           FROM employees
+           WHERE reviewer2_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT employee_id
+           FROM review_period_assignments
+           WHERE employee_id = ANY($1::uuid[])
           UNION ALL
           SELECT manager_employee_id
           FROM review_period_assignments
@@ -4561,10 +5105,26 @@ export class ApiStore {
           FROM assessments
           WHERE accepted_by_employee_id = ANY($1::uuid[])
           UNION ALL
-          SELECT reviewed_by_employee_id
-          FROM assessments
-          WHERE reviewed_by_employee_id = ANY($1::uuid[])
-        ) refs
+           SELECT reviewed_by_employee_id
+           FROM assessments
+           WHERE reviewed_by_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT scheduled_by_employee_id
+           FROM assessments
+           WHERE scheduled_by_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT reviewer1_completed_by_employee_id
+           FROM assessments
+           WHERE reviewer1_completed_by_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT reviewer2_completed_by_employee_id
+           FROM assessments
+           WHERE reviewer2_completed_by_employee_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT concluded_by_employee_id
+           FROM assessments
+           WHERE concluded_by_employee_id = ANY($1::uuid[])
+         ) refs
         WHERE employee_id IS NOT NULL
       `,
       [removableIds],
@@ -4715,6 +5275,7 @@ export class ApiStore {
   async createAssessment(session: AuthSession, reviewPeriodId: string, input: CreateAssessmentRequest) {
     try {
       return await withTransaction(async (client) => {
+        await this.ensureAssessmentWorkflowColumns(client);
         await this.assertReviewPeriodMutable(client, reviewPeriodId);
 
         const assessorId = session.user.id;
@@ -4913,42 +5474,165 @@ export class ApiStore {
     }
   }
 
-  async reviewAssessment(session: AuthSession, assessmentId: string, input: ReviewAssessmentRequest) {
+  async markAssessmentSetReadyForMeeting(session: AuthSession, reviewPeriodId: string, employeeId: string) {
     try {
       return await withTransaction(async (client) => {
-        const assessment = await this.assessmentOrThrow(client, assessmentId);
-        this.assertCanManageAssessment(session, assessment);
-        await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+        const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
+        this.assertCanManageAssessmentSet(session, items);
+        this.assertAssessmentSetState(
+          items,
+          "accepted",
+          "Only fully accepted assessment sets can be marked ready for meeting",
+        );
 
-        if (assessment.assessment.reviewState !== "accepted") {
-          throw new ApiError(409, "Only accepted assessments can be reviewed");
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE assessments
+            SET review_state = 'ready_for_meeting',
+                ready_for_meeting_at = COALESCE(ready_for_meeting_at, $3::timestamptz),
+                updated_at = $3::timestamptz
+            WHERE review_period_id = $1
+              AND employee_id = $2
+              AND archive_state = 'active'
+          `,
+          [reviewPeriodId, employeeId, timestamp],
+        );
+
+        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async scheduleAssessmentSet(session: AuthSession, reviewPeriodId: string, employeeId: string) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+        const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
+        this.assertCanManageAssessmentSet(session, items);
+        this.assertAssessmentSetState(
+          items,
+          "ready_for_meeting",
+          "Only ready-for-meeting assessment sets can be scheduled",
+        );
+
+        const timestamp = nowIso();
+        await client.query(
+          `
+            UPDATE assessments
+            SET review_state = 'scheduled',
+                scheduled_at = COALESCE(scheduled_at, $3::timestamptz),
+                scheduled_by_employee_id = COALESCE(scheduled_by_employee_id, $4),
+                updated_at = $3::timestamptz
+            WHERE review_period_id = $1
+              AND employee_id = $2
+              AND archive_state = 'active'
+          `,
+          [reviewPeriodId, employeeId, timestamp, session.user.id],
+        );
+
+        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      rethrowDatabaseError(error);
+    }
+  }
+
+  async concludeAssessmentSet(
+    session: AuthSession,
+    reviewPeriodId: string,
+    employeeId: string,
+    input: ConcludeAssessmentRequest,
+  ) {
+    try {
+      return await withTransaction(async (client) => {
+        await this.assertReviewPeriodMutable(client, reviewPeriodId);
+        const employee = this.toEmployee(await this.employeeOrThrow(client, employeeId));
+        const reviewerEmployeeId = this.assertCanConcludeAssessmentSet(session, employee, input.reviewerRole);
+        const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
+
+        if (items.some((item) => !["scheduled", "concluded"].includes(item.assessment.reviewState))) {
+          throw new ApiError(409, "Only scheduled or concluded assessment sets can record reviewer conclusions");
         }
 
-        if (input.reviewed) {
-          const timestamp = nowIso();
+        const reviewerPrefix = input.reviewerRole === "reviewer1" ? "reviewer1" : "reviewer2";
+        const notesColumn = `${reviewerPrefix}_notes`;
+        const completedAtColumn = `${reviewerPrefix}_completed_at`;
+        const completedByColumn = `${reviewerPrefix}_completed_by_employee_id`;
+        const notesProvided = input.reviewerNotes !== undefined;
+        const notes = input.reviewerNotes ?? null;
+        const timestamp = nowIso();
+
+        if (input.completed) {
           await client.query(
             `
               UPDATE assessments
-              SET review_state = 'reviewed',
-                  manager_notes = $2,
-                  reviewed_at = $3::timestamptz,
-                  reviewed_by_employee_id = $4
-              WHERE id = $1
+              SET ${notesColumn} = CASE WHEN $6 THEN $3 ELSE ${notesColumn} END,
+                  ${completedAtColumn} = COALESCE(${completedAtColumn}, $4::timestamptz),
+                  ${completedByColumn} = COALESCE(${completedByColumn}, $5),
+                  updated_at = $4::timestamptz
+              WHERE review_period_id = $1
+                AND employee_id = $2
+                AND archive_state = 'active'
             `,
-            [assessmentId, input.managerNotes, timestamp, session.user.id],
+            [reviewPeriodId, employeeId, notes, timestamp, reviewerEmployeeId, notesProvided],
           );
         } else {
+          const shouldReopen = items.some((item) => item.assessment.reviewState === "concluded");
           await client.query(
             `
               UPDATE assessments
-              SET manager_notes = $2
-              WHERE id = $1
+              SET review_state = CASE WHEN $5 THEN 'scheduled' ELSE review_state END,
+                  ${notesColumn} = CASE WHEN $6 THEN $3 ELSE ${notesColumn} END,
+                  ${completedAtColumn} = NULL,
+                  ${completedByColumn} = NULL,
+                  concluded_at = CASE WHEN $5 THEN NULL ELSE concluded_at END,
+                  concluded_by_employee_id = CASE WHEN $5 THEN NULL ELSE concluded_by_employee_id END,
+                  updated_at = $4::timestamptz
+              WHERE review_period_id = $1
+                AND employee_id = $2
+                AND archive_state = 'active'
             `,
-            [assessmentId, input.managerNotes],
+            [reviewPeriodId, employeeId, notes, timestamp, shouldReopen, notesProvided],
           );
         }
 
-        return (await this.assessmentOrThrow(client, assessmentId)).assessment;
+        const updatedItems = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
+        const reviewer1Required = employee.reviewer1Id !== null;
+        const reviewer2Required = employee.reviewer2Id !== null;
+        const allReviewersCompleted = updatedItems.every((item) => {
+          const reviewer1Completed = !reviewer1Required || item.assessment.reviewer1CompletedAt !== null;
+          const reviewer2Completed = !reviewer2Required || item.assessment.reviewer2CompletedAt !== null;
+          return reviewer1Completed && reviewer2Completed;
+        });
+
+        if (allReviewersCompleted && updatedItems.some((item) => item.assessment.reviewState !== "concluded")) {
+          const concludedAt = nowIso();
+          await client.query(
+            `
+              UPDATE assessments
+              SET review_state = 'concluded',
+                  concluded_at = COALESCE(concluded_at, $3::timestamptz),
+                  concluded_by_employee_id = COALESCE(concluded_by_employee_id, $4),
+                  updated_at = $3::timestamptz
+              WHERE review_period_id = $1
+                AND employee_id = $2
+                AND archive_state = 'active'
+            `,
+            [reviewPeriodId, employeeId, concludedAt, session.user.id],
+          );
+        }
+
+        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
       });
     } catch (error) {
       if (error instanceof ApiError) {

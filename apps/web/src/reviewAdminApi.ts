@@ -53,8 +53,10 @@ import type { QuestionSetDraft, ReviewAdminSnapshot, ReviewPeriodDraft, ReviewPe
 
 export type TransferFormat = 'json' | 'csv';
 
-type LocalUserTransferDraft = Omit<LocalUserTransferItem, 'passwordResetRequired'> & {
+type LocalUserTransferDraft = Omit<LocalUserTransferItem, 'passwordResetRequired' | 'reviewer1Username' | 'reviewer2Username'> & {
   passwordResetRequired?: boolean;
+  reviewer1Username?: string | null;
+  reviewer2Username?: string | null;
 };
 
 const localUserTransferRequiredHeaders = [
@@ -68,7 +70,21 @@ const localUserTransferRequiredHeaders = [
   'assessor2Username',
   'password',
 ] as const;
-const localUserTransferHeaders = [...localUserTransferRequiredHeaders, 'credentialKind', 'passwordResetRequired'] as const;
+const localUserTransferHeaders = [
+  'username',
+  'fullName',
+  'email',
+  'role',
+  'status',
+  'managerUsername',
+  'assessor1Username',
+  'assessor2Username',
+  'reviewer1Username',
+  'reviewer2Username',
+  'password',
+  'credentialKind',
+  'passwordResetRequired',
+] as const;
 const questionSetExportHeaders = [
   'reviewPeriodId',
   'questionSetId',
@@ -101,6 +117,8 @@ function escapeCsvCell(value: string) {
 function normalizeLocalUserTransferItems(items: LocalUserTransferDraft[]): LocalUserTransferItem[] {
   return items.map((item) => ({
     ...item,
+    reviewer1Username: item.reviewer1Username ?? null,
+    reviewer2Username: item.reviewer2Username ?? null,
     credentialKind: item.credentialKind ?? 'password',
     passwordResetRequired: item.passwordResetRequired ?? false,
   }));
@@ -119,6 +137,8 @@ function serializeLocalUsersAsCsv(items: LocalUserTransferDraft[]) {
         item.managerUsername ?? '',
         item.assessor1Username ?? '',
         item.assessor2Username ?? '',
+        item.reviewer1Username ?? '',
+        item.reviewer2Username ?? '',
         item.password,
         item.credentialKind ?? 'password',
         String(item.passwordResetRequired),
@@ -217,6 +237,8 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
       managerUsername: row[headers.get('managerUsername') ?? -1]?.trim() || null,
       assessor1Username: row[headers.get('assessor1Username') ?? -1]?.trim() || null,
       assessor2Username: row[headers.get('assessor2Username') ?? -1]?.trim() || null,
+      reviewer1Username: row[headers.get('reviewer1Username') ?? -1]?.trim() || null,
+      reviewer2Username: row[headers.get('reviewer2Username') ?? -1]?.trim() || null,
       password: row[headers.get('password') ?? -1] ?? '',
       credentialKind: row[headers.get('credentialKind') ?? -1]?.trim() || undefined,
       passwordResetRequired: parseBooleanCell(row[headers.get('passwordResetRequired') ?? -1] ?? ''),
