@@ -458,6 +458,7 @@ describe("assessment authoring and review API", () => {
   it("lets admins override assessment responses, notes, state, and deletion", async () => {
     const app = await createApp();
     const ada = await login(app, "ada.admin", "AdminPass123!");
+    const manny = await login(app, "manny.manager", "ManagerPass123!");
     const elliot = await login(app, "elliot.employee", "EmployeePass123!");
     const pat = await login(app, "pat.peer", "PeerPass123!");
 
@@ -621,7 +622,7 @@ describe("assessment authoring and review API", () => {
     expect(concludedAssessment.reviewState).toBe("concluded");
     expect(concludedAssessment.concludedByEmployeeId).toBe(ada.user.id);
     expect(concludedAssessment.reviewer1CompletedByEmployeeId).toBe(ada.user.id);
-    expect(concludedAssessment.reviewer2CompletedByEmployeeId).toBe(ada.user.id);
+    expect(concludedAssessment.reviewer2CompletedByEmployeeId).toBe(manny.user.id);
 
     const peerAfterConcludeResponse = await app.inject({
       method: "GET",

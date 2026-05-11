@@ -1928,7 +1928,7 @@ export class ApiStore {
             END,
             reviewer1_completed_by_employee_id = CASE
               WHEN $4::uuid IS NULL THEN NULL
-              ELSE COALESCE(reviewer1_completed_by_employee_id, $3)
+              ELSE COALESCE(reviewer1_completed_by_employee_id, $4)
             END,
             reviewer2_completed_at = CASE
               WHEN $5::uuid IS NULL THEN NULL
@@ -1936,7 +1936,7 @@ export class ApiStore {
             END,
             reviewer2_completed_by_employee_id = CASE
               WHEN $5::uuid IS NULL THEN NULL
-              ELSE COALESCE(reviewer2_completed_by_employee_id, $3)
+              ELSE COALESCE(reviewer2_completed_by_employee_id, $5)
             END,
             concluded_at = COALESCE(concluded_at, $2::timestamptz),
             concluded_by_employee_id = COALESCE(concluded_by_employee_id, $3),

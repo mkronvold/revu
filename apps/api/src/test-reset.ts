@@ -190,6 +190,36 @@ async function ensureAssessmentWorkflowColumns(client: PoolClient) {
   );
   await client.query(
     `
+      CREATE OR REPLACE FUNCTION enforce_assessment_reviewer_completion_consistency()
+      RETURNS TRIGGER
+      LANGUAGE plpgsql
+      AS $$
+      DECLARE
+        v_reviewer1_employee_id UUID;
+        v_reviewer2_employee_id UUID;
+      BEGIN
+        SELECT reviewer1_employee_id, reviewer2_employee_id
+        INTO v_reviewer1_employee_id, v_reviewer2_employee_id
+        FROM employees
+        WHERE id = NEW.employee_id;
+
+        IF NEW.reviewer1_completed_by_employee_id IS NOT NULL
+          AND NEW.reviewer1_completed_by_employee_id IS DISTINCT FROM v_reviewer1_employee_id THEN
+          RAISE EXCEPTION 'Reviewer 1 completion must match the employee reviewer 1 assignment';
+        END IF;
+
+        IF NEW.reviewer2_completed_by_employee_id IS NOT NULL
+          AND NEW.reviewer2_completed_by_employee_id IS DISTINCT FROM v_reviewer2_employee_id THEN
+          RAISE EXCEPTION 'Reviewer 2 completion must match the employee reviewer 2 assignment';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$;
+    `,
+  );
+  await client.query(
+    `
       CREATE OR REPLACE FUNCTION enforce_employee_assessment_set_conclusion()
       RETURNS TRIGGER
       LANGUAGE plpgsql
@@ -242,7 +272,20 @@ async function ensureAssessmentWorkflowColumns(client: PoolClient) {
   );
   await client.query(
     `
+      DROP TRIGGER IF EXISTS assessments_enforce_reviewer_completion_consistency ON assessments
+    `,
+  );
+  await client.query(
+    `
       DROP TRIGGER IF EXISTS assessments_enforce_employee_set_conclusion ON assessments
+    `,
+  );
+  await client.query(
+    `
+      CREATE TRIGGER assessments_enforce_reviewer_completion_consistency
+      BEFORE INSERT OR UPDATE ON assessments
+      FOR EACH ROW
+      EXECUTE FUNCTION enforce_assessment_reviewer_completion_consistency()
     `,
   );
   await client.query(
