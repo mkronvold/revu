@@ -322,6 +322,7 @@ ensure_stack_running() {
   mapfile -t running_services < <(docker compose ps --services --filter status=running)
 
   for service in "${running_services[@]}"; do
+    [[ -n "$service" ]] || continue
     running_lookup["$service"]=1
   done
 
