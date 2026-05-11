@@ -5016,9 +5016,23 @@ function App() {
                         assignments • {summary.assessmentCount} assessments
                       </p>
                     </div>
-                    <button type="button" disabled={isSavingReviewAdmin} onClick={() => startEditingReviewPeriod(reviewPeriod)}>
-                      Edit
-                    </button>
+                    <div className="archive-row-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={isSavingReviewAdmin}
+                        onClick={() => startEditingReviewPeriod(reviewPeriod)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingReviewAdmin}
+                        onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}
+                      >
+                        Archive
+                      </button>
+                    </div>
                   </article>
                 );
               })

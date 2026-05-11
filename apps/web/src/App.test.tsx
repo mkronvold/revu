@@ -87,6 +87,7 @@ import App from './App';
 import {
   activateQuestionSet,
   acceptAssessment,
+  archiveReviewPeriod,
   changePassword,
   checkApiHealth,
   clearReadyToStartAssessments,
@@ -894,6 +895,76 @@ describe('questions screen', () => {
       status: 'active',
     });
     await waitFor(() => container.textContent?.includes('Made 2025 Annual Review the active review period.') ?? false);
+  });
+
+  it('archives inactive review periods directly from lifecycle controls', async () => {
+    let currentFoundation = cloneQuestionSlice();
+    currentFoundation.reviewPeriods[1] = {
+      ...currentFoundation.reviewPeriods[1]!,
+      status: 'inactive',
+      archivedAt: null,
+      archivedByEmployeeId: null,
+    };
+    const reviewPeriodToArchive = currentFoundation.reviewPeriods[1]!;
+
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundation));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(archiveReviewPeriod).mockImplementation(async (_token, reviewPeriodId) => {
+      currentFoundation = {
+        ...currentFoundation,
+        reviewPeriods: currentFoundation.reviewPeriods.map((reviewPeriod) =>
+          reviewPeriod.id === reviewPeriodId
+            ? {
+                ...reviewPeriod,
+                status: 'archived',
+                archivedAt: '2026-06-01T12:00:00.000Z',
+                archivedByEmployeeId: adminEmployeeExample.item.id,
+              }
+            : reviewPeriod,
+        ),
+      };
+
+      return {
+        item: structuredClone(currentFoundation.reviewPeriods.find((reviewPeriod) => reviewPeriod.id === reviewPeriodId)!),
+      };
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/review-period');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Review period lifecycle') ?? false);
+
+    const inactiveSection = Array.from(container.querySelectorAll('.archive-section')).find((section) =>
+      section.textContent?.includes('Manage inactive review periods'),
+    );
+    expect(inactiveSection?.textContent).toContain(reviewPeriodToArchive.label);
+
+    const archiveButton = Array.from(inactiveSection?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Archive',
+    );
+    expect(archiveButton).toBeTruthy();
+
+    await act(async () => {
+      archiveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(archiveReviewPeriod).toHaveBeenCalledWith('session-token', reviewPeriodToArchive.id);
+    await waitFor(() => container.textContent?.includes('Archived the review period in the API.') ?? false);
+    expect(inactiveSection?.textContent).not.toContain(reviewPeriodToArchive.label);
+
+    const archivedSection = Array.from(container.querySelectorAll('.archive-section')).find((section) =>
+      section.textContent?.includes('Restore archived review periods'),
+    );
+    expect(archivedSection?.textContent).toContain(reviewPeriodToArchive.label);
+    expect(archivedSection?.textContent).toContain('Unarchive');
   });
 
   it('shows disabled Archived and Active status buttons for archived and active review periods', async () => {
