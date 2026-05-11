@@ -322,10 +322,46 @@ function requirePermissions(session: AuthSession, permissions: AuthPermission[])
   }
 }
 
-export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
-  app.addContentTypeParser(/^multipart\/form-data(?:;.*)?$/u, { parseAs: "buffer" }, (_request, body, done) => {
-    done(null, body);
+async function sendBackupExport(reply: FastifyReply, store: ApiStore, mode: "preserve-passwords" | "rotate-passcodes") {
+  const backup = backupExportResponseSchema.parse(await store.createBackup(mode));
+  reply.header("cache-control", "no-store");
+  reply.header("content-disposition", `attachment; filename="${buildBackupFilename(backup.exportedAt)}"`);
+  reply.type("application/json; charset=utf-8");
+  return backup;
+}
+
+async function restoreBackupFromMultipart(request: FastifyRequest, store: ApiStore) {
+  const body = parseBackupRestoreRequestFromMultipart(request);
+  return backupRestoreResponseSchema.parse(
+    await store.restoreBackup(body.target, {
+      ...body.backup,
+      users: {
+        ...body.backup.users,
+        items: body.backup.users.items.map((item) => normalizeLocalUserTransferItem(item)),
+      },
+    }),
+  );
+}
+
+export const registerInternalBackupRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
+  app.get("/backups/export", async (_request, reply) => {
+    try {
+      return await sendBackupExport(reply, store, "preserve-passwords");
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
+
+  app.post("/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, async (request, reply) => {
+    try {
+      return await restoreBackupFromMultipart(request, store);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+};
+
+export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
 
   const handleBackupStatus = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -342,11 +378,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       const session = await requireSession(request, store);
       requirePermissions(session, ["backups:create"]);
       const query = parseWithSchema(backupExportQuerySchema, request.query);
-      const backup = backupExportResponseSchema.parse(await store.createBackup(query.mode));
-      reply.header("cache-control", "no-store");
-      reply.header("content-disposition", `attachment; filename="${buildBackupFilename(backup.exportedAt)}"`);
-      reply.type("application/json; charset=utf-8");
-      return backup;
+      return await sendBackupExport(reply, store, query.mode ?? "preserve-passwords");
     } catch (error) {
       return sendError(reply, error);
     }
@@ -356,16 +388,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     try {
       const session = await requireSession(request, store);
       requirePermissions(session, ["backups:restore"]);
-      const body = parseBackupRestoreRequestFromMultipart(request);
-      return backupRestoreResponseSchema.parse(
-        await store.restoreBackup(body.target, {
-          ...body.backup,
-          users: {
-            ...body.backup.users,
-            items: body.backup.users.items.map((item) => normalizeLocalUserTransferItem(item)),
-          },
-        }),
-      );
+      return await restoreBackupFromMultipart(request, store);
     } catch (error) {
       return sendError(reply, error);
     }

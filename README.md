@@ -140,9 +140,10 @@ The direct workspace commands are useful for frontend or API-only iteration afte
   - `BACKUP_RETENTION_COUNT` keeps the latest N archived backups.
 - The API and backup sidecar both read and update `BACKUP_STATUS_PATH`, so the UI reflects the latest backup and restore timestamps from the shared config volume.
 - The scheduler and helper scripts expect the API backup endpoints to be reachable at:
-  - `BACKUP_DOWNLOAD_URL` (default `http://api:4000/api/v1/admin/backups/export`)
-  - `BACKUP_RESTORE_URL` (default `http://api:4000/api/v1/admin/backups/restore`)
-- If those endpoints need auth or an internal shared-secret header, set either:
+  - `BACKUP_DOWNLOAD_URL` (default `http://api:4000/internal/backups/export`)
+  - `BACKUP_RESTORE_URL` (default `http://api:4000/internal/backups/restore`)
+- The default internal endpoints are meant for the Docker-only `backup` sidecar and do not require a session token.
+- If you override those URLs to point at the authenticated admin endpoints instead, set either:
   - `BACKUP_BEARER_TOKEN`
   - or `BACKUP_HEADER_NAME` plus `BACKUP_HEADER_VALUE`
 - The current ops plumbing assumes the backup payload is a single file response, with JSON as the default extension (`BACKUP_FILE_EXTENSION=json`), and that restores accept multipart form fields named `file`, `target`, and `mode`.

@@ -79,8 +79,8 @@ services:
       BACKUP_HANDOFF_DIR: ${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
       BACKUP_CONFIG_DIR: ${BACKUP_CONFIG_DIR:-/var/lib/revu/backups/config}
       BACKUP_STATUS_PATH: ${BACKUP_STATUS_PATH:-/var/lib/revu/backups/config/status.json}
-      BACKUP_DOWNLOAD_URL: ${BACKUP_DOWNLOAD_URL:-http://api:4000/api/v1/admin/backups/export}
-      BACKUP_RESTORE_URL: ${BACKUP_RESTORE_URL:-http://api:4000/api/v1/admin/backups/restore}
+      BACKUP_DOWNLOAD_URL: ${BACKUP_DOWNLOAD_URL:-http://api:4000/internal/backups/export}
+      BACKUP_RESTORE_URL: ${BACKUP_RESTORE_URL:-http://api:4000/internal/backups/restore}
       BACKUP_FILE_PREFIX: ${BACKUP_FILE_PREFIX:-revu-backup}
       BACKUP_FILE_EXTENSION: ${BACKUP_FILE_EXTENSION:-json}
       BACKUP_AUTOMATIC_ENABLED: ${BACKUP_AUTOMATIC_ENABLED:-false}

@@ -66,6 +66,19 @@ describe("backup and question category admin API", () => {
     };
   }
 
+  async function exportInternalBackup(app: ReturnType<typeof buildApp>) {
+    const response = await app.inject({
+      method: "GET",
+      url: "/internal/backups/export",
+    });
+
+    expect(response.statusCode).toBe(200);
+    return {
+      response,
+      backup: backupExportResponseSchema.parse(response.json()),
+    };
+  }
+
   function createMultipartPayload(backup: unknown, target: string, mode = "replace") {
     const boundary = `----revu-backup-${target}`;
     const body = Buffer.concat([
@@ -92,6 +105,21 @@ describe("backup and question category admin API", () => {
       url: "/api/v1/admin/backups/restore",
       headers: {
         authorization: `Bearer ${token}`,
+        "content-type": `multipart/form-data; boundary=${payload.boundary}`,
+      },
+      payload: payload.body,
+    });
+
+    expect(response.statusCode).toBe(200);
+    return backupRestoreResponseSchema.parse(response.json());
+  }
+
+  async function restoreInternalBackup(app: ReturnType<typeof buildApp>, backup: unknown, target: string) {
+    const payload = createMultipartPayload(backup, target);
+    const response = await app.inject({
+      method: "POST",
+      url: "/internal/backups/restore",
+      headers: {
         "content-type": `multipart/form-data; boundary=${payload.boundary}`,
       },
       payload: payload.body,
@@ -506,5 +534,47 @@ describe("backup and question category admin API", () => {
     expect(reviewPeriodsListResponseSchema.parse(reviewPeriodsResponse.json()).items).toHaveLength(
       backup.reviewData.reviewPeriods.length,
     );
+  });
+
+  it("supports internal backup export and restore for the backup sidecar", async () => {
+    const app = await createApp();
+    const session = await loginAsAdmin(app);
+    const { response: exportResponse, backup } = await exportInternalBackup(app);
+
+    expect(exportResponse.headers["content-type"]).toContain("application/json");
+    expect(exportResponse.headers["content-disposition"]).toContain("attachment;");
+    expect(backup.users.mode).toBe("preserve-passwords");
+
+    const createReviewPeriodResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/review-periods",
+      headers: {
+        authorization: `Bearer ${session.token}`,
+      },
+      payload: {
+        key: "internal-restore-period",
+        label: "Internal Restore Period",
+        startDate: "2027-03-01",
+        dueDate: "2027-04-01",
+        assessmentDueDate: "2027-03-24",
+        reviewDueDate: "2027-03-29",
+      },
+    });
+    expect(createReviewPeriodResponse.statusCode).toBe(201);
+
+    const restoreResponse = await restoreInternalBackup(app, backup, "reviews");
+    expect(restoreResponse).toMatchObject({
+      mode: "replace",
+      target: "reviews",
+    });
+    expect(restoreResponse.counts.reviewPeriods).toBe(backup.reviewData.reviewPeriods.length);
+
+    const reviewPeriodsResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/review-periods",
+    });
+    const reviewPeriods = reviewPeriodsListResponseSchema.parse(reviewPeriodsResponse.json()).items;
+    expect(reviewPeriods).toHaveLength(backup.reviewData.reviewPeriods.length);
+    expect(reviewPeriods.some((item) => item.key === "internal-restore-period")).toBe(false);
   });
 });

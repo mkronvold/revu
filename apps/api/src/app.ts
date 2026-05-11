@@ -2,7 +2,7 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyServerOptions } from "fastify";
 
 import { closePool } from "./db.js";
-import { registerRoutes } from "./routes.js";
+import { registerInternalBackupRoutes, registerRoutes } from "./routes.js";
 import { resetDemoData } from "./test-reset.js";
 import { createApiStore } from "./store.js";
 
@@ -11,6 +11,9 @@ export function buildApp(options: FastifyServerOptions = {}) {
   const store = createApiStore();
 
   app.register(cors, { origin: true });
+  app.addContentTypeParser(/^multipart\/form-data(?:;.*)?$/u, { parseAs: "buffer" }, (_request, body, done) => {
+    done(null, body);
+  });
   app.addHook("onReady", async () => {
     if (process.env.NODE_ENV === "test" || process.env.VITEST) {
       await resetDemoData();
@@ -21,6 +24,7 @@ export function buildApp(options: FastifyServerOptions = {}) {
   });
 
   app.get("/health", async () => ({ status: "ok" as const }));
+  app.register(registerInternalBackupRoutes, { prefix: "/internal", store });
   app.register(registerRoutes, { prefix: "/api/v1", store });
 
   return app;
