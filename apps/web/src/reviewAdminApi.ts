@@ -637,7 +637,7 @@ export async function copyQuestionSetToReviewPeriodInApi(
       .map((question, index) => ({
         order: index + 1,
         type: question.type,
-        category: question.category,
+        category: question.category?.trim() || null,
         prompt: question.prompt,
       })),
   });

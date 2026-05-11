@@ -171,6 +171,64 @@ describe('review admin API orchestration', () => {
     expect(result.notice).toContain('made it active');
   });
 
+  it('normalizes blank question categories when copying a question set into the current review period', async () => {
+    const sourceReviewPeriod = foundationSnapshotExample.reviewPeriods[1]!;
+    const targetReviewPeriod = foundationSnapshotExample.reviewPeriods[0]!;
+    const sourceQuestionSet = {
+      ...foundationSnapshotExample.questionSets[2]!,
+      questions: [
+        ...foundationSnapshotExample.questionSets[2]!.questions,
+        {
+          id: '67676767-6767-4676-8676-676767676767',
+          order: 99,
+          type: 'narrative' as const,
+          category: '   ',
+          prompt: 'Question without a category',
+        },
+      ],
+    };
+
+    vi.mocked(createQuestionSet).mockResolvedValue({
+      item: {
+        ...sourceQuestionSet,
+        id: '57575757-5757-4575-8575-575757575757',
+        reviewPeriodId: targetReviewPeriod.id,
+        isReadOnly: false,
+        status: 'active',
+      },
+    });
+    vi.mocked(activateQuestionSet).mockResolvedValue({
+      item: {
+        ...sourceQuestionSet,
+        id: '57575757-5757-4575-8575-575757575757',
+        reviewPeriodId: targetReviewPeriod.id,
+        isReadOnly: false,
+        status: 'active',
+      },
+    });
+
+    await copyQuestionSetToReviewPeriodInApi(
+      'session-token',
+      sourceQuestionSet,
+      sourceReviewPeriod,
+      targetReviewPeriod,
+    );
+
+    expect(createQuestionSet).toHaveBeenCalledWith(
+      'session-token',
+      targetReviewPeriod.id,
+      expect.objectContaining({
+        questions: expect.arrayContaining([
+          expect.objectContaining({
+            order: sourceQuestionSet.questions.length,
+            category: null,
+            prompt: 'Question without a category',
+          }),
+        ]),
+      }),
+    );
+  });
+
   it('removes assignments through the API and clears the synced employee assessor', async () => {
     const reviewAdmin = createReviewAdminSnapshot(foundationSnapshotExample);
     const existingAssignment = reviewAdmin.assignments.find(

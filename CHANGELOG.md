@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed inactive-to-active question-set copying so questions with blank categories are normalized to uncategorized instead of failing API validation
 - Updated workflow docs and default workflow content so README, navigation copy, and seeded markdown now describe the dashboard-led `new` → `draft` → `submitted` → `accepted` → `ready_for_meeting` → `scheduled` → `concluded` lifecycle without the old review-queue wording
 - Refreshed the admin-only Assessments page around the new workflow lifecycle so summaries, filters, row details, and override actions now track not started / incomplete, submitted, accepted, ready for meeting, scheduled, and concluded work without the old reviewed terminology
 - Reworked dashboard workflow dialogs so accepted sets open a Ready for meeting summary, ready sets open a status-only Schedule review meeting dialog, reviewer/admin follow-up uses role-aware conclusion and reopen dialogs, and submitted assessments now confirm Return to incomplete before sending work back
