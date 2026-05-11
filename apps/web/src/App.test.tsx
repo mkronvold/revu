@@ -1564,6 +1564,58 @@ describe('workflow entry', () => {
     expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: managers');
   });
 
+  it('pauses automatic refresh while the workflow editor is open', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    let activeIntervalId: number | null = null;
+    let activeRefreshHandler: (() => void) | null = null;
+    let nextIntervalId = 1;
+
+    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((handler: TimerHandler) => {
+      const intervalId = nextIntervalId++;
+      if (typeof handler === 'function') {
+        activeIntervalId = intervalId;
+        activeRefreshHandler = handler as () => void;
+      }
+      return intervalId;
+    }) as typeof window.setInterval);
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval').mockImplementation(((intervalId?: number) => {
+      if (intervalId === activeIntervalId) {
+        activeIntervalId = null;
+        activeRefreshHandler = null;
+      }
+    }) as typeof window.clearInterval);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/workflow');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Reference the current lifecycle') ?? false);
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    expect(activeRefreshHandler).toBeTruthy();
+
+    const workflowEditButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit workflow',
+    );
+    expect(workflowEditButton).toBeTruthy();
+
+    await act(async () => {
+      workflowEditButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('.workflow-editor-dialog') !== null);
+    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(activeRefreshHandler).toBeNull();
+  });
+
   it('toggles the sidebar width without removing navigation or utility controls', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
@@ -1734,6 +1786,48 @@ describe('workflow entry', () => {
 
     await waitFor(() => vi.mocked(getFoundation).mock.calls.length === 1);
     expect(vi.mocked(listEmployees).mock.calls.length).toBe(1);
+  });
+
+  it('refreshes loaded data automatically on the configured interval', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    let refreshHandler: (() => void) | null = null;
+    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((handler: TimerHandler) => {
+      if (typeof handler === 'function') {
+        refreshHandler = handler as () => void;
+      }
+      return 1;
+    }) as typeof window.setInterval);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
+    expect(refreshHandler).toBeTruthy();
+
+    vi.mocked(getFoundation).mockClear();
+    vi.mocked(listEmployees).mockClear();
+    vi.mocked(listQuestionCategories).mockClear();
+    vi.mocked(getBackupStatus).mockClear();
+
+    await act(async () => {
+      refreshHandler?.();
+      await flushRender();
+    });
+
+    await waitFor(() => vi.mocked(getFoundation).mock.calls.length === 1);
+    expect(vi.mocked(listEmployees).mock.calls.length).toBe(1);
+    expect(vi.mocked(listQuestionCategories).mock.calls.length).toBe(1);
+    expect(vi.mocked(getBackupStatus).mock.calls.length).toBe(1);
   });
 
   it('restores the assessment list search state after a remount', async () => {

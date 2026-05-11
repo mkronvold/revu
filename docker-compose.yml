@@ -110,6 +110,7 @@ services:
     restart: unless-stopped
     environment:
       VITE_COMPANY_NAME: ${VITE_COMPANY_NAME:-Your Company}
+      VITE_AUTO_REFRESH_INTERVAL_MS: ${VITE_AUTO_REFRESH_INTERVAL_MS:-60000}
       VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
     # Deployment intentionally keeps web internal to Docker networks.
     # Decision point: keep it this way behind a reverse proxy on proxy-net, or

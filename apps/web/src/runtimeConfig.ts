@@ -2,6 +2,7 @@ type RuntimeRevuConfig = {
   companyName?: string;
   revision?: string;
   questionSetStatusEnabled?: boolean | string;
+  autoRefreshIntervalMs?: number | string;
 };
 
 declare global {
@@ -43,9 +44,34 @@ function parseBooleanFlag(value: boolean | string | null | undefined) {
   return null;
 }
 
+function parsePositiveIntegerFlag(value: number | string | null | undefined) {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsed = Number(normalizedValue);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function getRuntimeQuestionSetStatusEnabled() {
   return typeof window === 'undefined' ? null : parseBooleanFlag(window.__REVU_CONFIG__?.questionSetStatusEnabled);
 }
 
 export const questionSetStatusEnabled =
   getRuntimeQuestionSetStatusEnabled() ?? parseBooleanFlag(import.meta.env.VITE_ENABLE_QUESTION_SET_STATUS) ?? false;
+
+export function getRuntimeAutoRefreshIntervalMs() {
+  return typeof window === 'undefined' ? null : parsePositiveIntegerFlag(window.__REVU_CONFIG__?.autoRefreshIntervalMs);
+}
+
+export const autoRefreshIntervalMs =
+  getRuntimeAutoRefreshIntervalMs() ?? parsePositiveIntegerFlag(import.meta.env.VITE_AUTO_REFRESH_INTERVAL_MS) ?? 60000;

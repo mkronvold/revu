@@ -132,7 +132,7 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
-import { getRuntimeCompanyName, getRuntimeRevision, questionSetStatusEnabled } from './runtimeConfig';
+import { autoRefreshIntervalMs, getRuntimeCompanyName, getRuntimeRevision, questionSetStatusEnabled } from './runtimeConfig';
 import {
   getNextThemePreference,
   getThemeColorScheme,
@@ -1265,6 +1265,23 @@ function App() {
 
     return assessmentAdminStateDraft !== normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState);
   }, [assessmentAdminStateDraft, selectedAssessmentEditor]);
+  const isAutoRefreshPaused = Boolean(
+    draftEmployee ||
+      questionSetDraft ||
+      reviewPeriodDraft ||
+      editingQuestionDraftId ||
+      workflowDraft !== null ||
+      selectedAssessmentId ||
+      selectedReviewAssessmentId ||
+      selectedAssessmentSetDialog ||
+      isQuestionCategoriesDialogOpen ||
+      isNewQuestionCategoryDialogOpen ||
+      isSavingEmployee ||
+      isDeletingEmployee ||
+      isSavingReviewAdmin ||
+      isSavingAssessmentWorkflow ||
+      isSavingWorkflowSettings,
+  );
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
@@ -1870,7 +1887,7 @@ function App() {
     setSelectedEmployeeDetail((currentDetail) => (currentDetail?.id === employeeId ? null : currentDetail));
   };
 
-  const refreshQuestionCategorySuggestions = async () => {
+  const refreshQuestionCategorySuggestions = useCallback(async () => {
     if (!sessionToken || !isAdmin) {
       setQuestionCategories([]);
       return [];
@@ -1879,7 +1896,7 @@ function App() {
     const response = await listQuestionCategories(sessionToken);
     setQuestionCategories(response.items);
     return response.items;
-  };
+  }, [isAdmin, sessionToken]);
 
   const openQuestionCategoriesDialog = () => {
     setQuestionCategoriesDraft(questionCategories);
@@ -1944,7 +1961,7 @@ function App() {
     }
   };
 
-  const refreshBackupStatus = async () => {
+  const refreshBackupStatus = useCallback(async () => {
     if (!sessionToken || !isAdmin) {
       setBackupStatus(null);
       return null;
@@ -1953,7 +1970,7 @@ function App() {
     const response = await getBackupStatus(sessionToken);
     setBackupStatus(response);
     return response;
-  };
+  }, [isAdmin, sessionToken]);
 
   const handleBackupStatusRefresh = async () => {
     setIsLoadingBackupStatus(true);
@@ -2579,7 +2596,7 @@ function App() {
     }
   };
 
-  const refreshStoredBackups = async () => {
+  const refreshStoredBackups = useCallback(async () => {
     if (!sessionToken || !isAdmin) {
       setStoredBackups([]);
       return [];
@@ -2588,7 +2605,78 @@ function App() {
     const response = await listStoredBackups(sessionToken);
     setStoredBackups(response.items);
     return response.items;
-  };
+  }, [isAdmin, sessionToken]);
+
+  useEffect(() => {
+    if (!sessionToken || !sessionUser || passwordResetRequired || isAutoRefreshPaused) {
+      return;
+    }
+
+    let cancelled = false;
+    let refreshInFlight = false;
+
+    const refreshLoadedData = async () => {
+      if (refreshInFlight) {
+        return;
+      }
+
+      refreshInFlight = true;
+
+      try {
+        const refreshes: Array<Promise<unknown>> = [refreshFoundationSnapshot(), refreshEmployeeDirectory()];
+
+        if (selectedEmployeeId && hasEmployeeReadAccess && !draftEmployee) {
+          refreshes.push(
+            getEmployee(sessionToken, selectedEmployeeId).then((response) => {
+              if (!cancelled) {
+                setSelectedEmployeeDetail(response.item);
+              }
+              return response.item;
+            }),
+          );
+        }
+
+        if (isAdmin) {
+          refreshes.push(refreshQuestionCategorySuggestions(), refreshBackupStatus());
+          if (isStoredBackupsDialogOpen) {
+            refreshes.push(refreshStoredBackups());
+          }
+        }
+
+        await Promise.all(refreshes);
+      } catch (error) {
+        if (!cancelled) {
+          setAppError(getErrorMessage(error));
+        }
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshLoadedData();
+    }, autoRefreshIntervalMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    draftEmployee,
+    hasEmployeeReadAccess,
+    isAdmin,
+    isAutoRefreshPaused,
+    isStoredBackupsDialogOpen,
+    passwordResetRequired,
+    refreshBackupStatus,
+    refreshEmployeeDirectory,
+    refreshFoundationSnapshot,
+    refreshQuestionCategorySuggestions,
+    refreshStoredBackups,
+    selectedEmployeeId,
+    sessionToken,
+    sessionUser,
+  ]);
 
   const openStoredBackupsDialog = async () => {
     if (!sessionToken) {
