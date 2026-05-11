@@ -151,8 +151,6 @@ describe('assessment and review helpers', () => {
       assessmentStatusLabel: 'Scheduled',
       lifecycleLabel: 'Scheduled',
       nextStepLabel: 'Assigned reviewers or an admin can record reviewer conclusions.',
-      reviewActionLabel: null,
-      workflowActionLabel: 'Conclude review',
       summaryBucket: 'scheduled',
     });
     expect(rows[1]).toMatchObject({
@@ -162,7 +160,6 @@ describe('assessment and review helpers', () => {
       assessorLabel: 'Pat Peer',
       assessmentStatusLabel: 'Scheduled',
       lifecycleLabel: 'Scheduled',
-      workflowActionLabel: 'Conclude review',
     });
   });
 

@@ -59,8 +59,6 @@ export type AdminAssessmentRow = {
   assessmentStatusLabel: string;
   lifecycleLabel: string;
   nextStepLabel: string;
-  reviewActionLabel: string | null;
-  workflowActionLabel: string | null;
   summaryBucket: 'drafting' | 'submitted' | 'accepted' | 'ready-for-meeting' | 'scheduled' | 'concluded';
 };
 
@@ -624,25 +622,6 @@ function buildAdminAssessmentNextStepLabel(summaryBucket: AdminAssessmentRow['su
       return 'Assigned reviewers or an admin can record reviewer conclusions.';
     case 'concluded':
       return 'Admins can reopen reviewer conclusions if follow-up changes.';
-  }
-}
-
-function buildAdminAssessmentSetActionLabel(setState: Assessment['reviewState'] | null) {
-  switch (setState) {
-    case 'accepted':
-      return 'Mark ready for meeting';
-    case 'ready_for_meeting':
-      return 'Mark meeting scheduled';
-    case 'scheduled':
-      return 'Conclude review';
-    case 'concluded':
-    case 'reviewed':
-      return 'Reopen conclusion';
-    case 'new':
-    case 'draft':
-    case 'submitted':
-    case null:
-      return null;
   }
 }
 
@@ -1252,12 +1231,6 @@ export function buildAdminAssessmentRows(
   reviewPeriodId: string,
 ): AdminAssessmentRow[] {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
-  const assessmentSetStateByKey = new Map(
-    collectActiveAssessmentSets(snapshot).map((assessmentSet) => [
-      `${assessmentSet.reviewPeriodId}:${assessmentSet.employeeId}`,
-      getAssessmentSetState(assessmentSet.assessments),
-    ] as const),
-  );
   const assessments = snapshot.assessments
     .filter((assessment) => assessment.reviewPeriodId === reviewPeriodId && assessment.archiveState === 'active')
     .slice()
@@ -1278,8 +1251,6 @@ export function buildAdminAssessmentRows(
 
   return assessments.map((assessment) => {
     const summaryBucket = buildAdminAssessmentSummaryBucket(snapshot, assessment);
-    const assessmentSetState =
-      assessmentSetStateByKey.get(`${assessment.reviewPeriodId}:${assessment.employeeId}`) ?? null;
 
     return {
       assessmentId: assessment.id,
@@ -1294,8 +1265,6 @@ export function buildAdminAssessmentRows(
       assessmentStatusLabel: buildAssessmentStatusLabel(snapshot, assessment),
       lifecycleLabel: buildAdminAssessmentLifecycleLabel(snapshot, assessment),
       nextStepLabel: buildAdminAssessmentNextStepLabel(summaryBucket),
-      reviewActionLabel: assessment.reviewState === 'submitted' ? 'Review submission' : null,
-      workflowActionLabel: buildAdminAssessmentSetActionLabel(assessmentSetState),
       summaryBucket,
     };
   });

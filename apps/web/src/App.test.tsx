@@ -1687,9 +1687,7 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('2026 Annual Review');
     expect(container.textContent).toContain('Assessment status');
     expect(container.textContent).toContain('Workflow stage');
-    expect(container.textContent).toContain('Actions');
     expect(container.textContent).toContain('Scheduled');
-    expect(container.textContent).toContain('Conclude review');
     expect(container.textContent).toContain(
       'Showing 2 assessments • 0 not started / incomplete • 0 submitted • 0 accepted • 0 ready for meeting • 2 scheduled • 0 concluded',
     );
@@ -2049,22 +2047,21 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
-    const reviewButton = Array.from(container.querySelectorAll('.assessment-row-actions button')).find(
-      (button) => button.textContent === 'Review submission',
-    );
-    expect(reviewButton).toBeTruthy();
+    const row = container.querySelector('.assessment-row-card-clickable') as HTMLDivElement | null;
+    expect(row).toBeTruthy();
 
     await act(async () => {
-      reviewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
     expect(window.location.pathname).toBe('/assessments');
-    expect(container.textContent).toContain('Assessment submission');
+    expect(container.textContent).toContain('Self assessment form');
+    expect(container.textContent).toContain('Assessment status');
+    expect(container.textContent).toContain('Save changes');
     expect(container.textContent).toContain('Accept');
-    expect(container.textContent).toContain('Return to incomplete');
   });
 
   it('opens assessment-set workflow actions from the admin assessments page', async () => {
@@ -2083,13 +2080,11 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
-    const workflowButton = Array.from(container.querySelectorAll('.assessment-row-actions button')).find(
-      (button) => button.textContent === 'Mark ready for meeting',
-    );
-    expect(workflowButton).toBeTruthy();
+    const row = container.querySelector('.assessment-row-card-clickable') as HTMLDivElement | null;
+    expect(row).toBeTruthy();
 
     await act(async () => {
-      workflowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 

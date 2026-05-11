@@ -1059,8 +1059,6 @@ function App() {
         item.assessmentStatusLabel,
         item.lifecycleLabel,
         item.nextStepLabel,
-        item.reviewActionLabel ?? '',
-        item.workflowActionLabel ?? '',
       ].some((value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery)),
     );
   }, [adminAssessmentRows, assessmentLifecycleFilter, assessmentSearchQuery, assessmentTargetFilter]);
@@ -5860,7 +5858,6 @@ function App() {
                   <span>Assessor</span>
                   <span>Assessment status</span>
                   <span>Workflow stage</span>
-                  <span>Actions</span>
                 </div>
                 {filteredAdminAssessmentRows.map((item) => (
                   <div
@@ -5885,30 +5882,6 @@ function App() {
                       <span className="employee-row-cell assessment-row-lifecycle">
                         <span className="pill">{item.lifecycleLabel}</span>
                         <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
-                      </span>
-                      <span className="employee-row-cell assessment-row-actions">
-                        {item.reviewActionLabel ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleSelectReviewAssessment(item.assessmentId);
-                            }}
-                          >
-                            {item.reviewActionLabel}
-                          </button>
-                        ) : null}
-                        {item.workflowActionLabel ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId);
-                            }}
-                          >
-                            {item.workflowActionLabel}
-                          </button>
-                        ) : null}
                       </span>
                     </div>
                   </div>

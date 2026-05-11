@@ -949,17 +949,6 @@ button.employee-row:focus-visible {
   gap: 0.25rem;
 }
 
-.assessment-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: flex-start;
-}
-
-.assessment-row-actions button {
-  white-space: nowrap;
-}
-
 .assessment-admin-controls {
   display: grid;
   gap: 1rem;
