@@ -1736,6 +1736,68 @@ describe('workflow entry', () => {
     expect(vi.mocked(listEmployees).mock.calls.length).toBe(1);
   });
 
+  it('restores the assessment list search state after a remount', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+
+    const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    const lifecycleSelect = Array.from(container.querySelectorAll('select')).find(
+      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All stages'),
+    ) as HTMLSelectElement | undefined;
+    const targetSelect = Array.from(container.querySelectorAll('select')).find(
+      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All assessments'),
+    ) as HTMLSelectElement | undefined;
+
+    expect(searchInput).toBeTruthy();
+    expect(lifecycleSelect).toBeTruthy();
+    expect(targetSelect).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(searchInput!, 'Peer');
+      setFieldValue(lifecycleSelect!, 'scheduled');
+      setFieldValue(targetSelect!, 'peer');
+      await flushRender();
+    });
+
+    expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+
+    const restoredSearchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    const restoredLifecycleSelect = Array.from(container.querySelectorAll('select')).find(
+      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All stages'),
+    ) as HTMLSelectElement | undefined;
+    const restoredTargetSelect = Array.from(container.querySelectorAll('select')).find(
+      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All assessments'),
+    ) as HTMLSelectElement | undefined;
+
+    expect(restoredSearchInput?.value).toBe('Peer');
+    expect(restoredLifecycleSelect?.value).toBe('scheduled');
+    expect(restoredTargetSelect?.value).toBe('peer');
+    expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(1);
+  });
+
   it('keeps the admin assessments route admin-only', async () => {
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('draft'));
@@ -3866,6 +3928,47 @@ describe('employees screen', () => {
     });
 
     await waitFor(() => vi.mocked(listEmployees).mock.calls.length === 1);
+  });
+
+  it('restores the employee directory search after a remount', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    expect(searchInput).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(searchInput!, 'Elliot');
+      await flushRender();
+    });
+
+    expect(container.querySelectorAll('.employee-row-card')).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
+
+    const restoredSearchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    expect(restoredSearchInput?.value).toBe('Elliot');
+    expect(container.querySelectorAll('.employee-row-card')).toHaveLength(1);
   });
 
   it('validates reviewer assignments before saving employee edits', async () => {

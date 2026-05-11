@@ -150,6 +150,8 @@ const sessionStorageKey = 'revu-session-token';
 const loginUsernameStorageKey = 'revu-login-username';
 const themeStorageKey = 'revu-theme-preference';
 const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
+const employeeSearchStorageKey = 'revu-employee-search';
+const assessmentListStateStorageKey = 'revu-assessment-list-state';
 const lastResponseTimeoutMs = 120000;
 const newQuestionCategoryOptionValue = '__new-question-category__';
 const backupScheduleOptions: BackupSchedule[] = ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'];
@@ -451,6 +453,53 @@ function getStoredLoginUsername() {
   return window.localStorage.getItem(loginUsernameStorageKey) ?? '';
 }
 
+function getStoredEmployeeSearchQuery() {
+  return window.sessionStorage.getItem(employeeSearchStorageKey) ?? '';
+}
+
+function getStoredAssessmentListState(): {
+  searchQuery: string;
+  lifecycleFilter: 'all' | AdminAssessmentRow['summaryBucket'];
+  targetFilter: 'all' | AdminAssessmentRow['target'];
+} {
+  const storedValue = window.sessionStorage.getItem(assessmentListStateStorageKey);
+  if (!storedValue) {
+    return {
+      searchQuery: '',
+      lifecycleFilter: 'all',
+      targetFilter: 'all',
+    };
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue) as Partial<{
+      searchQuery: string;
+      lifecycleFilter: 'all' | AdminAssessmentRow['summaryBucket'];
+      targetFilter: 'all' | AdminAssessmentRow['target'];
+    }>;
+
+    return {
+      searchQuery: typeof parsedValue.searchQuery === 'string' ? parsedValue.searchQuery : '',
+      lifecycleFilter:
+        parsedValue.lifecycleFilter === 'drafting' ||
+        parsedValue.lifecycleFilter === 'submitted' ||
+        parsedValue.lifecycleFilter === 'accepted' ||
+        parsedValue.lifecycleFilter === 'ready-for-meeting' ||
+        parsedValue.lifecycleFilter === 'scheduled' ||
+        parsedValue.lifecycleFilter === 'concluded'
+          ? parsedValue.lifecycleFilter
+          : 'all',
+      targetFilter: parsedValue.targetFilter === 'self' || parsedValue.targetFilter === 'peer' ? parsedValue.targetFilter : 'all',
+    };
+  } catch {
+    return {
+      searchQuery: '',
+      lifecycleFilter: 'all',
+      targetFilter: 'all',
+    };
+  }
+}
+
 type BackupRestoreAction = {
   target: BackupRestoreScope;
   title: string;
@@ -601,7 +650,7 @@ function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [foundation, setFoundation] = useState<FoundationSnapshot | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState(() => getStoredEmployeeSearchQuery());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeDetail, setSelectedEmployeeDetail] = useState<EmployeeAdmin | null>(null);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -670,9 +719,13 @@ function App() {
   const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
   const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
-  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
-  const [assessmentLifecycleFilter, setAssessmentLifecycleFilter] = useState<'all' | AdminAssessmentRow['summaryBucket']>('all');
-  const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<'all' | AdminAssessmentRow['target']>('all');
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState(() => getStoredAssessmentListState().searchQuery);
+  const [assessmentLifecycleFilter, setAssessmentLifecycleFilter] = useState<'all' | AdminAssessmentRow['summaryBucket']>(
+    () => getStoredAssessmentListState().lifecycleFilter,
+  );
+  const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<'all' | AdminAssessmentRow['target']>(
+    () => getStoredAssessmentListState().targetFilter,
+  );
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
   const [assessmentManagerNotesDraft, setAssessmentManagerNotesDraft] = useState('');
@@ -734,6 +787,35 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!employeeSearchQuery) {
+      window.sessionStorage.removeItem(employeeSearchStorageKey);
+      return;
+    }
+
+    window.sessionStorage.setItem(employeeSearchStorageKey, employeeSearchQuery);
+  }, [employeeSearchQuery]);
+
+  useEffect(() => {
+    if (
+      !assessmentSearchQuery &&
+      assessmentLifecycleFilter === 'all' &&
+      assessmentTargetFilter === 'all'
+    ) {
+      window.sessionStorage.removeItem(assessmentListStateStorageKey);
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      assessmentListStateStorageKey,
+      JSON.stringify({
+        searchQuery: assessmentSearchQuery,
+        lifecycleFilter: assessmentLifecycleFilter,
+        targetFilter: assessmentTargetFilter,
+      }),
+    );
+  }, [assessmentLifecycleFilter, assessmentSearchQuery, assessmentTargetFilter]);
 
   useEffect(() => {
     const handleApiUnavailable = () => {
@@ -2072,6 +2154,8 @@ function App() {
     authNotice?: string;
   }) => {
     window.sessionStorage.removeItem(sessionStorageKey);
+    window.sessionStorage.removeItem(employeeSearchStorageKey);
+    window.sessionStorage.removeItem(assessmentListStateStorageKey);
     setSessionToken(null);
     setSession(null);
     setFoundation(null);
