@@ -12,18 +12,19 @@ import {
   questionSetsListResponseSchema,
   reviewPeriodsListResponseSchema,
 } from "@revu/contracts";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "../../apps/api/src/app.js";
 
 describe("API/domain foundation", () => {
-  const app = buildApp();
+  let app: ReturnType<typeof buildApp>;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
+    app = buildApp();
     await app.ready();
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
@@ -46,46 +47,46 @@ describe("API/domain foundation", () => {
     const authSession = authLoginResponseSchema.parse(loginResponse.json()).session;
     expect(authSession.passwordResetRequired).toBe(false);
 
-    const [indexResponse, rulesResponse, employeesResponse, periodsResponse, questionSetsResponse, assignmentsResponse, assessmentsResponse, foundationResponse] =
-      await Promise.all([
-        app.inject({ method: "GET", url: "/api/v1" }),
-        app.inject({ method: "GET", url: "/api/v1/domain-rules" }),
-        app.inject({
-          method: "GET",
-          url: "/api/v1/employees",
-          headers: {
-            authorization: `Bearer ${authSession.token}`,
-          },
-        }),
-        app.inject({ method: "GET", url: "/api/v1/review-periods" }),
-        app.inject({ method: "GET", url: "/api/v1/question-sets" }),
-        app.inject({ method: "GET", url: "/api/v1/assignments" }),
-        app.inject({
-          method: "GET",
-          url: "/api/v1/assessments",
-          headers: {
-            authorization: `Bearer ${authSession.token}`,
-          },
-        }),
-        app.inject({
-          method: "GET",
-          url: "/api/v1/foundation",
-          headers: {
-            authorization: `Bearer ${authSession.token}`,
-          },
-        }),
-      ]);
+    const indexResponse = await app.inject({ method: "GET", url: "/api/v1" });
+    const rulesResponse = await app.inject({ method: "GET", url: "/api/v1/domain-rules" });
+    const employeesResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/employees",
+      headers: {
+        authorization: `Bearer ${authSession.token}`,
+      },
+    });
+    const periodsResponse = await app.inject({ method: "GET", url: "/api/v1/review-periods" });
+    const questionSetsResponse = await app.inject({ method: "GET", url: "/api/v1/question-sets" });
+    const assignmentsResponse = await app.inject({ method: "GET", url: "/api/v1/assignments" });
+    const assessmentsResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/assessments",
+      headers: {
+        authorization: `Bearer ${authSession.token}`,
+      },
+    });
+    const foundationResponse = await app.inject({
+      method: "GET",
+      url: "/api/v1/foundation",
+      headers: {
+        authorization: `Bearer ${authSession.token}`,
+      },
+    });
 
     const apiIndex = apiIndexResponseSchema.parse(indexResponse.json());
     expect(apiIndex.resources.length).toBeGreaterThan(0);
     expect(apiIndex.seededAccountsAvailable).toBe(true);
     expect(domainRulesResponseSchema.parse(rulesResponse.json()).acceptedAssessmentsAreImmutable).toBe(false);
+    expect(employeesResponse.statusCode).toBe(200);
     expect(employeesListResponseSchema.parse(employeesResponse.json()).items.length).toBeGreaterThan(0);
     expect(reviewPeriodsListResponseSchema.parse(periodsResponse.json()).items.length).toBe(2);
     expect(questionSetsListResponseSchema.parse(questionSetsResponse.json()).items.length).toBe(4);
     expect(assignmentsListResponseSchema.parse(assignmentsResponse.json()).items.length).toBe(1);
+    expect(assessmentsResponse.statusCode).toBe(200);
     expect(assessmentsListResponseSchema.parse(assessmentsResponse.json()).items.length).toBe(3);
 
+    expect(foundationResponse.statusCode).toBe(200);
     const snapshot = foundationSnapshotSchema.parse(foundationResponse.json());
     const activeQuestionSets = snapshot.questionSets.filter(
       (questionSet) => questionSet.reviewPeriodId === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" && questionSet.status === "active",
