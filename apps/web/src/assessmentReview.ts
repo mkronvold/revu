@@ -109,10 +109,13 @@ export type AssessmentEditor = {
   isReadOnly: boolean;
   isAdminOverride: boolean;
   isComplete: boolean;
+  saveLabel: string;
   canSave: boolean;
+  submitLabel: string | null;
   canSubmit: boolean;
-  canAccept: boolean;
   canDelete: boolean;
+  adminQuickActionLabel: string | null;
+  adminQuickActionState: Exclude<Assessment['reviewState'], 'reviewed'> | null;
   questions: AssessmentEditorQuestion[];
 };
 
@@ -852,6 +855,24 @@ export function getAssessmentEditor(
   const isAdminOverride = user?.role === 'admin' && assessment.archiveState !== 'archived' && reviewPeriod?.status !== 'archived';
   const readOnly = !isAdminOverride && (assessment.isReadOnly || assessment.archiveState === 'archived' || reviewPeriod?.status === 'archived');
   const isComplete = isAssessmentComplete(snapshot, assessment);
+  const normalizedReviewState = assessment.reviewState === 'reviewed' ? 'accepted' : assessment.reviewState;
+  const saveLabel = isAdminOverride && normalizedReviewState !== 'new' && normalizedReviewState !== 'draft' ? 'Save changes' : 'Save for later';
+  const submitLabel =
+    normalizedReviewState === 'new' || normalizedReviewState === 'draft'
+      ? 'Submit'
+      : null;
+  const adminQuickAction =
+    !isAdminOverride
+      ? null
+      : normalizedReviewState === 'submitted'
+        ? { label: 'Accept', reviewState: 'accepted' as const }
+        : normalizedReviewState === 'accepted'
+          ? { label: 'Mark ready for meeting', reviewState: 'ready_for_meeting' as const }
+          : normalizedReviewState === 'ready_for_meeting'
+            ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
+            : normalizedReviewState === 'concluded'
+              ? { label: 'Reopen conclusion', reviewState: 'scheduled' as const }
+              : null;
 
   return {
     assessmentId: assessment.id,
@@ -872,10 +893,13 @@ export function getAssessmentEditor(
     isReadOnly: Boolean(readOnly),
     isAdminOverride,
     isComplete,
+    saveLabel,
     canSave: !readOnly && (isAdminOverride || assessment.reviewState !== 'submitted'),
-    canSubmit: !readOnly && (isAdminOverride || assessment.reviewState !== 'submitted'),
-    canAccept: isAdminOverride,
+    submitLabel,
+    canSubmit: !readOnly && submitLabel !== null,
     canDelete: isAdminOverride,
+    adminQuickActionLabel: adminQuickAction?.label ?? null,
+    adminQuickActionState: adminQuickAction?.reviewState ?? null,
     questions: getAssessmentQuestionRows(snapshot, assessment),
   };
 }

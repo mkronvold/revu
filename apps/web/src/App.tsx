@@ -2923,8 +2923,9 @@ function App() {
     setWorkflowNotice('');
 
     try {
+      const shouldSubmit = isAssessmentDraftComplete;
       const { notice } = selectedAssessmentEditor.isAdminOverride
-        ? isAssessmentDraftComplete
+        ? shouldSubmit
           ? await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
               reviewState: 'submitted',
               managerNotes: assessmentManagerNotesDraft,
@@ -2933,12 +2934,15 @@ function App() {
               reviewState: hasAssessmentDraftResponses ? 'draft' : 'new',
               managerNotes: assessmentManagerNotesDraft,
             })
-        : isAssessmentDraftComplete
+        : shouldSubmit
           ? await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft)
           : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
       await refreshFoundationSnapshot();
+      if (shouldSubmit) {
+        closeAssessmentDialog();
+      }
       setWorkflowNotice(
-        isAssessmentDraftComplete ? notice : 'Assessment saved for later. Complete every response before submitting.',
+        shouldSubmit ? notice : 'Assessment saved for later. Complete every response before submitting.',
       );
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -2947,8 +2951,13 @@ function App() {
     }
   };
 
-  const handleAcceptAssessmentAsAdmin = async () => {
-    if (!selectedAssessmentEditor || !selectedAssessmentEditor.isAdminOverride || !sessionToken) {
+  const handleAssessmentAdminQuickAction = async () => {
+    if (
+      !selectedAssessmentEditor
+      || !selectedAssessmentEditor.isAdminOverride
+      || !selectedAssessmentEditor.adminQuickActionState
+      || !sessionToken
+    ) {
       return;
     }
 
@@ -2958,7 +2967,7 @@ function App() {
 
     try {
       const { notice } = await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-        reviewState: 'accepted',
+        reviewState: selectedAssessmentEditor.adminQuickActionState,
         managerNotes: assessmentManagerNotesDraft,
       });
       await refreshFoundationSnapshot();
@@ -5416,22 +5425,24 @@ function App() {
                 disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
                 onClick={() => void handleSaveAssessmentForLater()}
               >
-                Save for later
+                {selectedAssessmentEditor.saveLabel}
               </button>
-              <button
-                type="button"
-                disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
-                onClick={() => void handleSubmitAssessment()}
-              >
-                Submit
-              </button>
-              {selectedAssessmentEditor.canAccept ? (
+              {selectedAssessmentEditor.submitLabel ? (
                 <button
                   type="button"
-                  disabled={!isAssessmentDraftComplete || isSavingAssessmentWorkflow}
-                  onClick={() => void handleAcceptAssessmentAsAdmin()}
+                  disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
+                  onClick={() => void handleSubmitAssessment()}
                 >
-                  Accept
+                  {selectedAssessmentEditor.submitLabel}
+                </button>
+              ) : null}
+              {selectedAssessmentEditor.adminQuickActionLabel ? (
+                <button
+                  type="button"
+                  disabled={isSavingAssessmentWorkflow || !isAssessmentDraftComplete}
+                  onClick={() => void handleAssessmentAdminQuickAction()}
+                >
+                  {selectedAssessmentEditor.adminQuickActionLabel}
                 </button>
               ) : null}
             </div>

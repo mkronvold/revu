@@ -1796,9 +1796,10 @@ describe('workflow entry', () => {
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
     expect(container.textContent).toContain('Assessment status');
-    expect(container.textContent).toContain('Save for later');
-    expect(container.textContent).toContain('Accept');
+    expect(container.textContent).toContain('Save changes');
+    expect(container.textContent).toContain('Mark ready for meeting');
     expect(container.textContent).toContain('Delete assessment');
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Submit')).toBe(false);
 
     const deleteButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Delete assessment',
@@ -1812,6 +1813,37 @@ describe('workflow entry', () => {
     await waitFor(() => container.querySelector('[role="dialog"]') === null);
     expect(deleteAssessmentByAdmin).toHaveBeenCalledWith('session-token', assessmentId);
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(initialRows - 1);
+  });
+
+  it('shows reopen conclusion in the admin assessment dialog for concluded assessments', async () => {
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('concluded'));
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+    window.history.pushState(null, '', '/assessments');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
+
+    const row = container.querySelector('.assessment-row-card-clickable') as HTMLDivElement | null;
+    expect(row).toBeTruthy();
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    expect(container.textContent).toContain('Save changes');
+    expect(container.textContent).toContain('Reopen conclusion');
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Submit')).toBe(false);
   });
 
   it('opens submitted review actions from the admin assessments page', async () => {
@@ -3457,6 +3489,71 @@ describe('dashboard screen', () => {
     });
     expect(submitAssessment).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Assessment saved for later. Complete every response before submitting.');
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('closes the assessment dialog after a successful submit', async () => {
+    const initialSnapshot = createAssessmentLifecycleSnapshot('draft');
+    const refreshedSnapshot = createAssessmentLifecycleSnapshot('submitted');
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    vi.mocked(submitAssessment).mockResolvedValue({
+      item: refreshedSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+    });
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    const openButton = container.querySelector('.dashboard-queue-item');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    expect(narrativeResponse).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(narrativeResponse!, 'Completed and ready to submit.');
+      await flushRender();
+    });
+
+    const submitButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Submit');
+    expect(submitButton).toBeTruthy();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') === null);
+    expect(submitAssessment).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
+      responses: [
+        {
+          questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+          order: 1,
+          response: 'somewhat agree',
+        },
+        {
+          questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+          order: 2,
+          response: 'Completed and ready to submit.',
+        },
+      ],
+    });
   });
 });
 
