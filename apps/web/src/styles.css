@@ -876,7 +876,7 @@ button.employee-row:focus-visible {
 }
 
 .assessments-table {
-  --assessments-columns: minmax(0, 1.7fr) fit-content(9rem) minmax(0, 1fr) fit-content(11rem) minmax(0, 1.2fr) minmax(0, 1.3fr);
+  --assessments-columns: minmax(0, 1.7fr) fit-content(9rem) minmax(0, 1fr) fit-content(11rem) minmax(0, 2.5fr);
   width: 100%;
   min-width: 0;
   display: grid;
@@ -944,6 +944,7 @@ button.employee-row:focus-visible {
   gap: 0.15rem;
 }
 
+.assessment-row-status,
 .assessment-row-lifecycle {
   display: grid;
   gap: 0.25rem;

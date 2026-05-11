@@ -5867,11 +5867,11 @@ function App() {
             <div className="employee-roster-table-scroll" role="region" aria-label="Assessment List assessments">
               <div className="assessments-table" aria-label="Assessment List assessments">
                 <div className="assessments-header">
-                  <span>Name</span>
+                  <span>Employee</span>
                   <span>Assessment type</span>
                   <span>Assessor</span>
                   <span>Assessment status</span>
-                  <span>Workflow stage</span>
+                  <span>Next Steps</span>
                 </div>
                 {filteredAdminAssessmentRows.map((item) => (
                   <div
@@ -5886,15 +5886,14 @@ function App() {
                       <span className="employee-row-cell assessment-row-primary">
                         <strong>{item.subjectName}</strong>
                         <span className="muted-copy employee-row-subcopy">{item.title}</span>
-                        <span className="muted-copy employee-row-subcopy">{item.detail}</span>
                       </span>
                       <span className="employee-row-cell">{item.targetLabel}</span>
                       <span className="employee-row-cell">{item.assessorLabel}</span>
-                      <span className="employee-row-cell">
+                      <span className="employee-row-cell assessment-row-status">
                         <span className="pill">{item.assessmentStatusLabel}</span>
+                        <span className="muted-copy employee-row-subcopy">{item.detail}</span>
                       </span>
-                      <span className="employee-row-cell assessment-row-lifecycle">
-                        <span className="pill">{item.lifecycleLabel}</span>
+                      <span className="employee-row-cell">
                         <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
                       </span>
                     </div>

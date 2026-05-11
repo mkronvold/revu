@@ -1757,7 +1757,8 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Assessment List');
     expect(container.textContent).toContain('2026 Annual Review');
     expect(container.textContent).toContain('Assessment status');
-    expect(container.textContent).toContain('Workflow stage');
+    expect(container.textContent).toContain('Employee');
+    expect(container.textContent).toContain('Next Steps');
     expect(container.textContent).toContain('Scheduled');
     expect(container.textContent).toContain(
       'Showing 2 assessments • 0 not started / incomplete • 0 submitted • 0 accepted • 0 ready for meeting • 2 scheduled • 0 concluded',
