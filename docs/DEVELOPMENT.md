@@ -166,6 +166,8 @@ Current behavior:
 - question-set imports upsert sets in the selected review period by target plus title and preserve imported question ordering and content
 - assignment exports include employee, manager, and assessor usernames so imports can resolve relationships across environments
 - assignment imports upsert rows by employee username for the selected review period and keep employee manager and peer-reviewer relationships aligned
-- local user exports return import-ready payloads plus generated one-time passcodes
+- local user exports support both `rotate-passcodes` and `preserve-passwords` modes
+- `rotate-passcodes` exports return import-ready payloads plus generated one-time passcodes, mark exported accounts for password reset, and invalidate those users' current sessions
+- `preserve-passwords` exports return stored password-hash credentials without rotating passwords or invalidating current sessions
 - local user imports upsert users, preserve the supplied `passwordResetRequired` flag, and invalidate sessions for imported accounts
 - the File Management admin screen exports direct `.json` or `.csv` downloads and imports from a browser-selected file for local users, question sets, and assignments
