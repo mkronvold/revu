@@ -1,4 +1,4 @@
-Revu:
+# Revu goal and early workflow sketch
 
 A survey-like tool for personnel assessments and performance reviews
 
