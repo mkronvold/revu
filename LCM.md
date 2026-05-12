@@ -4,6 +4,56 @@
 
 This document explains how Revu keeps its published images and deployed containers fresh for CVE mitigation, what is refreshed automatically, and where source-controlled dependency updates are still required.
 
+See also: [GitHub setup for Revu automation](./GITHUB-SETUP.md)
+
+## Simple operating workflow
+
+1. **One-time GitHub setup**
+   - Enable the repository settings in [GITHUB-SETUP.md](./GITHUB-SETUP.md).
+   - This is required for Dependabot automerge, GHCR publishing, and automatic branch cleanup.
+2. **Automatic weekly dependency intake**
+   - Dependabot checks weekly for npm, GitHub Actions, and Docker updates.
+   - Safe patch and minor updates are auto-approved and set to auto-merge when repository settings allow it.
+3. **Automatic publish after merge**
+   - When a Dependabot PR merges into `main`, `publish-images.yml` validates the repo and publishes fresh `revu-api` and `revu-web` images to GHCR.
+   - On the host, `autoupdate.sh` or a timer/service can pull and redeploy those updated images automatically.
+4. **Automatic image refresh even without code changes**
+   - `refresh-images.yml` runs weekly and rebuilds the published deployment images so base-image CVE fixes can land without a source commit.
+5. **Manual path for major dependency updates**
+   - Major Dependabot PRs are intentionally not auto-approved or auto-merged.
+   - For each major PR, run the AI review prompt in this document, let the agent make any needed compatibility fixes, review the result, then approve and merge manually if it is still acceptable.
+
+### Quick AI prompt for major Dependabot PRs
+
+Use this prompt for each major Dependabot PR:
+
+```text
+Review Dependabot PR #<PR_NUMBER> in mkronvold/revu.
+
+Goal:
+- determine whether the major upgrade is safe to merge
+- make any code, workflow, or test changes required for compatibility
+- run the repo's existing validation commands
+- give a final recommendation: approve, needs manual follow-up, or close/reject
+
+Required work:
+1. Read the PR diff and identify the dependency, old version, new version, and affected files.
+2. Check upstream release notes/changelog for breaking changes relevant to this repo.
+3. Inspect this codebase for impacted usage and update the code or workflows if needed.
+4. Run the existing validation flow and any targeted tests needed to prove the upgrade works.
+5. Summarize:
+   - what changed
+   - any compatibility fixes made
+   - validation results
+   - risks or follow-up items
+   - whether the PR should be approved and merged
+
+Constraints:
+- do not invent new test tools
+- do not weaken validation just to make the PR pass
+- prefer precise fixes over broad refactors
+```
+
 ## Revu LCM model
 
 Revu uses two separate automation paths:
@@ -66,6 +116,8 @@ Safe patch and minor Dependabot PRs are automatically approved and set to auto-m
 
 This keeps Git as the source of truth while still minimizing human involvement.
 
+Major Dependabot PRs are not auto-approved. They should go through an AI-assisted review and validation pass before a human decides whether to approve and merge them.
+
 ### Important note about auto-merge
 
 GitHub repository settings must allow **auto-merge** for the automerge workflow to complete the merge automatically.
@@ -75,6 +127,23 @@ If auto-merge is disabled in the repository settings:
 - Dependabot PRs will still be created
 - the workflow may approve them
 - but GitHub will not complete the automatic merge step
+
+See [GITHUB-SETUP.md](./GITHUB-SETUP.md) for the required repository settings, including:
+
+- allowing GitHub Actions to create and approve pull requests
+- allowing auto-merge
+- automatically deleting merged head branches
+
+### Manual review flow for major Dependabot PRs
+
+Use this process for major updates:
+
+1. Let Dependabot open the PR.
+2. Run the major-upgrade AI prompt above against that PR.
+3. Let the agent make any compatibility changes on the PR branch and run the existing repo validation.
+4. Review the agent's summary and any code changes.
+5. Approve and merge manually if the result is acceptable.
+6. After merge, let `publish-images.yml` publish updated images from `main`.
 
 ## CVE mitigation boundaries
 
