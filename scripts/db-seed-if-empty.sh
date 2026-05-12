@@ -7,23 +7,35 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 readonly wait_attempts="${DB_WAIT_ATTEMPTS:-30}"
 readonly wait_seconds="${DB_WAIT_SECONDS:-2}"
 
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+  printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_error() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&2
+}
+
 if ! command -v docker >/dev/null 2>&1; then
-  printf 'docker is required to bootstrap the example dataset.\n' >&2
+  log_error 'docker is required to bootstrap the example dataset.'
   exit 1
 fi
 
-printf 'Ensuring the db service is running...\n'
+log 'Ensuring the db service is running...'
 docker compose up -d db >/dev/null
 
 db_query() {
   docker compose exec -T db sh -lc 'psql -tA -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 }
 
-printf 'Waiting for Postgres to become ready...\n'
+log 'Waiting for Postgres to become ready...'
 attempt=1
 until docker compose exec -T db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
   if (( attempt >= wait_attempts )); then
-    printf 'Postgres did not become ready after %s attempts.\n' "$wait_attempts" >&2
+    log_error "Postgres did not become ready after ${wait_attempts} attempts."
     exit 1
   fi
 
@@ -39,18 +51,18 @@ bootstrap_state="$(
 
 case "$bootstrap_state" in
   seeded)
-    printf 'Example bootstrap skipped because employees already exist.\n'
+    log 'Example bootstrap skipped because employees already exist.'
     ;;
   empty)
-    printf 'Database is empty. Loading the example dataset...\n'
+    log 'Database is empty. Loading the example dataset...'
     docker compose run --rm --no-deps api node apps/api/dist/seed-example.js
     ;;
   missing)
-    printf 'Cannot seed example data before migrations create the employees table.\n' >&2
+    log_error 'Cannot seed example data before migrations create the employees table.'
     exit 1
     ;;
   *)
-    printf 'Unexpected bootstrap state: %s\n' "$bootstrap_state" >&2
+    log_error "Unexpected bootstrap state: ${bootstrap_state}"
     exit 1
     ;;
 esac

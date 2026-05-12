@@ -7,25 +7,40 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 readonly env_example_file=".env.example"
 readonly env_file=".env"
 
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+  printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_error() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&2
+}
+
 if ! command -v docker >/dev/null 2>&1; then
-  printf 'docker is required to start the deployment stack.\n' >&2
+  log_error 'docker is required to start the deployment stack.'
   exit 1
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-  printf 'git is required to update the deployment checkout.\n' >&2
+  log_error 'git is required to update the deployment checkout.'
   exit 1
 fi
 
 prompt_yes_no() {
   local prompt="$1"
   local reply=""
+  local prompt_timestamp=""
 
   if [[ ! -t 0 ]]; then
     return 1
   fi
 
-  read -r -p "$prompt [y/N] " reply || return 1
+  prompt_timestamp="$(timestamp)"
+  printf '[%s] %s [y/N] ' "$prompt_timestamp" "$prompt"
+  read -r reply || return 1
   [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
@@ -55,9 +70,9 @@ reconcile_env_file() {
   if [[ ! -f "$env_file" ]]; then
     if prompt_yes_no ".env is missing. Create it from .env.example?"; then
       cp -- "$env_example_file" "$env_file"
-      printf 'Created %s from %s.\n' "$env_file" "$env_example_file"
+      log "Created ${env_file} from ${env_example_file}."
     else
-      printf 'Skipping .env reconciliation because %s does not exist.\n' "$env_file"
+      log "Skipping .env reconciliation because ${env_file} does not exist."
     fi
     return
   fi
@@ -75,13 +90,15 @@ reconcile_env_file() {
   done < <(env_keys "$env_file")
 
   if (( ${#missing_keys[@]} == 0 && ${#removed_keys[@]} == 0 )); then
-    printf '%s already matches the keys in %s.\n' "$env_file" "$env_example_file"
+    log "${env_file} already matches the keys in ${env_example_file}."
     return
   fi
 
   if (( ${#missing_keys[@]} > 0 )); then
-    printf 'Missing entries in %s:\n' "$env_file"
-    printf '  - %s\n' "${missing_keys[@]}"
+    log "Missing entries in ${env_file}:"
+    for key in "${missing_keys[@]}"; do
+      log "  - ${key}"
+    done
 
     if prompt_yes_no "Add missing entries from ${env_example_file} to ${env_file}?"; then
       for key in "${missing_keys[@]}"; do
@@ -90,13 +107,15 @@ reconcile_env_file() {
           printf '\n%s\n' "$line" >> "$env_file"
         fi
       done
-      printf 'Added missing entries to %s.\n' "$env_file"
+      log "Added missing entries to ${env_file}."
     fi
   fi
 
   if (( ${#removed_keys[@]} > 0 )); then
-    printf 'Entries in %s that are no longer in %s:\n' "$env_file" "$env_example_file"
-    printf '  - %s\n' "${removed_keys[@]}"
+    log "Entries in ${env_file} that are no longer in ${env_example_file}:"
+    for key in "${removed_keys[@]}"; do
+      log "  - ${key}"
+    done
 
     if prompt_yes_no "Remove obsolete entries from ${env_file}?"; then
       temp_file="$(mktemp)"
@@ -115,25 +134,25 @@ reconcile_env_file() {
       done < "$env_file"
 
       mv -- "$temp_file" "$env_file"
-      printf 'Removed obsolete entries from %s.\n' "$env_file"
+      log "Removed obsolete entries from ${env_file}."
     fi
   fi
 }
 
-printf 'Pulling latest git changes...\n'
+log 'Pulling latest git changes...'
 git pull --ff-only
 
 reconcile_env_file
 
-printf 'Pulling deployment images...\n'
+log 'Pulling deployment images...'
 docker compose pull
 
-printf 'Applying database migrations...\n'
+log 'Applying database migrations...'
 bash ./scripts/db-migrate.sh
 
-printf 'Bootstrapping example data when needed...\n'
+log 'Bootstrapping example data when needed...'
 bash ./scripts/db-seed-if-empty.sh
 
-printf 'Starting deployment stack...\n'
+log 'Starting deployment stack...'
 docker compose up -d "$@"
-printf 'Containers up\n'
+log 'Containers up'

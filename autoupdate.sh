@@ -10,13 +10,31 @@ readonly ghcr_services=(api web)
 readonly manifest_accept_header='application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json'
 readonly docker_config_path="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
 
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+  printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_error() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&2
+}
+
+usage() {
+  local now=""
+  now="$(timestamp)"
+  printf '[%s] Usage: %s [interval-minutes]\n[%s]        %s --once\n' "$now" "$0" "$now" "$0" >&2
+}
+
 if ! command -v docker >/dev/null 2>&1; then
-  printf 'docker is required to monitor and update the deployment stack.\n' >&2
+  log_error 'docker is required to monitor and update the deployment stack.'
   exit 1
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
-  printf 'curl is required to query GHCR for image metadata.\n' >&2
+  log_error 'curl is required to query GHCR for image metadata.'
   exit 1
 fi
 
@@ -24,7 +42,7 @@ one_shot=false
 interval_minutes="$default_interval_minutes"
 
 if (( $# > 1 )); then
-  printf 'Usage: %s [interval-minutes]\n       %s --once\n' "$0" "$0" >&2
+  usage
   exit 1
 fi
 
@@ -37,7 +55,7 @@ case "${1:-}" in
   *)
     interval_minutes="$1"
     if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || (( interval_minutes <= 0 )); then
-      printf 'Interval must be a positive number of minutes.\n' >&2
+      log_error 'Interval must be a positive number of minutes.'
       exit 1
     fi
     ;;
@@ -45,14 +63,6 @@ esac
 
 readonly interval_minutes
 readonly sleep_seconds=$(( interval_minutes * 60 ))
-
-timestamp() {
-  date '+%Y-%m-%d %H:%M:%S'
-}
-
-log() {
-  printf '[%s] %s\n' "$(timestamp)" "$*"
-}
 
 service_image() {
   local service="$1"

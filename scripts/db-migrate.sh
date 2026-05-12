@@ -7,12 +7,24 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 readonly wait_attempts="${DB_WAIT_ATTEMPTS:-30}"
 readonly wait_seconds="${DB_WAIT_SECONDS:-2}"
 
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+  printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_error() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&2
+}
+
 if ! command -v docker >/dev/null 2>&1; then
-  printf 'docker is required to apply local Postgres migrations.\n' >&2
+  log_error 'docker is required to apply local Postgres migrations.'
   exit 1
 fi
 
-printf 'Ensuring the db service is running...\n'
+log 'Ensuring the db service is running...'
 docker compose up -d db >/dev/null
 
 db_exec() {
@@ -23,11 +35,11 @@ db_query() {
   docker compose exec -T db sh -lc 'psql -tA -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 }
 
-printf 'Waiting for Postgres to become ready...\n'
+log 'Waiting for Postgres to become ready...'
 attempt=1
 until docker compose exec -T db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
   if (( attempt >= wait_attempts )); then
-    printf 'Postgres did not become ready after %s attempts.\n' "$wait_attempts" >&2
+    log_error "Postgres did not become ready after ${wait_attempts} attempts."
     exit 1
   fi
 
@@ -41,7 +53,7 @@ shopt -s nullglob
 migrations=(prisma/migrations/*.sql)
 
 if (( ${#migrations[@]} == 0 )); then
-  printf 'No migrations found in prisma/migrations.\n'
+  log 'No migrations found in prisma/migrations.'
   exit 0
 fi
 
@@ -51,13 +63,13 @@ has_existing_schema="$(
 )"
 
 if [[ "$tracked_migrations" == "0" && "$has_existing_schema" == "1" ]]; then
-  printf 'Schema already exists without migration history; recording current migrations.\n'
+  log 'Schema already exists without migration history; recording current migrations.'
   for migration in "${migrations[@]}"; do
     filename="$(basename "$migration")"
     escaped_filename="${filename//\'/\'\'}"
     printf '%s\n' "INSERT INTO schema_migrations (filename) VALUES ('$escaped_filename') ON CONFLICT (filename) DO NOTHING;" | db_exec >/dev/null
   done
-  printf 'Local database schema is up to date.\n'
+  log 'Local database schema is up to date.'
   exit 0
 fi
 
@@ -67,13 +79,13 @@ for migration in "${migrations[@]}"; do
   already_applied="$(printf '%s\n' "SELECT 1 FROM schema_migrations WHERE filename = '$escaped_filename' LIMIT 1;" | db_query)"
 
   if [[ "$already_applied" == "1" ]]; then
-    printf 'Skipping %s (already applied).\n' "$filename"
+    log "Skipping ${filename} (already applied)."
     continue
   fi
 
-  printf 'Applying %s...\n' "$filename"
+  log "Applying ${filename}..."
   cat "$migration" | db_exec >/dev/null
   printf '%s\n' "INSERT INTO schema_migrations (filename) VALUES ('$escaped_filename');" | db_exec >/dev/null
 done
 
-printf 'Local database schema is up to date.\n'
+log 'Local database schema is up to date.'

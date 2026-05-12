@@ -8,21 +8,33 @@ readonly database_url="${DATABASE_URL:-postgresql://revu:revu@localhost:5432/rev
 readonly wait_attempts="${DB_WAIT_ATTEMPTS:-30}"
 readonly wait_seconds="${DB_WAIT_SECONDS:-2}"
 
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log() {
+  printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_error() {
+  printf '[%s] %s\n' "$(timestamp)" "$*" >&2
+}
+
 if ! command -v psql >/dev/null 2>&1; then
-  printf 'psql is required to apply Postgres migrations via DATABASE_URL.\n' >&2
+  log_error 'psql is required to apply Postgres migrations via DATABASE_URL.'
   exit 1
 fi
 
 if ! command -v pg_isready >/dev/null 2>&1; then
-  printf 'pg_isready is required to wait for Postgres before applying migrations.\n' >&2
+  log_error 'pg_isready is required to wait for Postgres before applying migrations.'
   exit 1
 fi
 
-printf 'Waiting for Postgres to become ready...\n'
+log 'Waiting for Postgres to become ready...'
 attempt=1
 until pg_isready -d "$database_url" >/dev/null 2>&1; do
   if (( attempt >= wait_attempts )); then
-    printf 'Postgres did not become ready after %s attempts.\n' "$wait_attempts" >&2
+    log_error "Postgres did not become ready after ${wait_attempts} attempts."
     exit 1
   fi
 
@@ -37,7 +49,7 @@ shopt -s nullglob
 migrations=(prisma/migrations/*.sql)
 
 if (( ${#migrations[@]} == 0 )); then
-  printf 'No migrations found in prisma/migrations.\n'
+  log 'No migrations found in prisma/migrations.'
   exit 0
 fi
 
@@ -48,14 +60,14 @@ has_existing_schema="$(
 )"
 
 if [[ "$tracked_migrations" == "0" && "$has_existing_schema" == "1" ]]; then
-  printf 'Schema already exists without migration history; recording current migrations.\n'
+  log 'Schema already exists without migration history; recording current migrations.'
   for migration in "${migrations[@]}"; do
     filename="$(basename "$migration")"
     escaped_filename="${filename//\'/\'\'}"
     psql "$database_url" -v ON_ERROR_STOP=1 \
       -c "INSERT INTO schema_migrations (filename) VALUES ('$escaped_filename') ON CONFLICT (filename) DO NOTHING;" >/dev/null
   done
-  printf 'Database schema is up to date.\n'
+  log 'Database schema is up to date.'
   exit 0
 fi
 
@@ -68,14 +80,14 @@ for migration in "${migrations[@]}"; do
   )"
 
   if [[ "$already_applied" == "1" ]]; then
-    printf 'Skipping %s (already applied).\n' "$filename"
+    log "Skipping ${filename} (already applied)."
     continue
   fi
 
-  printf 'Applying %s...\n' "$filename"
+  log "Applying ${filename}..."
   psql "$database_url" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
   psql "$database_url" -v ON_ERROR_STOP=1 \
     -c "INSERT INTO schema_migrations (filename) VALUES ('$escaped_filename');" >/dev/null
 done
 
-printf 'Database schema is up to date.\n'
+log 'Database schema is up to date.'
