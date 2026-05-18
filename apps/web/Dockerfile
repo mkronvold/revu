@@ -23,7 +23,7 @@ COPY packages/contracts packages/contracts
 RUN npm run build --workspace @revu/contracts \
   && npm run build --workspace @revu/web
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 ARG APP_REVISION=
 ENV APP_REVISION=$APP_REVISION
