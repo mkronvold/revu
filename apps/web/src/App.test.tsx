@@ -418,6 +418,7 @@ describe('questions screen', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -1413,6 +1414,7 @@ describe('workflow entry', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -2196,6 +2198,7 @@ describe('file management screen', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
@@ -2862,6 +2865,7 @@ describe('sidebar refresh detection', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -2911,6 +2915,7 @@ describe('sidebar profile editor', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -3138,6 +3143,7 @@ describe('dashboard workflow surface', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -3565,6 +3571,7 @@ describe('dashboard screen', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
@@ -3855,6 +3862,7 @@ describe('employees screen', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
