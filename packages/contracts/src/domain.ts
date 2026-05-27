@@ -142,6 +142,7 @@ export const localUserTransferItemSchema = z.object({
       code: z.ZodIssueCode.too_small,
       minimum: 8,
       inclusive: true,
+      origin: "string",
       type: "string",
       path: ["password"],
       message: "Password must be at least 8 characters",
