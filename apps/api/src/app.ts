@@ -10,7 +10,7 @@ export function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify(options);
   const store = createApiStore();
 
-  app.register(cors, { origin: true });
+  app.register(cors, { origin: true, methods: "GET,HEAD,PUT,PATCH,POST,DELETE" });
   app.addContentTypeParser(/^multipart\/form-data(?:;.*)?$/u, { parseAs: "buffer" }, (_request, body, done) => {
     done(null, body);
   });
