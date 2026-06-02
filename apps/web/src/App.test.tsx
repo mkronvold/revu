@@ -3661,6 +3661,13 @@ describe('dashboard screen', () => {
     ]);
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(5);
     expect(container.textContent).toContain('Status');
+    const printResponseTable = container.querySelector('.assessment-print-response-table');
+    expect(printResponseTable).toBeTruthy();
+    expect(printResponseTable?.textContent).toContain('Question');
+    expect(printResponseTable?.textContent).toContain('Response');
+    expect(Array.from(printResponseTable?.querySelectorAll('tbody td:last-child') ?? []).map((cell) => cell.textContent?.trim())).toEqual([
+      'Somewhat agree',
+    ]);
 
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const printButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Print');

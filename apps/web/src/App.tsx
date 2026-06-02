@@ -353,6 +353,15 @@ function normalizeAssessmentResponseValue(type: AssessmentEditorQuestion['type']
   }
 }
 
+function getAssessmentResponseLabel(type: Exclude<AssessmentEditorQuestion['type'], 'narrative'>, response: string) {
+  if (!response.trim()) {
+    return '';
+  }
+
+  const normalizedResponse = normalizeAssessmentResponseValue(type, response);
+  return assessmentResponseOptions[type].find((option) => option.value === normalizedResponse)?.label ?? response;
+}
+
 function getBackupScheduleLabel(schedule: BackupSchedule) {
   return schedule;
 }
@@ -1111,6 +1120,42 @@ function App() {
         ? getAssessmentEditor(assessmentWorkflow, workflowEmployees, selectedAssessmentId, sessionUser)
         : null,
     [assessmentWorkflow, selectedAssessmentId, sessionUser, workflowEmployees],
+  );
+  const selectedAssessmentQuestionGroups = useMemo(
+    () => (selectedAssessmentEditor ? groupAssessmentEditorQuestions(selectedAssessmentEditor.questions) : []),
+    [selectedAssessmentEditor],
+  );
+  const selectedAssessmentPrintScaleRows = useMemo(
+    () =>
+      selectedAssessmentQuestionGroups.flatMap((group) =>
+        group.questions.flatMap((question) =>
+          question.type === 'narrative'
+            ? []
+            : [
+                {
+                  category: group.category,
+                  question,
+                  responseLabel: getAssessmentResponseLabel(question.type, assessmentResponsesDraft[question.questionId] ?? ''),
+                },
+              ],
+        ),
+      ),
+    [assessmentResponsesDraft, selectedAssessmentQuestionGroups],
+  );
+  const selectedAssessmentPrintNarrativeGroups = useMemo(
+    () =>
+      selectedAssessmentQuestionGroups
+        .map((group) => ({
+          ...group,
+          questions: group.questions
+            .filter((question) => question.type === 'narrative')
+            .map((question) => ({
+              ...question,
+              response: assessmentResponsesDraft[question.questionId] ?? '',
+            })),
+        }))
+        .filter((group) => group.questions.length > 0),
+    [assessmentResponsesDraft, selectedAssessmentQuestionGroups],
   );
   const selectedReviewPanel = useMemo(
     () =>
@@ -5468,7 +5513,7 @@ function App() {
 
   const renderAssessmentDialog = () =>
     selectedAssessmentEditor ? (
-      <div className="modal-backdrop" role="presentation" onClick={closeAssessmentDialog}>
+      <div className="modal-backdrop assessment-print-backdrop" role="presentation" onClick={closeAssessmentDialog}>
         <section
           aria-modal="true"
           className="card modal-card review-dialog-card assessment-dialog-card"
@@ -5528,8 +5573,66 @@ function App() {
           {selectedAssessmentEditor.headerMarkdown ? (
             <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content assessment-editor-copy" />
           ) : null}
-          <div className="assessment-editor-sections">
-            {groupAssessmentEditorQuestions(selectedAssessmentEditor.questions).map((group) => (
+          <div className="assessment-print-layout assessment-print-only">
+            {selectedAssessmentPrintScaleRows.length > 0 ? (
+              <section className="assessment-print-section">
+                <p className="section-label">Multiple choice responses</p>
+                <table className="assessment-print-response-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Question</th>
+                      <th scope="col">Response</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedAssessmentPrintScaleRows.map(({ category, question, responseLabel }) => (
+                      <tr key={question.questionId}>
+                        <td>
+                          <div className="assessment-print-question-cell">
+                            {category ? <p className="section-label assessment-print-question-category">{category}</p> : null}
+                            <div className="assessment-print-question-prompt">
+                              <span className="question-order">#{question.order}</span>
+                              <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                            </div>
+                          </div>
+                        </td>
+                        <td>{responseLabel || 'No response provided.'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            ) : null}
+            {selectedAssessmentPrintNarrativeGroups.map((group) => (
+              <section className="assessment-print-section" key={group.id}>
+                {group.category ? (
+                  <div className="assessment-print-category">
+                    <p className="section-label">Category</p>
+                    <h4>{group.category}</h4>
+                  </div>
+                ) : null}
+                <div className="assessment-print-narrative-list">
+                  {group.questions.map((question) => (
+                    <article className="assessment-print-narrative-question" key={question.questionId}>
+                      <div className="question-prompt-block">
+                        <span className="question-order">#{question.order}</span>
+                        <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                      </div>
+                      <div className="assessment-print-narrative-response">
+                        {question.response.trim() ? (
+                          question.response
+                        ) : (
+                          <span className="assessment-print-empty-response">No response provided.</span>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+          <div className="assessment-editor-sections assessment-screen-only">
+            {selectedAssessmentQuestionGroups.map((group) => (
               <section className="assessment-editor-section" key={group.id}>
                 {group.category ? (
                   <div className="assessment-editor-category">
