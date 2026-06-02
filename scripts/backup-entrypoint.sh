@@ -307,6 +307,161 @@ NODE
   printf '%s\n' "$receipt_path"
 }
 
+list_archive() {
+  ensure_dirs
+
+  node - "$BACKUP_ARCHIVE_DIR" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [archiveDir] = process.argv.slice(2);
+const files = fs.existsSync(archiveDir)
+  ? fs.readdirSync(archiveDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const fullPath = path.join(archiveDir, entry.name);
+        const stats = fs.statSync(fullPath);
+        return {
+          name: entry.name,
+          size: stats.size,
+          modifiedAt: stats.mtime.toISOString(),
+        };
+      })
+      .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))
+  : [];
+
+if (!files.length) {
+  process.stdout.write(`No archived backups found in ${archiveDir}\n`);
+  process.exit(0);
+}
+
+process.stdout.write("MODIFIED_UTC\tSIZE_BYTES\tFILE\n");
+for (const file of files) {
+  process.stdout.write(`${file.modifiedAt}\t${file.size}\t${file.name}\n`);
+}
+NODE
+}
+
+delete_archive() {
+  ensure_dirs
+
+  if [ "$#" -eq 0 ]; then
+    printf 'Usage: delete-archive <backup-file|latest> [more-files...]\n' >&2
+    exit 1
+  fi
+
+  while [ "$#" -gt 0 ]; do
+    source_path="$(resolve_archive_source "$1")"
+    if [ -z "$source_path" ] || [ ! -f "$source_path" ]; then
+      printf 'Archived backup does not exist: %s\n' "$1" >&2
+      exit 1
+    fi
+
+    rm -f -- "$source_path"
+    log "Deleted archived backup ${source_path}"
+    shift
+  done
+}
+
+preserve_copy() {
+  ensure_dirs
+
+  source_ref="${1:-latest}"
+  destination_dir="${2:-.}"
+  source_path="$(resolve_archive_source "$source_ref")"
+  if [ -z "$source_path" ] || [ ! -f "$source_path" ]; then
+    printf 'Archived backup does not exist: %s\n' "$source_ref" >&2
+    exit 1
+  fi
+
+  mkdir -p "$destination_dir"
+  destination_path="${destination_dir}/$(basename "$source_path")"
+  cp "$source_path" "$destination_path"
+  log "Copied archived backup to ${destination_path}"
+  printf '%s\n' "$destination_path"
+}
+
+show_config() {
+  ensure_dirs
+
+  status_json="$(read_status_json)"
+  node - "$status_json" "$BACKUP_STATUS_PATH" "$BACKUP_ARCHIVE_DIR" <<'NODE'
+const [statusJson, statusPath, archiveDir] = process.argv.slice(2);
+const status = JSON.parse(statusJson);
+
+process.stdout.write(
+  [
+    `Automatic backups: ${status.automaticBackupsEnabled ? "enabled" : "disabled"}`,
+    `Schedule: ${status.schedule}`,
+    `Retention count: ${status.retentionCount}`,
+    `Last backup at: ${status.lastBackupAt ?? "never"}`,
+    `Last restore at: ${status.lastRestoreAt ?? "never"}`,
+    `Status file: ${statusPath}`,
+    `Archive dir: ${archiveDir}`,
+  ].join("\n") + "\n",
+);
+NODE
+}
+
+set_config() {
+  ensure_dirs
+
+  if [ "${1:-}" = "" ]; then
+    printf 'Usage: set-config <patch-json>\n' >&2
+    exit 1
+  fi
+
+  validated_patch="$(node - "${1:-}" <<'NODE'
+const [patchJson] = process.argv.slice(2);
+const supportedSchedules = new Set(["1hr", "3hr", "6hr", "12hr", "daily", "weekly"]);
+let parsed;
+
+try {
+  parsed = JSON.parse(patchJson);
+} catch {
+  console.error("Config patch must be valid JSON.");
+  process.exit(1);
+}
+
+const nextPatch = {};
+
+if (Object.prototype.hasOwnProperty.call(parsed, "automaticBackupsEnabled")) {
+  if (typeof parsed.automaticBackupsEnabled !== "boolean") {
+    console.error("automaticBackupsEnabled must be true or false.");
+    process.exit(1);
+  }
+  nextPatch.automaticBackupsEnabled = parsed.automaticBackupsEnabled;
+}
+
+if (Object.prototype.hasOwnProperty.call(parsed, "schedule")) {
+  if (typeof parsed.schedule !== "string" || !supportedSchedules.has(parsed.schedule)) {
+    console.error(`schedule must be one of: ${Array.from(supportedSchedules).join(", ")}`);
+    process.exit(1);
+  }
+  nextPatch.schedule = parsed.schedule;
+}
+
+if (Object.prototype.hasOwnProperty.call(parsed, "retentionCount")) {
+  if (!Number.isInteger(parsed.retentionCount) || parsed.retentionCount < 1) {
+    console.error("retentionCount must be a positive integer.");
+    process.exit(1);
+  }
+  nextPatch.retentionCount = parsed.retentionCount;
+}
+
+if (Object.keys(nextPatch).length === 0) {
+  console.error("Config patch did not include any supported keys.");
+  process.exit(1);
+}
+
+process.stdout.write(JSON.stringify(nextPatch));
+NODE
+)"
+
+  write_status_patch "$validated_patch"
+  show_config
+}
+
 schedule_to_seconds() {
   case "$1" in
     1hr) printf '3600\n' ;;
@@ -375,7 +530,7 @@ run_scheduler() {
 
 usage() {
   cat <<'EOF'
-Usage: backup-entrypoint.sh [scheduler|backup-now|download-handoff|upload-handoff|restore-execute]
+Usage: backup-entrypoint.sh [scheduler|backup-now|download-handoff|upload-handoff|restore-execute|list-archive|delete-archive|preserve-copy|show-config|set-config]
 EOF
 }
 
@@ -397,6 +552,21 @@ case "$command" in
     ;;
   restore-execute)
     restore_execute "$@"
+    ;;
+  list-archive)
+    list_archive "$@"
+    ;;
+  delete-archive)
+    delete_archive "$@"
+    ;;
+  preserve-copy)
+    preserve_copy "$@"
+    ;;
+  show-config)
+    show_config "$@"
+    ;;
+  set-config)
+    set_config "$@"
     ;;
   help|-h|--help)
     usage

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Added `backuptool.sh` for Docker-backed backup administration from the deployment checkout, including listing, deleting, preserving, showing backup config, and updating automatic-backup schedule and retention settings through the shared backup sidecar
 - Added a Print action to self and peer assessment dialogs, included assessment status in the dialog metadata, and introduced a print-only layout that removes UI chrome, tightens spacing, and renders multiple-choice responses in a cleaner document-style format
 - Made the admin Assessments page open the assessment form from any row click, added an admin-only delete action, and introduced full admin override editing so admins can update responses/notes and move assessments directly between draft, submitted, accepted, ready-for-meeting, scheduled, and concluded states
 - Fixed inactive-to-active question-set copying so questions with blank categories are normalized to uncategorized instead of failing API validation

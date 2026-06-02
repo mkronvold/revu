@@ -48,6 +48,16 @@ From the UI, admins can:
 - restore a stored or uploaded backup
 - delete a stored backup
 
+For non-browser admin work from the deployment checkout, use `./backuptool.sh`:
+
+- `./backuptool.sh list`
+- `./backuptool.sh delete <backup-file>`
+- `./backuptool.sh preserve [backup-file|latest] [destination-dir]`
+- `./backuptool.sh show-config`
+- `./backuptool.sh set-config --autobackup on|off --schedule daily --keep 14`
+
+That tool runs through the existing Docker backup sidecar and shared backup volumes instead of reaching into container internals manually.
+
 ## Restore scopes
 
 Restore actions support replace-style restores for the supported slices of data:
