@@ -2041,6 +2041,19 @@ function App() {
     setSelectedAssessmentId(null);
   };
 
+  const printAssessmentDialog = () => {
+    document.body.classList.remove('assessment-print-active');
+    document.body.classList.add('assessment-print-active');
+    window.addEventListener(
+      'afterprint',
+      () => {
+        document.body.classList.remove('assessment-print-active');
+      },
+      { once: true },
+    );
+    window.print();
+  };
+
   const closeReviewDialog = () => {
     setSelectedReviewAssessmentId(null);
     setIsReturnToIncompleteDialogOpen(false);
@@ -5458,7 +5471,7 @@ function App() {
       <div className="modal-backdrop" role="presentation" onClick={closeAssessmentDialog}>
         <section
           aria-modal="true"
-          className="card modal-card review-dialog-card"
+          className="card modal-card review-dialog-card assessment-dialog-card"
           role="dialog"
           aria-labelledby="assessment-dialog-title"
           onClick={(event) => event.stopPropagation()}
@@ -5471,6 +5484,9 @@ function App() {
               </div>
               <div className="dialog-header-actions">
                 <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
+                <button type="button" className="secondary-button" onClick={printAssessmentDialog}>
+                  Print
+                </button>
                 <button type="button" className="secondary-button" onClick={closeAssessmentDialog}>
                   Close
                 </button>
@@ -5486,6 +5502,10 @@ function App() {
               <div>
                 <dt>Assessment type</dt>
                 <dd>{selectedAssessmentEditor.targetLabel}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{selectedAssessmentEditor.statusLabel}</dd>
               </div>
               <div>
                 <dt>Assessor</dt>

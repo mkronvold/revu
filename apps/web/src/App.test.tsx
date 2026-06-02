@@ -3660,6 +3660,27 @@ describe('dashboard screen', () => {
       'Growth',
     ]);
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(5);
+    expect(container.textContent).toContain('Status');
+
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const printButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Print');
+    expect(printButton).toBeTruthy();
+
+    await act(async () => {
+      printButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    expect(document.body.classList.contains('assessment-print-active')).toBe(true);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('afterprint'));
+      await flushRender();
+    });
+
+    expect(document.body.classList.contains('assessment-print-active')).toBe(false);
+    printSpy.mockRestore();
 
     const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
     expect(closeButton).toBeTruthy();

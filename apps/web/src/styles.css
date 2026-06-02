@@ -1454,6 +1454,10 @@ button.employee-row:focus-visible {
   overflow: auto;
 }
 
+.assessment-dialog-card {
+  --modal-card-width: min(960px, calc(100vw - 2rem));
+}
+
 .assessment-review-dialog-backdrop {
   padding: 2rem 0.5rem;
 }
@@ -1552,6 +1556,158 @@ button.employee-row:focus-visible {
 
 .assessment-question-option input {
   margin: 0.15rem 0 0;
+}
+
+@media print {
+  body.assessment-print-active {
+    background: white;
+  }
+
+  body.assessment-print-active * {
+    visibility: hidden;
+  }
+
+  body.assessment-print-active .modal-backdrop,
+  body.assessment-print-active .modal-backdrop *,
+  body.assessment-print-active .assessment-dialog-card,
+  body.assessment-print-active .assessment-dialog-card * {
+    visibility: visible;
+  }
+
+  body.assessment-print-active .modal-backdrop {
+    position: static;
+    inset: auto;
+    display: block;
+    padding: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  body.assessment-print-active .assessment-dialog-card {
+    width: auto;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    gap: 0.85rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .section-heading {
+    align-items: flex-start;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid #cbd5e1;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .dialog-header-actions {
+    gap: 0.5rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .dialog-header-actions > button,
+  body.assessment-print-active .assessment-dialog-card .dialog-footer,
+  body.assessment-print-active .assessment-dialog-card .assessment-admin-controls {
+    display: none !important;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .pill {
+    color: #0f172a;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-intro {
+    padding: 0.75rem 0;
+    border-top: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-meta {
+    gap: 0.5rem 0.85rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-sections,
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-section,
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-question-list {
+    gap: 0.6rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-section,
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-category,
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-question {
+    break-inside: avoid;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-question {
+    padding: 0.75rem 0 0;
+    border: none;
+    border-top: 1px solid #cbd5e1;
+    border-radius: 0;
+    background: transparent;
+    gap: 0.5rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .question-prompt-block {
+    gap: 0.5rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-response {
+    gap: 0.35rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-response textarea {
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    resize: none;
+    overflow: visible;
+    box-shadow: none;
+    color: inherit;
+    field-sizing: content;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-scale {
+    border: none;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-options {
+    display: block;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-option {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: start;
+    padding: 0.35rem 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    break-inside: avoid;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-option + .assessment-question-option {
+    border-top: 1px solid #cbd5e1;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-option-selected {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-question-option input {
+    margin-top: 0.2rem;
+    accent-color: #0f172a;
+  }
 }
 
 .assessment-question-option-selected {
