@@ -405,6 +405,9 @@ describe('questions screen', () => {
     }
     window.localStorage.clear();
     window.sessionStorage.clear();
+    window.__REVU_CONFIG__ = {
+      revision: 'deadbeef1234567',
+    };
     window.history.pushState(null, '', '/questions');
     vi.mocked(getApiIndex).mockResolvedValue({
       name: 'revu-api',
@@ -446,6 +449,32 @@ describe('questions screen', () => {
     expect(container.textContent).toContain('Revu');
     expect(container.textContent).not.toContain('Use the API-backed local username and password flow');
     expect(container.textContent).not.toContain('Seeded API accounts');
+  });
+
+  it('links the build id to the changelog on GitHub', async () => {
+    vi.mocked(getApiIndex).mockResolvedValue({
+      name: 'revu-api',
+      version: '0.1.0',
+      seededAccountsAvailable: false,
+      resources: [],
+    });
+    vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
+    vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.querySelector('a.revision-sha') instanceof HTMLAnchorElement);
+
+    const buildLink = container.querySelector('a.revision-sha') as HTMLAnchorElement | null;
+    expect(buildLink).toBeTruthy();
+    expect(buildLink?.getAttribute('href')).toBe('https://github.com/mkronvold/revu/blob/main/docs/CHANGELOG.md');
+    expect(buildLink?.textContent).toBe('deadbee');
   });
 
   it('prefills the sign-in username from local storage and saves the last successful username', async () => {

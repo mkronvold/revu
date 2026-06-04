@@ -392,6 +392,13 @@ button {
   font-size: 0.75rem;
   font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
   opacity: 0.75;
+  color: inherit;
+  text-decoration: none;
+}
+
+.revision-sha:hover,
+.revision-sha:focus-visible {
+  text-decoration: underline;
 }
 
 .session-card {

@@ -145,7 +145,7 @@ import {
 const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
 const revuRepositoryUrl = 'https://github.com/mkronvold/revu';
-const buildRevision = getRuntimeRevision();
+const revuChangelogUrl = `${revuRepositoryUrl}/blob/main/docs/CHANGELOG.md`;
 const sessionStorageKey = 'revu-session-token';
 const loginUsernameStorageKey = 'revu-login-username';
 const themeStorageKey = 'revu-theme-preference';
@@ -651,6 +651,7 @@ function formatLocalizedDateTime(value: string | null) {
 }
 
 function App() {
+  const buildRevision = getRuntimeRevision();
   const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
     return normalizeThemePreference(window.localStorage.getItem(themeStorageKey));
@@ -7513,7 +7514,15 @@ function App() {
             {buildRevision ? (
               <div className="revision-card">
                 <p className="revision-label">Build</p>
-                <p className="revision-sha" title={buildRevision}>{buildRevision.slice(0, 7)}</p>
+                <a
+                  className="revision-sha"
+                  href={revuChangelogUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={buildRevision}
+                >
+                  {buildRevision.slice(0, 7)}
+                </a>
               </div>
             ) : null}
 
