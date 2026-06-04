@@ -1663,6 +1663,11 @@ button.employee-row:focus-visible {
     gap: 0.85rem;
   }
 
+  body.assessment-print-active .assessment-dialog-card,
+  body.assessment-print-active .assessment-dialog-card * {
+    color: #000 !important;
+  }
+
   body.assessment-print-active .assessment-dialog-card .section-heading {
     align-items: flex-start;
     padding-bottom: 0.45rem;
@@ -1777,7 +1782,7 @@ button.employee-row:focus-visible {
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-empty-response {
-    color: #64748b;
+    color: #000;
   }
 }
 

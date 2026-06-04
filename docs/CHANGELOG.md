@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Changed assessment print output to use black text throughout the printed document instead of muted gray metadata and empty-state copy
 - Tightened assessment print spacing so the metadata box prints with lighter styling and better padding, while the multiple-choice table and narrative responses paginate without overlapping near page breaks
 - Refined assessment printing so multiple-choice questions now print as a compact borderless `Question | Response` table with only the selected response, while the print stylesheet avoids blank leading pages and no longer forces category-by-category page breaks
 - Added `backuptool.sh` for Docker-backed backup administration from the deployment checkout, including listing, deleting, preserving, showing backup config, and updating automatic-backup schedule and retention settings through the shared backup sidecar
