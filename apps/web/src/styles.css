@@ -1676,13 +1676,11 @@ button.employee-row:focus-visible {
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-editor-intro {
-    padding: 0.55rem 0;
-    border-bottom: 1px solid #cbd5e1;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    border-radius: 0;
-    background: transparent;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 0.6rem;
+    background: #f8fafc;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-editor-copy {
@@ -1693,26 +1691,34 @@ button.employee-row:focus-visible {
     gap: 0.35rem 0.85rem;
   }
 
+  body.assessment-print-active .assessment-dialog-card .assessment-editor-meta > div {
+    padding-right: 0;
+  }
+
   body.assessment-print-active .assessment-dialog-card .assessment-screen-only {
     display: none !important;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-only {
-    display: grid !important;
-    gap: 0.75rem;
+    display: block !important;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-layout,
   body.assessment-print-active .assessment-dialog-card .assessment-print-section,
   body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-list {
-    gap: 0.6rem;
+    display: block;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-editor-category,
   body.assessment-print-active .assessment-dialog-card .assessment-print-category,
   body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-question,
   body.assessment-print-active .assessment-dialog-card .assessment-print-response-table tr {
-    break-inside: auto;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-print-section + .assessment-print-section {
+    margin-top: 0.85rem;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-response-table th {
@@ -1729,6 +1735,19 @@ button.employee-row:focus-visible {
     padding: 0.45rem 0.75rem;
   }
 
+  body.assessment-print-active .assessment-dialog-card .assessment-print-response-table {
+    margin-top: 0.35rem;
+    margin-bottom: 0.85rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-print-response-table thead {
+    display: table-header-group;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-print-response-table tbody {
+    display: table-row-group;
+  }
+
   body.assessment-print-active .assessment-dialog-card .assessment-print-response-table tbody tr + tr td {
     border-top: 1px solid #cbd5e1;
   }
@@ -1739,16 +1758,22 @@ button.employee-row:focus-visible {
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-question {
+    display: block;
     padding-top: 0.55rem;
+    margin-top: 0.55rem;
     border: none;
     border-top: 1px solid #cbd5e1;
     border-radius: 0;
     background: transparent;
-    gap: 0.35rem;
+  }
+
+  body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-question:first-child {
+    margin-top: 0;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-response {
     padding-left: 2rem;
+    margin-top: 0.25rem;
   }
 
   body.assessment-print-active .assessment-dialog-card .assessment-print-empty-response {
