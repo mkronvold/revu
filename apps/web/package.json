@@ -17,7 +17,7 @@
   "dependencies": {
     "@revu/contracts": "file:../../packages/contracts",
     "react": "^19.2.7",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
