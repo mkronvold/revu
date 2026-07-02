@@ -26,7 +26,7 @@ jobs:
       - name: Auto-approve safe dependency updates
         if: >-
           contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.metadata.outputs.update-type) &&
-          contains(fromJSON('["npm","github-actions","docker"]'), steps.metadata.outputs.package-ecosystem)
+          contains(fromJSON('["npm","npm_and_yarn","github-actions","github_actions","docker"]'), steps.metadata.outputs.package-ecosystem)
         uses: hmarr/auto-approve-action@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
       - name: Enable auto-merge for safe dependency updates
         if: >-
           contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.metadata.outputs.update-type) &&
-          contains(fromJSON('["npm","github-actions","docker"]'), steps.metadata.outputs.package-ecosystem)
+          contains(fromJSON('["npm","npm_and_yarn","github-actions","github_actions","docker"]'), steps.metadata.outputs.package-ecosystem)
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
