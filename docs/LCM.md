@@ -22,6 +22,9 @@ See also: [GitHub setup for Revu automation](./GITHUB-SETUP.md)
 5. **Manual path for major dependency updates**
    - Major Dependabot PRs are intentionally not auto-approved or auto-merged.
    - For each major PR, run the AI review prompt in this document, let the agent make any needed compatibility fixes, review the result, then approve and merge manually if it is still acceptable.
+6. **Manual re-enrollment for already-open safe PRs**
+   - If a patch or minor Dependabot PR was opened before the automerge workflow changed, run the `automerge-dependencies` workflow manually with the PR number.
+   - That workflow replays the standard `reopened` path so the normal auto-approve and auto-merge logic can run against the existing PR without a new commit.
 
 ### Quick AI prompt for major Dependabot PRs
 
@@ -118,6 +121,8 @@ This keeps Git as the source of truth while still minimizing human involvement.
 
 Major Dependabot PRs are not auto-approved. They should go through an AI-assisted review and validation pass before a human decides whether to approve and merge them.
 
+If an eligible patch or minor Dependabot PR is already open before an automerge workflow fix lands, use the workflow's manual `workflow_dispatch` entry point with the PR number to re-enroll it. That manual path closes and reopens the PR so the standard `pull_request_target` `reopened` trigger can re-run the same approval and auto-merge logic the repo uses for newly opened PRs.
+
 ### Important note about auto-merge
 
 GitHub repository settings must allow **auto-merge** for the automerge workflow to complete the merge automatically.
@@ -144,6 +149,18 @@ Use this process for major updates:
 4. Review the agent's summary and any code changes.
 5. Approve and merge manually if the result is acceptable.
 6. After merge, let `publish-images.yml` publish updated images from `main`.
+
+### Manual re-enrollment flow for already-open safe PRs
+
+Use this only for Dependabot **patch** or **minor** PRs that should already qualify for auto-merge but missed the original workflow run.
+
+1. Open `Actions -> automerge-dependencies`.
+2. Choose `Run workflow`.
+3. Enter the PR number for the existing Dependabot PR.
+4. Let the workflow close and reopen the PR.
+5. The reopened PR will re-enter the normal auto-approve and auto-merge path.
+
+Do **not** use this for major updates; keep those on the manual review flow above.
 
 ## CVE mitigation boundaries
 
