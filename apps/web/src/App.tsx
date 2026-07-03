@@ -2086,6 +2086,15 @@ function App() {
     setSelectedAssessmentId(null);
   };
 
+  const handleCloseAssessmentDialog = () => {
+    if (isAssessmentDraftDirty || isAssessmentManagerNotesDirty || isAssessmentAdminStateDirty) {
+      if (!window.confirm('You have unsaved changes. Close anyway?')) {
+        return;
+      }
+    }
+    closeAssessmentDialog();
+  };
+
   const printAssessmentDialog = () => {
     document.body.classList.remove('assessment-print-active');
     document.body.classList.add('assessment-print-active');
@@ -5489,13 +5498,12 @@ function App() {
 
   const renderAssessmentDialog = () =>
     selectedAssessmentEditor ? (
-      <div className="modal-backdrop assessment-print-backdrop" role="presentation" onClick={closeAssessmentDialog}>
+      <div className="modal-backdrop assessment-print-backdrop" role="presentation">
         <section
           aria-modal="true"
           className="card modal-card review-dialog-card assessment-dialog-card"
           role="dialog"
           aria-labelledby="assessment-dialog-title"
-          onClick={(event) => event.stopPropagation()}
         >
             <div className="section-heading">
               <div>
@@ -5508,7 +5516,7 @@ function App() {
                 <button type="button" className="secondary-button" onClick={printAssessmentDialog}>
                   Print
                 </button>
-                <button type="button" className="secondary-button" onClick={closeAssessmentDialog}>
+                <button type="button" className="secondary-button" onClick={handleCloseAssessmentDialog}>
                   Close
                 </button>
               </div>
