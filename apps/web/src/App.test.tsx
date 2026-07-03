@@ -3835,6 +3835,137 @@ describe('dashboard screen', () => {
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
+  it('does not close the assessment dialog when clicking the backdrop', async () => {
+    const dashboardSnapshot = createAssessmentLifecycleSnapshot('new');
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    const openButton = container.querySelector('.dashboard-queue-item');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    await act(async () => {
+      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('closes the assessment dialog without a confirmation when there are no unsaved changes', async () => {
+    const dashboardSnapshot = createAssessmentLifecycleSnapshot('new');
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    const confirmSpy = vi.spyOn(window, 'confirm');
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    const openButton = container.querySelector('.dashboard-queue-item');
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    expect(closeButton).toBeTruthy();
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('prompts before closing the assessment dialog when there are unsaved changes', async () => {
+    const dashboardSnapshot = createAssessmentLifecycleSnapshot('new');
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessment Queue') ?? false);
+
+    const openButton = container.querySelector('.dashboard-queue-item');
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[role="dialog"]') !== null);
+
+    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    expect(narrativeResponse).toBeTruthy();
+
+    await act(async () => {
+      setFieldValue(narrativeResponse!, 'Unsaved response text.');
+      await flushRender();
+    });
+
+    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith('You have unsaved changes. Close anyway?');
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+
+    confirmSpy.mockReturnValue(true);
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('closes the assessment dialog after a successful submit', async () => {
     const initialSnapshot = createAssessmentLifecycleSnapshot('draft');
     const refreshedSnapshot = createAssessmentLifecycleSnapshot('submitted');
