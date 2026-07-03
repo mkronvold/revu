@@ -5488,12 +5488,12 @@ function App() {
                     className="dashboard-queue-group-heading section-toggle"
                     aria-expanded={isQueueExpanded}
                     aria-label={`${isQueueExpanded ? 'Collapse' : 'Expand'} ${queue.title} queue`}
-                    onClick={() =>
-                      setDashboardQueueExpandedState((currentState) => ({
-                        ...currentState,
-                        [queueStateKey]: !isQueueExpanded,
-                      }))
-                    }
+onClick={() =>
+  setDashboardQueueExpandedState((currentState) => ({
+    ...currentState,
+    [queueStateKey]: !(currentState[queueStateKey] ?? true),
+  }))
+}
                   >
                     <strong>{queue.title}</strong>
                     <span className="muted-copy">
