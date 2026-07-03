@@ -62,6 +62,12 @@ Admins manage the local user directory:
 - set or reset passwords
 - keep local user state aligned with the actual organization
 
+For non-browser user/password administration from the deployment checkout, use `./passwordtool.sh`:
+
+- `./passwordtool.sh list`
+- `./passwordtool.sh reset <employee-id|username> [temporary-password]`
+- `./passwordtool.sh set <employee-id|username> <password|->` (use `-` to read the password from stdin)
+
 ## Assessments
 
 Admins use the Assessments area as the override and visibility surface for the active review period:
