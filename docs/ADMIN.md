@@ -66,7 +66,7 @@ For non-browser user/password administration from the deployment checkout, use `
 
 - `./passwordtool.sh list`
 - `./passwordtool.sh reset <employee-id|username> [temporary-password]`
-- `./passwordtool.sh set <employee-id|username> <password>`
+- `./passwordtool.sh set <employee-id|username> <password|->` (use `-` to read the password from stdin)
 
 ## Assessments
 
