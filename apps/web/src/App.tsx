@@ -1058,7 +1058,16 @@ function App() {
   );
   const authoredAssessmentIds = useMemo(
     () =>
-      dashboardSnapshot?.queues.flatMap((queue) => queue.items.map((item) => item.assessmentId)) ?? [],
+      dashboardSnapshot?.queues.flatMap((queue) =>
+        queue.items.flatMap((item) => (item.assessmentId ? [item.assessmentId] : [])),
+      ) ?? [],
+    [dashboardSnapshot],
+  );
+  const dashboardSectionAssessmentIds = useMemo(
+    () =>
+      dashboardSnapshot?.sections.flatMap((section) =>
+        section.queues.flatMap((queue) => queue.items.flatMap((item) => item.assessmentIds)),
+      ) ?? [],
     [dashboardSnapshot],
   );
   const reviewQueues = useMemo(
@@ -1131,14 +1140,16 @@ function App() {
   const areAssessmentFiltersActive =
     assessmentSearchQuery.trim().length > 0 || assessmentLifecycleFilter !== 'all' || assessmentTargetFilter !== 'all';
   const viewableAssessmentIds = useMemo(() => {
-    const assessmentIds = new Set(authoredAssessmentIds);
+    const assessmentIds = new Set<string>(authoredAssessmentIds);
+
+    dashboardSectionAssessmentIds.forEach((assessmentId) => assessmentIds.add(assessmentId));
 
     if (sessionUser?.role === 'admin') {
       adminAssessmentIds.forEach((assessmentId) => assessmentIds.add(assessmentId));
     }
 
     return Array.from(assessmentIds);
-  }, [adminAssessmentIds, authoredAssessmentIds, sessionUser]);
+  }, [adminAssessmentIds, authoredAssessmentIds, dashboardSectionAssessmentIds, sessionUser]);
   const reviewAssessmentIds = useMemo(
     () => reviewQueues.map((item) => item.assessmentId),
     [reviewQueues],
@@ -2241,6 +2252,17 @@ function App() {
 
   const handleSelectReviewAssessment = (assessmentId: string) => {
     setSelectedReviewAssessmentId(assessmentId);
+  };
+
+  const handleOpenAssessmentSetAssessment = (assessmentId: string, target: 'assessment' | 'review') => {
+    closeAssessmentSetDialog();
+
+    if (target === 'review') {
+      handleSelectReviewAssessment(assessmentId);
+      return;
+    }
+
+    handleSelectAssessment(assessmentId);
   };
 
   const handleDashboardWorkflowAction = async (item: DashboardActionItem) => {
@@ -6315,24 +6337,53 @@ onClick={() =>
           <section className="review-dialog-section">
             <p className="section-label">Assessments in this set</p>
             <div className="workflow-reviewer-grid">
-              {selectedAssessmentSetWorkflowPanel.assessments.map((assessment) => (
-                <article className="subcard workflow-set-assessment-card" key={assessment.assessmentId}>
-                  <div className="workflow-reviewer-card-header">
-                    <div>
-                      <h4>{assessment.targetLabel}</h4>
-                      <p className="muted-copy">{assessment.assessorLabel}</p>
+              {selectedAssessmentSetWorkflowPanel.assessments.map((assessment) => {
+                const canOpenAssessment = viewableAssessmentIds.includes(assessment.assessmentId);
+                const canOpenReview = reviewAssessmentIds.includes(assessment.assessmentId);
+
+                return (
+                  <article className="subcard workflow-set-assessment-card" key={assessment.assessmentId}>
+                    <div className="workflow-reviewer-card-header">
+                      <div>
+                        <h4>{assessment.targetLabel}</h4>
+                        <p className="muted-copy">{assessment.assessorLabel}</p>
+                      </div>
+                      <span className="pill">{assessment.statusLabel}</span>
                     </div>
-                    <span className="pill">{assessment.statusLabel}</span>
-                  </div>
-                  <p className="muted-copy">{assessment.title}</p>
-                  {assessment.managerNotes ? (
-                    <div className="workflow-reviewer-note">
-                      <strong>Manager notes</strong>
-                      <p>{assessment.managerNotes}</p>
-                    </div>
-                  ) : null}
-                </article>
-              ))}
+                    <p className="muted-copy">{assessment.title}</p>
+                    {canOpenAssessment || canOpenReview ? (
+                      <div className="dialog-footer">
+                        <div className="dialog-footer-end">
+                          {canOpenAssessment ? (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleOpenAssessmentSetAssessment(assessment.assessmentId, 'assessment')}
+                            >
+                              Open assessment
+                            </button>
+                          ) : null}
+                          {canOpenReview ? (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleOpenAssessmentSetAssessment(assessment.assessmentId, 'review')}
+                            >
+                              Open review
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {assessment.managerNotes ? (
+                      <div className="workflow-reviewer-note">
+                        <strong>Manager notes</strong>
+                        <p>{assessment.managerNotes}</p>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
           </section>
 
