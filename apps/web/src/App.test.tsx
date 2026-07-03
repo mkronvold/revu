@@ -3420,6 +3420,53 @@ describe('dashboard workflow surface', () => {
     expect(container.textContent).toContain('Review meeting marked as scheduled.');
   });
 
+  it('opens assessment details from the dashboard assessment-set dialog and keeps review access role-safe', async () => {
+    const snapshot = createAcceptedWorkflowSnapshot();
+
+    vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
+    vi.mocked(getFoundation).mockResolvedValue(snapshot);
+    vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Ready to be Scheduled') ?? false);
+
+    const readyRow = Array.from(container.querySelectorAll('.review-queue-item')).find(
+      (button) =>
+        button.textContent?.includes('Elliot Employee') &&
+        button.textContent?.includes('Accepted') &&
+        button.textContent?.includes('Schedule meeting'),
+    );
+    expect(readyRow).toBeTruthy();
+
+    await act(async () => {
+      readyRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.textContent?.includes('Assessments in this set') ?? false);
+
+    expect(container.textContent).toContain('Open assessment');
+    expect(container.textContent).not.toContain('Open review');
+
+    const openAssessmentButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Open assessment',
+    );
+    expect(openAssessmentButton).toBeTruthy();
+
+    await act(async () => {
+      openAssessmentButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    await waitFor(() => container.querySelector('[aria-labelledby="assessment-dialog-title"]') !== null);
+    expect(container.textContent).not.toContain('Assessments in this set');
+  });
+
   it('asks for confirmation before returning a submitted assessment to incomplete', async () => {
     const initialSnapshot = createSubmittedWorkflowSnapshot();
     const refreshedSnapshot = createSubmittedWorkflowSnapshot();

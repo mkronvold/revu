@@ -19,6 +19,7 @@ export type DashboardActionItem = {
   id: string;
   kind: 'authored-assessment' | 'review-assessment' | 'assessment-set';
   assessmentId: string | null;
+  assessmentIds: string[];
   reviewPeriodId: string | null;
   employeeId: string | null;
   title: string;
@@ -69,6 +70,7 @@ function toAuthoredDashboardItem(item: AssessmentQueueItem): DashboardActionItem
     id: item.assessmentId,
     kind: 'authored-assessment',
     assessmentId: item.assessmentId,
+    assessmentIds: [item.assessmentId],
     reviewPeriodId: null,
     employeeId: null,
     title: item.title,
@@ -89,6 +91,7 @@ function toReviewDashboardItem(item: ReviewQueueItem): DashboardActionItem {
     id: item.assessmentId,
     kind: 'review-assessment',
     assessmentId: item.assessmentId,
+    assessmentIds: [item.assessmentId],
     reviewPeriodId: null,
     employeeId: null,
     title: item.title,
@@ -109,6 +112,7 @@ function toAssessmentSetDashboardItem(item: AssessmentSetQueueItem): DashboardAc
     id: item.id,
     kind: 'assessment-set',
     assessmentId: null,
+    assessmentIds: item.assessmentIds,
     reviewPeriodId: item.reviewPeriodId,
     employeeId: item.employeeId,
     title: item.title,
