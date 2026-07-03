@@ -5513,6 +5513,36 @@ function App() {
               </div>
               <div className="dialog-header-actions">
                 <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
+                {!selectedAssessmentEditor.isReadOnly ? (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
+                      onClick={() => void handleSaveAssessmentForLater()}
+                    >
+                      {selectedAssessmentEditor.saveLabel}
+                    </button>
+                    {selectedAssessmentEditor.submitLabel ? (
+                      <button
+                        type="button"
+                        disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
+                        onClick={() => void handleSubmitAssessment()}
+                      >
+                        {selectedAssessmentEditor.submitLabel}
+                      </button>
+                    ) : null}
+                    {selectedAssessmentEditor.adminQuickActionLabel ? (
+                      <button
+                        type="button"
+                        disabled={isSavingAssessmentWorkflow || !isAssessmentDraftComplete}
+                        onClick={() => void handleAssessmentAdminQuickAction()}
+                      >
+                        {selectedAssessmentEditor.adminQuickActionLabel}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
                 <button type="button" className="secondary-button" onClick={printAssessmentDialog}>
                   Print
                 </button>
@@ -6037,6 +6067,25 @@ function App() {
               </div>
               <div className="dialog-header-actions">
                 <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
+                {!selectedReviewPanel.isArchived && (selectedReviewPanel.canAccept || selectedReviewPanel.canRejectToDraft) ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!selectedReviewPanel.canAccept || isSavingAssessmentWorkflow}
+                      onClick={() => void handleAcceptReview()}
+                    >
+                      Accept assessment
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!selectedReviewPanel.canRejectToDraft || isSavingAssessmentWorkflow}
+                      onClick={() => setIsReturnToIncompleteDialogOpen(true)}
+                    >
+                      Return to incomplete
+                    </button>
+                  </>
+                ) : null}
                 <button type="button" className="secondary-button" onClick={closeReviewDialog}>
                   Close
                 </button>
