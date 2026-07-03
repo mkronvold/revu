@@ -111,7 +111,9 @@ describe("API/domain foundation", () => {
         .every((assessment) => assessment.archiveState === "archived" && assessment.isReadOnly),
     ).toBe(true);
     expect(snapshot.workflow.visibility).toBe("all");
-    expect(snapshot.workflow.markdown).toContain("Dashboard follow-up moves the set through `ready_for_meeting` and then `scheduled`");
+    expect(snapshot.workflow.markdown).toContain(
+      "Dashboard follow-up treats accepted sets as `ready to be scheduled` and then marks them `scheduled`",
+    );
   });
 
   it("requires auth for the foundation snapshot and filters assessments by viewer visibility", async () => {
