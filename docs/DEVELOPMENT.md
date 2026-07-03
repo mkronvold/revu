@@ -23,7 +23,7 @@ This document collects developer-facing status, source-development steps, local 
 
 ## Requirements
 
-- Node.js 25+
+- Node.js 26+
 - npm 11+
 - Docker with Docker Compose
 
