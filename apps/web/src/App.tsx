@@ -149,6 +149,7 @@ const sessionStorageKey = 'revu-session-token';
 const loginUsernameStorageKey = 'revu-login-username';
 const themeStorageKey = 'revu-theme-preference';
 const sidebarCollapsedStorageKey = 'revu-sidebar-collapsed';
+const dashboardQueueExpandedStateStorageKey = 'revu-dashboard-queue-expanded-state';
 const employeeSearchStorageKey = 'revu-employee-search';
 const assessmentListStateStorageKey = 'revu-assessment-list-state';
 const lastResponseTimeoutMs = 120000;
@@ -457,6 +458,22 @@ function getStoredSidebarCollapsed() {
   return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
 }
 
+function getStoredDashboardQueueExpandedState(): Record<string, boolean> {
+  const storedValue = window.localStorage.getItem(dashboardQueueExpandedStateStorageKey);
+  if (!storedValue) {
+    return {};
+  }
+
+  try {
+    const parsedValue = JSON.parse(storedValue) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsedValue).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function getStoredLoginUsername() {
   return window.localStorage.getItem(loginUsernameStorageKey) ?? '';
 }
@@ -749,6 +766,9 @@ function App() {
   const [reviewerNotesDraft, setReviewerNotesDraft] = useState<ReviewerNotesDraft>(() => createEmptyReviewerNotesDraft());
   const [isReturnToIncompleteDialogOpen, setIsReturnToIncompleteDialogOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getStoredSidebarCollapsed());
+  const [dashboardQueueExpandedState, setDashboardQueueExpandedState] = useState<Record<string, boolean>>(
+    () => getStoredDashboardQueueExpandedState(),
+  );
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
@@ -796,6 +816,15 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!Object.keys(dashboardQueueExpandedState).length) {
+      window.localStorage.removeItem(dashboardQueueExpandedStateStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(dashboardQueueExpandedStateStorageKey, JSON.stringify(dashboardQueueExpandedState));
+  }, [dashboardQueueExpandedState]);
 
   useEffect(() => {
     if (!employeeSearchQuery) {
@@ -5377,55 +5406,74 @@ function App() {
         </div>
         {areDashboardQueuesExpanded ? (
           <div className="queue-stack dashboard-queue-stack">
-            {dashboardSnapshot?.queues.map((queue) => (
-              <article className="dashboard-queue-group" key={queue.id}>
-                <div className="dashboard-queue-group-heading">
-                  <strong>{queue.title}</strong>
-                  <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
-                </div>
-                {queue.items.length ? (
-                  <div
-                    className="employee-roster-table-scroll review-queue-table-scroll"
-                    role="region"
-                    aria-label={`${queue.title} assessments`}
+            {dashboardSnapshot?.queues.map((queue) => {
+              const queueStateKey = `assessment:${queue.id}`;
+              const isQueueExpanded = dashboardQueueExpandedState[queueStateKey] ?? true;
+              return (
+                <article className="dashboard-queue-group" key={queue.id}>
+                  <button
+                    type="button"
+                    className="dashboard-queue-group-heading section-toggle"
+                    aria-expanded={isQueueExpanded}
+                    aria-label={`${isQueueExpanded ? 'Collapse' : 'Expand'} ${queue.title} queue`}
+onClick={() =>
+  setDashboardQueueExpandedState((currentState) => ({
+    ...currentState,
+    [queueStateKey]: !(currentState[queueStateKey] ?? true),
+  }))
+}
                   >
-                    <div className="review-queue-table dashboard-queue-table" aria-label={`${queue.title} assessments`}>
-                      <div className="review-queue-header">
-                        <span>Name</span>
-                        <span>Work</span>
-                        <span>Responsibility</span>
-                        <span>Due</span>
-                        <span>Status</span>
-                        <span>Action</span>
-                      </div>
-                      {queue.items.map((item) => (
-                        <div className="review-queue-row-card" key={item.assessmentId}>
-                          <button
-                            type="button"
-                            className={`review-queue-item dashboard-queue-item${item.assessmentId === selectedAssessmentId ? ' admin-list-item-active' : ''}`}
-                            onClick={() => void handleDashboardWorkflowAction(item)}
-                          >
-                            <span className="employee-row-cell review-queue-primary">
-                              <strong>{item.subjectName}</strong>
-                              <span className="muted-copy review-queue-subcopy">{item.title}</span>
-                            </span>
-                            <span className="employee-row-cell">{item.workLabel}</span>
-                            <span className="employee-row-cell">{item.responsibilityLabel}</span>
-                            <span className="employee-row-cell">{item.dueDate}</span>
-                            <span className="employee-row-cell review-queue-step-cell">
-                              <span className="pill">{item.statusLabel}</span>
-                            </span>
-                            <span className="employee-row-cell">{item.actionLabel}</span>
-                          </button>
+                    <strong>{queue.title}</strong>
+                    <span className="muted-copy">
+                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} • {isQueueExpanded ? 'Collapse' : 'Expand'}
+                    </span>
+                  </button>
+                  {isQueueExpanded ? (
+                    queue.items.length ? (
+                      <div
+                        className="employee-roster-table-scroll review-queue-table-scroll"
+                        role="region"
+                        aria-label={`${queue.title} assessments`}
+                      >
+                        <div className="review-queue-table dashboard-queue-table" aria-label={`${queue.title} assessments`}>
+                          <div className="review-queue-header">
+                            <span>Name</span>
+                            <span>Work</span>
+                            <span>Responsibility</span>
+                            <span>Due</span>
+                            <span>Status</span>
+                            <span>Action</span>
+                          </div>
+                          {queue.items.map((item) => (
+                            <div className="review-queue-row-card" key={item.assessmentId}>
+                              <button
+                                type="button"
+                                className={`review-queue-item dashboard-queue-item${item.assessmentId === selectedAssessmentId ? ' admin-list-item-active' : ''}`}
+                                onClick={() => void handleDashboardWorkflowAction(item)}
+                              >
+                                <span className="employee-row-cell review-queue-primary">
+                                  <strong>{item.subjectName}</strong>
+                                  <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                                </span>
+                                <span className="employee-row-cell">{item.workLabel}</span>
+                                <span className="employee-row-cell">{item.responsibilityLabel}</span>
+                                <span className="employee-row-cell">{item.dueDate}</span>
+                                <span className="employee-row-cell review-queue-step-cell">
+                                  <span className="pill">{item.statusLabel}</span>
+                                </span>
+                                <span className="employee-row-cell">{item.actionLabel}</span>
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-copy">{queue.emptyMessage}</p>
-                )}
-              </article>
-            )) ?? <p className="muted-copy">Loading assessment queue...</p>}
+                      </div>
+                    ) : (
+                      <p className="muted-copy">{queue.emptyMessage}</p>
+                    )
+                  ) : null}
+                </article>
+              );
+            }) ?? <p className="muted-copy">Loading assessment queue...</p>}
           </div>
         ) : null}
       </section>
@@ -5439,57 +5487,76 @@ function App() {
             </div>
           </div>
           <div className="queue-stack dashboard-queue-stack">
-            {section.queues.map((queue) => (
-              <article className="dashboard-queue-group" key={queue.id}>
-                <div className="dashboard-queue-group-heading">
-                  <strong>{queue.title}</strong>
-                  <span className="muted-copy">{queue.items.length} {queue.items.length === 1 ? 'item' : 'items'}</span>
-                </div>
-                {queue.items.length ? (
-                  <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label={queue.title}>
-                    <div className="review-queue-table dashboard-queue-table" aria-label={queue.title}>
-                      <div className="review-queue-header">
-                        <span>Name</span>
-                        <span>Work</span>
-                        <span>Responsibility</span>
-                        <span>Due</span>
-                        <span>Status</span>
-                        <span>Action</span>
-                      </div>
-                        {queue.items.map((item) => (
-                          <div className="review-queue-row-card" key={item.id}>
-                            <button
-                              type="button"
-                              className={`review-queue-item${
-                                selectedAssessmentSetDialog?.reviewPeriodId === item.reviewPeriodId &&
-                                selectedAssessmentSetDialog.employeeId === item.employeeId
-                                  ? ' admin-list-item-active'
-                                  : ''
-                              }`}
-                              disabled={isSavingAssessmentWorkflow}
-                              onClick={() => void handleDashboardWorkflowAction(item)}
-                            >
-                            <span className="employee-row-cell review-queue-primary">
-                              <strong>{item.subjectName}</strong>
-                              <span className="muted-copy review-queue-subcopy">{item.title}</span>
-                            </span>
-                            <span className="employee-row-cell">{item.workLabel}</span>
-                            <span className="employee-row-cell">{item.responsibilityLabel}</span>
-                            <span className="employee-row-cell">{item.dueDate}</span>
-                            <span className="employee-row-cell review-queue-step-cell">
-                              <span className="pill">{item.statusLabel}</span>
-                            </span>
-                            <span className="employee-row-cell">{item.actionLabel}</span>
-                          </button>
+            {section.queues.map((queue) => {
+              const queueStateKey = `${section.id}:${queue.id}`;
+              const isQueueExpanded = dashboardQueueExpandedState[queueStateKey] ?? true;
+              return (
+                <article className="dashboard-queue-group" key={queue.id}>
+                  <button
+                    type="button"
+                    className="dashboard-queue-group-heading section-toggle"
+                    aria-expanded={isQueueExpanded}
+                    aria-label={`${isQueueExpanded ? 'Collapse' : 'Expand'} ${queue.title} queue`}
+onClick={() =>
+  setDashboardQueueExpandedState((currentState) => ({
+    ...currentState,
+    [queueStateKey]: !(currentState[queueStateKey] ?? true),
+  }))
+}
+                  >
+                    <strong>{queue.title}</strong>
+                    <span className="muted-copy">
+                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} • {isQueueExpanded ? 'Collapse' : 'Expand'}
+                    </span>
+                  </button>
+                  {isQueueExpanded ? (
+                    queue.items.length ? (
+                      <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label={queue.title}>
+                        <div className="review-queue-table dashboard-queue-table" aria-label={queue.title}>
+                          <div className="review-queue-header">
+                            <span>Name</span>
+                            <span>Work</span>
+                            <span>Responsibility</span>
+                            <span>Due</span>
+                            <span>Status</span>
+                            <span>Action</span>
+                          </div>
+                            {queue.items.map((item) => (
+                              <div className="review-queue-row-card" key={item.id}>
+                                <button
+                                  type="button"
+                                  className={`review-queue-item${
+                                    selectedAssessmentSetDialog?.reviewPeriodId === item.reviewPeriodId &&
+                                    selectedAssessmentSetDialog.employeeId === item.employeeId
+                                      ? ' admin-list-item-active'
+                                      : ''
+                                  }`}
+                                  disabled={isSavingAssessmentWorkflow}
+                                  onClick={() => void handleDashboardWorkflowAction(item)}
+                                >
+                                <span className="employee-row-cell review-queue-primary">
+                                  <strong>{item.subjectName}</strong>
+                                  <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                                </span>
+                                <span className="employee-row-cell">{item.workLabel}</span>
+                                <span className="employee-row-cell">{item.responsibilityLabel}</span>
+                                <span className="employee-row-cell">{item.dueDate}</span>
+                                <span className="employee-row-cell review-queue-step-cell">
+                                  <span className="pill">{item.statusLabel}</span>
+                                </span>
+                                <span className="employee-row-cell">{item.actionLabel}</span>
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-copy">{queue.emptyMessage}</p>
-                )}
-              </article>
-            ))}
+                      </div>
+                    ) : (
+                      <p className="muted-copy">{queue.emptyMessage}</p>
+                    )
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </section>
       ))}
