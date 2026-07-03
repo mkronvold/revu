@@ -61,15 +61,20 @@ async function listUsers() {
 }
 
 async function resolveEmployee(identifier) {
+  const needle = identifier.trim();
   const users = await store.listEmployees();
-  if (isUuid(identifier)) {
-    const exact = users.find((item) => item.id === identifier);
-    if (exact) {
-      return exact;
+
+  if (isUuid(needle)) {
+    const normalizedId = needle.toLowerCase();
+    const exact = users.find((item) => item.id.toLowerCase() === normalizedId);
+    if (!exact) {
+      throw new Error(`Employee not found for id "${identifier}"`);
     }
+    return exact;
   }
 
-  const byUsername = users.filter((item) => item.username === identifier);
+  const normalizedUsername = needle.toLowerCase();
+  const byUsername = users.filter((item) => item.username.toLowerCase() === normalizedUsername);
   if (byUsername.length !== 1) {
     throw new Error(`Unable to find exactly one employee for "${identifier}"`);
   }
