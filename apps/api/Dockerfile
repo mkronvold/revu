@@ -1,4 +1,4 @@
-FROM node:25-bookworm-slim AS builder
+FROM node:26-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY packages/contracts packages/contracts
 RUN npm run build --workspace @revu/contracts \
   && npm run build --workspace @revu/api
 
-FROM node:25-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 
 WORKDIR /app
 
