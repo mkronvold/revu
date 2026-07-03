@@ -60,7 +60,7 @@ describe('assessment and review helpers', () => {
     expect(submittedQueues.every((queue) => queue.items.every((item) => item.assessmentId !== selfAssessmentId))).toBe(true);
   });
 
-  it('tracks manager acceptance queues plus ready-for-meeting set transitions', () => {
+  it('tracks manager acceptance queues plus scheduling-ready set transitions', () => {
     const submittedSnapshot = createAssessmentWorkflowSnapshot({
       ...foundationSnapshotExample,
       assessments: foundationSnapshotExample.assessments.map((assessment) =>
@@ -125,8 +125,8 @@ describe('assessment and review helpers', () => {
     expect(readyQueues).toHaveLength(1);
     expect(readyQueues[0]).toMatchObject({
       employeeId: elliot.id,
-      actionLabel: 'Ready for meeting',
-      responsibilityLabel: 'Manager readiness',
+      actionLabel: 'Schedule meeting',
+      responsibilityLabel: 'Manager scheduling',
       statusLabel: 'Accepted',
     });
 

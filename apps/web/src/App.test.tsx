@@ -113,12 +113,12 @@ import {
   listQuestionCategories,
   listStoredBackups,
   login,
-  markAssessmentSetReadyForMeeting,
   me,
   rejectAssessmentToDraft,
   resetEmployeePassword,
   restoreStoredBackup,
   saveAssessmentDraft,
+  scheduleAssessmentSet,
   submitAssessment,
   updateBackupStatus,
   updateEmployee,
@@ -1488,7 +1488,7 @@ describe('workflow entry', () => {
     expect(container.querySelector('.workflow-page-card .section-label')?.textContent).toBe('Workflow');
     expect(container.textContent).not.toContain('Review workflow markdown');
     expect(container.textContent).toContain('Edit workflow');
-    expect(container.textContent).toContain('Dashboard follow-up moves the set through ready_for_meeting and then scheduled');
+    expect(container.textContent).toContain('Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled');
   });
 
   it('keeps direct workflow access working while hiding the nav item from employees when visibility is managers', async () => {
@@ -1514,7 +1514,7 @@ describe('workflow entry', () => {
     expect(window.location.pathname).toBe('/workflow');
     expect(container.textContent).not.toContain('Edit workflow');
     expect(container.textContent).not.toContain('Sidebar visibility:');
-    expect(container.textContent).toContain('Dashboard follow-up moves the set through ready_for_meeting and then scheduled');
+    expect(container.textContent).toContain('Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled');
   });
 
   it('warns before closing the workflow editor when there are unsaved changes', async () => {
@@ -2085,7 +2085,7 @@ describe('workflow entry', () => {
 
     expect(container.textContent).toContain('Assessment status');
     expect(container.textContent).toContain('Save changes');
-    expect(container.textContent).toContain('Mark ready for meeting');
+    expect(container.textContent).toContain('Schedule meeting');
     expect(container.textContent).toContain('Delete assessment');
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Submit')).toBe(false);
 
@@ -2195,7 +2195,7 @@ describe('workflow entry', () => {
 
     expect(window.location.pathname).toBe('/assessments');
     expect(container.textContent).toContain('Ready for meeting');
-    expect(container.textContent).toContain('Mark ready for meeting');
+    expect(container.textContent).toContain('Schedule meeting');
   });
 });
 
@@ -3356,18 +3356,18 @@ describe('dashboard workflow surface', () => {
       managerNotes: 'Ready for meeting.',
     });
 
-    await waitFor(() => container.textContent?.includes('Accepted sets ready for meeting') ?? false);
-    expect(container.textContent).toContain('Assessment accepted. The dashboard now tracks the set in the ready-for-meeting queue.');
+    await waitFor(() => container.textContent?.includes('Ready to be Scheduled') ?? false);
+    expect(container.textContent).toContain('Assessment accepted. The dashboard now tracks the set as ready to be scheduled.');
   });
 
-  it('opens the ready-for-meeting summary dialog before moving an accepted set forward', async () => {
+  it('opens the scheduling summary dialog before moving an accepted set forward', async () => {
     const initialSnapshot = createAcceptedWorkflowSnapshot();
     const refreshedSnapshot = createReadyForMeetingWorkflowSnapshot();
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
     vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(markAssessmentSetReadyForMeeting).mockResolvedValue({
+    vi.mocked(scheduleAssessmentSet).mockResolvedValue({
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       employeeId: '33333333-3333-4333-8333-333333333333',
       items: refreshedSnapshot.assessments.filter((assessment) => assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
@@ -3379,13 +3379,13 @@ describe('dashboard workflow surface', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Accepted sets ready for meeting') ?? false);
+    await waitFor(() => container.textContent?.includes('Ready to be Scheduled') ?? false);
 
     const readyRow = Array.from(container.querySelectorAll('.review-queue-item')).find(
       (button) =>
         button.textContent?.includes('Elliot Employee') &&
         button.textContent?.includes('Accepted') &&
-        button.textContent?.includes('Ready for meeting'),
+        button.textContent?.includes('Schedule meeting'),
     );
     expect(readyRow).toBeTruthy();
 
@@ -3396,13 +3396,13 @@ describe('dashboard workflow surface', () => {
 
     await waitFor(() => container.textContent?.includes('Assessments in this set') ?? false);
 
-    expect(container.textContent).toContain('Ready for meeting');
+    expect(container.textContent).toContain('Schedule review meeting');
     expect(container.textContent).toContain('Reviewer responsibilities');
     expect(container.textContent).toContain('Reviewer 1 records the first conclusion after the meeting');
-    expect(container.textContent).toContain('Mark ready for meeting');
+    expect(container.textContent).toContain('Mark meeting scheduled');
 
     const readyButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Mark ready for meeting',
+      (button) => button.textContent === 'Mark meeting scheduled',
     );
     expect(readyButton).toBeTruthy();
 
@@ -3411,13 +3411,13 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    await waitFor(() => vi.mocked(markAssessmentSetReadyForMeeting).mock.calls.length === 1);
+    await waitFor(() => vi.mocked(scheduleAssessmentSet).mock.calls.length === 1);
 
-    expect(markAssessmentSetReadyForMeeting).toHaveBeenCalledWith('session-token', {
+    expect(scheduleAssessmentSet).toHaveBeenCalledWith('session-token', {
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       employeeId: '33333333-3333-4333-8333-333333333333',
     });
-    expect(container.textContent).toContain('Assessment set marked ready for meeting.');
+    expect(container.textContent).toContain('Review meeting marked as scheduled.');
   });
 
   it('asks for confirmation before returning a submitted assessment to incomplete', async () => {

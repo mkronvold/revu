@@ -148,7 +148,7 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
     sections.push({
       id: 'manager-workflow',
       title: 'Manager workflow',
-      description: 'Accept submitted assessments or move fully accepted assessment sets into meeting preparation.',
+      description: 'Accept submitted assessments and schedule meetings for accepted assessment sets.',
       queues: [
         {
           id: 'submitted-assessments',
@@ -158,8 +158,8 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
         },
         {
           id: 'accepted-assessment-sets',
-          title: 'Accepted sets ready for meeting',
-          emptyMessage: 'No accepted assessment sets are waiting on readiness work.',
+          title: 'Ready to be Scheduled',
+          emptyMessage: 'No accepted assessment sets are waiting to be scheduled.',
           items: managerReadyItems.map(toAssessmentSetDashboardItem),
         },
       ],
@@ -217,7 +217,7 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
         ? 'No workflow follow-up is assigned right now. Dashboard stays centered on authored assessments.'
         : `${pluralize(managerSubmittedItems.length, 'submitted assessment')} and ${pluralize(
             managerReadyItems.length,
-            'accepted set',
+            'set ready to be scheduled',
           )} need workflow follow-up.`;
 
   return {

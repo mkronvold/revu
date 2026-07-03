@@ -5771,17 +5771,16 @@ export class ApiStore {
         await this.assertReviewPeriodMutable(client, reviewPeriodId);
         const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
         this.assertCanManageAssessmentSet(session, items);
-        this.assertAssessmentSetState(
-          items,
-          "ready_for_meeting",
-          "Only ready-for-meeting assessment sets can be scheduled",
-        );
+        if (items.some((item) => item.assessment.reviewState !== "accepted" && item.assessment.reviewState !== "ready_for_meeting")) {
+          throw new ApiError(409, "Only accepted or ready-for-meeting assessment sets can be scheduled");
+        }
 
         const timestamp = nowIso();
         await client.query(
           `
             UPDATE assessments
             SET review_state = 'scheduled',
+                ready_for_meeting_at = COALESCE(ready_for_meeting_at, $3::timestamptz),
                 scheduled_at = COALESCE(scheduled_at, $3::timestamptz),
                 scheduled_by_employee_id = COALESCE(scheduled_by_employee_id, $4),
                 updated_at = $3::timestamptz

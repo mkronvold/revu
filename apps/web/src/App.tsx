@@ -76,7 +76,6 @@ import {
   acceptReviewToApi,
   concludeAssessmentSetInApi,
   deleteAssessmentByAdminInApi,
-  markAssessmentSetReadyForMeetingInApi,
   rejectReviewToApi,
   saveAssessmentDraftToApi,
   scheduleAssessmentSetInApi,
@@ -3338,30 +3337,6 @@ function App() {
     }
   };
 
-  const handleMarkAssessmentSetReady = async () => {
-    if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
-      return;
-    }
-
-    setIsSavingAssessmentWorkflow(true);
-    setAppError('');
-    setWorkflowNotice('');
-
-    try {
-      const { notice } = await markAssessmentSetReadyForMeetingInApi(sessionToken, {
-        reviewPeriodId: selectedAssessmentSetWorkflowPanel.reviewPeriodId,
-        employeeId: selectedAssessmentSetWorkflowPanel.employeeId,
-      });
-      setSelectedAssessmentSetDialog(null);
-      await refreshFoundationSnapshot();
-      setWorkflowNotice(notice);
-    } catch (error) {
-      setAppError(getErrorMessage(error));
-    } finally {
-      setIsSavingAssessmentWorkflow(false);
-    }
-  };
-
   const handleScheduleAssessmentSet = async () => {
     if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
       return;
@@ -6177,9 +6152,7 @@ function App() {
           <div className="section-heading">
             <div>
               <p className="section-label">
-                {selectedAssessmentSetWorkflowPanel.dialogKind === 'ready-for-meeting'
-                  ? 'Ready for meeting'
-                  : selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting'
+                {selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting'
                     ? 'Schedule review meeting'
                     : 'Conclude review'}
               </p>
@@ -6334,15 +6307,6 @@ function App() {
           {selectedAssessmentSetWorkflowPanel.dialogKind !== 'conclude-review' ? (
             <div className="dialog-footer">
               <div className="dialog-footer-end">
-                {selectedAssessmentSetWorkflowPanel.dialogKind === 'ready-for-meeting' ? (
-                  <button
-                    type="button"
-                    disabled={!selectedAssessmentSetWorkflowPanel.canMarkReady || isSavingAssessmentWorkflow}
-                    onClick={() => void handleMarkAssessmentSetReady()}
-                  >
-                    Mark ready for meeting
-                  </button>
-                ) : null}
                 {selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting' ? (
                   <button
                     type="button"

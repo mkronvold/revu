@@ -499,7 +499,7 @@ function buildAssessmentDetail(
     case 'submitted':
       return `Submitted and waiting for manager or admin acceptance.`;
     case 'accepted':
-      return `Accepted and ready for the assessment set to move into meeting preparation.`;
+      return `Accepted and ready to be scheduled for a review meeting.`;
     case 'ready_for_meeting':
       return `Ready for meeting scheduling.`;
     case 'scheduled':
@@ -615,7 +615,7 @@ function buildAdminAssessmentNextStepLabel(summaryBucket: AdminAssessmentRow['su
     case 'submitted':
       return 'Manager or admin can accept it or return it to incomplete.';
     case 'accepted':
-      return 'Manager or admin can move the full assessment set to ready for meeting.';
+      return 'Manager or admin can mark the review meeting as scheduled.';
     case 'ready-for-meeting':
       return 'Manager or admin can mark the review meeting as scheduled.';
     case 'scheduled':
@@ -846,7 +846,7 @@ export function getAssessmentEditor(
       : normalizedReviewState === 'submitted'
         ? { label: 'Accept', reviewState: 'accepted' as const }
         : normalizedReviewState === 'accepted'
-          ? { label: 'Mark ready for meeting', reviewState: 'ready_for_meeting' as const }
+          ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
           : normalizedReviewState === 'ready_for_meeting'
             ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
             : normalizedReviewState === 'concluded'
@@ -1020,13 +1020,16 @@ export function buildReadyForMeetingQueues(
 
   return sortAssessmentSets(collectActiveAssessmentSets(snapshot), employeesById)
     .filter((assessmentSet) => canManageAssessmentSet(user, snapshot, employeesById, assessmentSet))
-    .filter((assessmentSet) => getAssessmentSetState(assessmentSet.assessments) === 'accepted')
+    .filter((assessmentSet) => {
+      const state = getAssessmentSetState(assessmentSet.assessments);
+      return state === 'accepted' || state === 'ready_for_meeting';
+    })
     .map((assessmentSet) =>
       toAssessmentSetQueueItem(snapshot, employeesById, assessmentSet, {
-        actionKind: 'mark-ready',
-        actionLabel: 'Ready for meeting',
-        detail: `Review the accepted set for ${getEmployeeName(employeesById, assessmentSet.employeeId)} and confirm it is ready for the meeting.`,
-        responsibilityLabel: 'Manager readiness',
+        actionKind: 'schedule',
+        actionLabel: 'Schedule meeting',
+        detail: `Schedule the review meeting for ${getEmployeeName(employeesById, assessmentSet.employeeId)}.`,
+        responsibilityLabel: 'Manager scheduling',
       }),
     );
 }
@@ -1193,16 +1196,14 @@ export function getAssessmentSetWorkflowPanel(
     title: `${subjectName} assessment set`,
     detail:
       setState === 'accepted'
-        ? `Both submitted assessments are accepted. Confirm when this set is ready for the review meeting.`
+        ? `Both submitted assessments are accepted and ready to be scheduled for the review meeting.`
         : setState === 'ready_for_meeting'
-          ? `Use this status-only step once the review meeting is arranged elsewhere. Revu does not capture meeting details yet.`
+          ? `This set is ready to be scheduled for the review meeting. Revu does not capture meeting details yet.`
           : user.role === 'admin'
             ? 'Record or reopen reviewer conclusions for Reviewer 1 and Reviewer 2.'
             : `${buildReviewerRoleLabel(currentUserReviewerRole!)} is responsible for recording this conclusion.`,
     dialogKind:
-      setState === 'accepted'
-        ? 'ready-for-meeting'
-        : setState === 'ready_for_meeting'
+      setState === 'accepted' || setState === 'ready_for_meeting'
           ? 'schedule-meeting'
           : 'conclude-review',
     subjectName,
@@ -1210,7 +1211,7 @@ export function getAssessmentSetWorkflowPanel(
     dueDate: reviewPeriod ? formatDate(reviewPeriod.reviewDueDate) : 'Unknown due date',
     statusLabel:
       setState === 'accepted'
-        ? 'Accepted'
+        ? 'Ready to be Scheduled'
         : setState === 'ready_for_meeting'
           ? 'Ready for meeting'
           : setState === 'scheduled'
@@ -1218,8 +1219,8 @@ export function getAssessmentSetWorkflowPanel(
             : 'Concluded',
     assessments,
     reviewerActions,
-    canMarkReady: canManage && setState === 'accepted',
-    canSchedule: canManage && setState === 'ready_for_meeting',
+    canMarkReady: false,
+    canSchedule: canManage && (setState === 'accepted' || setState === 'ready_for_meeting'),
     currentUserReviewerRole,
     isAdmin: user.role === 'admin',
   };

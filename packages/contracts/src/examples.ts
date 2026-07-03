@@ -456,7 +456,7 @@ export const domainRulesExample: DomainRulesResponse = {
     new: ["draft", "submitted"],
     draft: ["draft", "submitted"],
     submitted: ["accepted", "draft"],
-    accepted: ["ready_for_meeting"],
+    accepted: ["ready_for_meeting", "scheduled"],
     ready_for_meeting: ["scheduled"],
     scheduled: ["concluded"],
     concluded: ["scheduled"],
