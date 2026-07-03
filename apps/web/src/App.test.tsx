@@ -3754,6 +3754,60 @@ describe('dashboard screen', () => {
     await waitFor(() => vi.mocked(getFoundation).mock.calls.length === 1);
   });
 
+  it('collapses dashboard status groups and restores the state from local storage', async () => {
+    const dashboardSnapshot = cloneQuestionSlice();
+    dashboardSnapshot.assessments = dashboardSnapshot.assessments.map((assessment) =>
+      assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        ? {
+            ...assessment,
+            reviewState: 'draft',
+            isReadOnly: false,
+            submittedAt: null,
+            acceptedAt: null,
+            acceptedByEmployeeId: null,
+            reviewedAt: null,
+            reviewedByEmployeeId: null,
+          }
+        : assessment,
+    );
+
+    vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
+    vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
+
+    window.sessionStorage.setItem('revu-session-token', 'session-token');
+
+    await act(async () => {
+      root.render(<App />);
+    });
+
+    await waitFor(() => container.textContent?.includes('Incomplete') ?? false);
+
+    const collapseButton = container.querySelector(
+      'button[aria-label="Collapse Incomplete queue"]',
+    ) as HTMLButtonElement | null;
+    expect(collapseButton).toBeTruthy();
+
+    await act(async () => {
+      collapseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushRender();
+    });
+
+    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
+    expect(window.localStorage.getItem('revu-dashboard-queue-expanded-state')).toContain('"assessment:incomplete":false');
+
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+
+    await act(async () => {
+      root.render(<App />);
+    });
+    await waitFor(() => container.querySelector('button[aria-label="Expand Incomplete queue"]') !== null);
+    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
+    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
+  });
+
   it('uses submit to save draft changes even before an assessment is complete', async () => {
     const dashboardSnapshot = cloneQuestionSlice();
     dashboardSnapshot.assessments = dashboardSnapshot.assessments.map((assessment) =>
