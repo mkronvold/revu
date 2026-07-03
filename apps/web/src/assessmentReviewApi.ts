@@ -112,7 +112,7 @@ export async function acceptReviewToApi(token: string, panel: ReviewPanel, notes
 
   return {
     assessment: response.item,
-    notice: 'Assessment accepted. The dashboard now tracks the set in the ready-for-meeting queue.',
+    notice: 'Assessment accepted. The dashboard now tracks the set as ready to be scheduled.',
   };
 }
 

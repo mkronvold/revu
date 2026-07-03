@@ -37,7 +37,7 @@ export const defaultWorkflowMarkdown = `### Active assessment lifecycle
 - Managers align peer assignments and reviewer 1 / reviewer 2 coverage for the cycle
 - Employees use \`Dashboard\` to move assigned assessments through \`new\`, \`draft\`, and \`submitted\`
 - Managers or admins accept submitted assessments so the employee assessment set becomes \`accepted\`
-- Dashboard follow-up moves the set through \`ready_for_meeting\` and then \`scheduled\`
+- Dashboard follow-up treats accepted sets as \`ready to be scheduled\` and then marks them \`scheduled\`
 - Reviewer 1 and reviewer 2 each record their own conclusion; once both finish, the set becomes \`concluded\`
 - \`Dashboard\` stays the operational workflow surface, while admin \`Assessments\` remains the override and visibility route
 - When the cycle is complete, admins archive the \`Review Period\``;
