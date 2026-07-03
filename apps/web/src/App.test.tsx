@@ -3804,8 +3804,7 @@ describe('dashboard screen', () => {
       root.render(<App />);
     });
     await waitFor(() => container.querySelector('button[aria-label="Expand Incomplete queue"]') !== null);
-    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
-    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
+expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
   });
 
   it('uses submit to save draft changes even before an assessment is complete', async () => {
