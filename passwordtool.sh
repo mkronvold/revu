@@ -145,10 +145,21 @@ main() {
     set)
       shift
       if (($# != 2)); then
-        log_error 'Usage: ./passwordtool.sh set <employee-id|username> <password>'
+        log_error 'Usage: ./passwordtool.sh set <employee-id|username> <password|->'
         exit 1
       fi
-      run_api_node_command set "$1" "$2"
+
+      local password="$2"
+      if [[ "$password" == "-" ]]; then
+        if [[ -t 0 ]]; then
+          read -r -s -p "Password: " password
+          printf '\n' >&2
+        else
+          IFS= read -r password
+        fi
+      fi
+
+      run_api_node_command set "$1" "$password"
       ;;
     help|-h|--help)
       usage
