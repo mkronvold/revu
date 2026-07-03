@@ -7,6 +7,12 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pull-request-number:
+        description: "Existing Dependabot PR number to re-enroll in the automerge flow"
+        required: true
+        type: number
 
 permissions:
   contents: write
@@ -14,7 +20,7 @@ permissions:
 
 jobs:
   automerge:
-    if: github.actor == 'dependabot[bot]'
+    if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Dependabot metadata
@@ -40,3 +46,41 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
+
+  reenroll-existing-pr:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate requested PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json author,isDraft,number,state)"
+          author_login="$(echo "$pr_json" | jq -r '.author.login')"
+          pr_state="$(echo "$pr_json" | jq -r '.state')"
+          pr_draft="$(echo "$pr_json" | jq -r '.isDraft')"
+
+          if [ "$author_login" != "app/dependabot" ]; then
+            echo "Only Dependabot PRs can be re-enrolled; PR #$PR_NUMBER was opened by $author_login." >&2
+            exit 1
+          fi
+
+          if [ "$pr_state" != "OPEN" ]; then
+            echo "PR #$PR_NUMBER must be open before it can be re-enrolled." >&2
+            exit 1
+          fi
+
+          if [ "$pr_draft" = "true" ]; then
+            echo "PR #$PR_NUMBER is draft; mark it ready for review instead of using manual re-enrollment." >&2
+            exit 1
+          fi
+
+      - name: Reopen PR to retrigger the standard automerge flow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          gh pr reopen "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
