@@ -2502,6 +2502,14 @@ button.employee-row:focus-visible {
 
 .backup-list-dialog {
   --modal-card-width: 56rem;
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.backup-list-dialog .archive-list {
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .backup-list-row {
