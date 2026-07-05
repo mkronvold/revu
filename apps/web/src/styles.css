@@ -2500,7 +2500,7 @@ button.employee-row:focus-visible {
   flex-wrap: wrap;
 }
 
-.backup-list-dialog {
+.modal-card.backup-list-dialog {
   --modal-card-width: 56rem;
   max-height: calc(100vh - 4rem);
   display: flex;
