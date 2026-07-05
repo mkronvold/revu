@@ -15,7 +15,7 @@ usage() {
 Usage:
   ./passwordtool.sh list
   ./passwordtool.sh reset <employee-id|username> [temporary-password]
-  ./passwordtool.sh set <employee-id|username> <password>
+  ./passwordtool.sh set <employee-id|username> <password|-> 
 EOF
 }
 
@@ -24,6 +24,19 @@ require_docker() {
     log_error 'docker is required to manage users.'
     exit 1
   fi
+}
+
+prompt_yes_no() {
+  local prompt="$1"
+  local reply=""
+
+  if [[ ! -t 0 ]]; then
+    return 1
+  fi
+
+  printf '%s [y/N] ' "$prompt" >&2
+  read -r reply || return 1
+  [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 api_container_running() {
@@ -82,6 +95,22 @@ async function resolveEmployee(identifier) {
   return byUsername[0];
 }
 
+async function inspectEmployee(identifier) {
+  const employee = await resolveEmployee(identifier);
+  console.log(`${employee.id}\t${employee.username}\t${employee.status}`);
+}
+
+async function activateEmployee(identifier) {
+  const employee = await resolveEmployee(identifier);
+  if (employee.status === "active") {
+    console.log(`Employee ${employee.username} (${employee.id}) is already active`);
+    return;
+  }
+
+  await store.updateEmployee({ id: employee.id, role: "admin" }, employee.id, { status: "active" });
+  console.log(`Activated ${employee.username} (${employee.id})`);
+}
+
 async function resetPassword(identifier, requestedPassword) {
   const employee = await resolveEmployee(identifier);
   const result = await store.resetPassword(employee.id, requestedPassword || undefined);
@@ -105,6 +134,10 @@ async function setPassword(identifier, nextPassword) {
 try {
   if (action === "list") {
     await listUsers();
+  } else if (action === "inspect") {
+    await inspectEmployee(employeeIdentifier);
+  } else if (action === "activate") {
+    await activateEmployee(employeeIdentifier);
   } else if (action === "reset") {
     await resetPassword(employeeIdentifier, password);
   } else if (action === "set") {
@@ -120,6 +153,53 @@ try {
   await closePool();
 }
 NODE
+}
+
+inspect_employee() {
+  local identifier="$1"
+  run_api_node_command inspect "$identifier"
+}
+
+activate_employee() {
+  local identifier="$1"
+  run_api_node_command activate "$identifier"
+}
+
+prepare_employee_for_password_change() {
+  local identifier="$1"
+  local employee_info=""
+  local employee_id=""
+  local username=""
+  local status=""
+
+  employee_info="$(inspect_employee "$identifier")"
+  IFS=$'\t' read -r employee_id username status <<<"$employee_info"
+
+  if [[ "$status" != "inactive" ]]; then
+    return 0
+  fi
+
+  log_error "Warning: ${username} (${employee_id}) is inactive."
+  if [[ -t 0 ]]; then
+    if prompt_yes_no "Make ${username} active before changing the password?"; then
+      activate_employee "$employee_id" >&2
+    fi
+  else
+    log_error "Proceeding without reactivating ${username} because stdin is not interactive."
+  fi
+}
+
+read_password_from_input() {
+  local password=""
+
+  if [[ -t 0 ]]; then
+    read -r -s -p "Password: " password
+    printf '\n' >&2
+  else
+    IFS= read -r password
+  fi
+
+  printf '%s\n' "$password"
 }
 
 main() {
@@ -140,6 +220,7 @@ main() {
         log_error 'Usage: ./passwordtool.sh reset <employee-id|username> [temporary-password]'
         exit 1
       fi
+      prepare_employee_for_password_change "$1"
       run_api_node_command reset "$1" "${2:-}"
       ;;
     set)
@@ -149,14 +230,11 @@ main() {
         exit 1
       fi
 
+      prepare_employee_for_password_change "$1"
+
       local password="$2"
       if [[ "$password" == "-" ]]; then
-        if [[ -t 0 ]]; then
-          read -r -s -p "Password: " password
-          printf '\n' >&2
-        else
-          IFS= read -r password
-        fi
+        password="$(read_password_from_input)"
       fi
 
       run_api_node_command set "$1" "$password"
