@@ -12,7 +12,7 @@
     "seed:example": "npm run build --workspace @revu/contracts && tsx src/seed-example.ts"
   },
   "dependencies": {
-    "@fastify/cors": "^11.2.0",
+    "@fastify/cors": "^11.3.0",
     "@revu/contracts": "file:../../packages/contracts",
     "@types/pg": "^8.20.0",
     "fastify": "^5.10.0",
