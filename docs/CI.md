@@ -58,8 +58,8 @@ Auto-approves and enables auto-merge **only** for open `base-image-cve` PRs labe
 | Stage                 | Behavior                                                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Now                   | Report-only Trivy SARIF upload per deployable service (`revu-api`, `revu-web`). Scans must not fail the job solely on finding severity. |
-| Artifacts             | Per-service Trivy **JSON** artifacts (`trivy-json-revu-api`, `trivy-json-revu-web`) retained for bot/triage use.                         |
-| Lane B remediation    | `base-image-cve-fix` opens digest pin PRs for any severity when a newer digest exists; crit/high auto-merge when checks are green.     |
+| Artifacts             | Per-service Trivy **JSON** artifacts (`trivy-json-revu-api`, `trivy-json-revu-web`) retained for bot/triage use.                        |
+| Lane B remediation    | `base-image-cve-fix` opens digest pin PRs for any severity when a newer digest exists; crit/high auto-merge when checks are green.      |
 | After baseline triage | Enable reviewed severity gates; unresolved policy-severity findings block merge unless an approved exception exists.                    |
 | Exceptions            | Record accepted risks in [`security/exceptions.md`](../security/exceptions.md) with ID, owner, rationale, mitigation, and expiry.       |
 
