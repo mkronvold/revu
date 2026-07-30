@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes, scryptSync } from 'node:crypto';
 
 import {
   assessmentsListExample,
@@ -8,21 +8,21 @@ import {
   employeesListExample,
   questionSetsListExample,
   reviewPeriodsListExample,
-} from "@revu/contracts";
-import { type PoolClient } from "pg";
+} from '@revu/contracts';
+import { type PoolClient } from 'pg';
 
-import { getPool } from "./db.js";
+import { getPool } from './db.js';
 
 const seedPasswordsByUsername: Record<string, string> = {
-  "ada.admin": "AdminPass123!",
-  "manny.manager": "ManagerPass123!",
-  "elliot.employee": "EmployeePass123!",
-  "pat.peer": "PeerPass123!",
+  'ada.admin': 'AdminPass123!',
+  'manny.manager': 'ManagerPass123!',
+  'elliot.employee': 'EmployeePass123!',
+  'pat.peer': 'PeerPass123!',
 };
 
 function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
   return `${salt}:${hash}`;
 }
 
@@ -444,11 +444,11 @@ async function insertQuestionCategories(client: PoolClient) {
     new Set(
       questionSetsListExample.items.flatMap((questionSet) =>
         questionSet.questions
-          .map((question) => question.category?.trim() ?? "")
+          .map((question) => question.category?.trim() ?? '')
           .filter((category) => category.length > 0),
       ),
     ),
-  ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+  ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 
   for (const category of categories) {
     await client.query(
@@ -567,7 +567,13 @@ async function insertAssessments(client: PoolClient) {
             updated_at
           ) VALUES ($1,$2,$3,$4::timestamptz,$5::timestamptz)
         `,
-        [assessment.id, response.questionId, response.response, assessment.createdAt, assessment.updatedAt],
+        [
+          assessment.id,
+          response.questionId,
+          response.response,
+          assessment.createdAt,
+          assessment.updatedAt,
+        ],
       );
     }
   }
@@ -598,7 +604,7 @@ export async function resetDemoData() {
     await ensureReviewPeriodDueDateColumns(client);
     await ensureEmployeeReviewerColumns(client);
     await ensureAssessmentWorkflowColumns(client);
-    await client.query("BEGIN");
+    await client.query('BEGIN');
     await client.query(
       `
         CREATE TABLE IF NOT EXISTS question_categories (
@@ -619,7 +625,7 @@ export async function resetDemoData() {
         )
       `,
     );
-    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query('SET LOCAL session_replication_role = replica');
     await client.query(
       `
         TRUNCATE TABLE
@@ -644,9 +650,9 @@ export async function resetDemoData() {
     await insertWorkflowSettings(client);
     await insertAssignments(client);
     await insertAssessments(client);
-    await client.query("COMMIT");
+    await client.query('COMMIT');
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();

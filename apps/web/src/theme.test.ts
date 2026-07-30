@@ -36,9 +36,9 @@ describe('theme helpers', () => {
   });
 
   it('keeps review queue items on the same themed surface model as employee roster rows', () => {
-    expect(themeStyleOverrides).toContain(".review-queue-item");
-    expect(themeStyleOverrides).toContain(".employee-row-summary:hover");
-    expect(themeStyleOverrides).toContain(".review-queue-item:hover");
+    expect(themeStyleOverrides).toContain('.review-queue-item');
+    expect(themeStyleOverrides).toContain('.employee-row-summary:hover');
+    expect(themeStyleOverrides).toContain('.review-queue-item:hover');
   });
 
   it('themes assessment queue headers and rows for dark palettes', () => {
@@ -77,10 +77,10 @@ describe('theme helpers', () => {
 
   it('uses the shared button default color with themed hover gradients', () => {
     expect(themeStyleOverrides).toContain(
-      "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)",
+      'button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle)',
     );
     expect(themeStyleOverrides).toContain(
-      "button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle):hover",
+      'button:not(.demo-account-card):not(.employee-row):not(.employee-row-summary):not(.review-queue-item):not(.section-toggle):hover',
     );
     expect(themeStyleOverrides).toContain('.button-link:focus-visible');
   });

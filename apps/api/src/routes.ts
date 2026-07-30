@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import {
   acceptAssessmentRequestSchema,
   adminUpdateAssessmentRequestSchema,
@@ -83,21 +83,21 @@ import {
   type AuthPermission,
   type AuthSession,
   type BackupRestoreRequest,
-} from "@revu/contracts";
-import { ZodError, z, type ZodType } from "zod";
+} from '@revu/contracts';
+import { ZodError, z, type ZodType } from 'zod';
 
-import { ApiError, type ApiStore } from "./store.js";
+import { ApiError, type ApiStore } from './store.js';
 
 type RegisterRoutesOptions = {
   store: ApiStore;
 };
 
 const exportFormatQuerySchema = z.object({
-  format: exportFormatSchema.default("json"),
+  format: exportFormatSchema.default('json'),
 });
 
 const localUsersExportQuerySchema = exportFormatQuerySchema.extend({
-  mode: localUsersExportModeSchema.default("rotate-passcodes"),
+  mode: localUsersExportModeSchema.default('rotate-passcodes'),
 });
 const assessmentSetParamsSchema = z.object({
   reviewPeriodId: idSchema,
@@ -114,7 +114,7 @@ function parseWithSchema<T>(schema: ZodType<T>, value: unknown) {
     return schema.parse(value);
   } catch (error) {
     if (error instanceof ZodError) {
-      throw new ApiError(400, error.issues[0]?.message ?? "Invalid request");
+      throw new ApiError(400, error.issues[0]?.message ?? 'Invalid request');
     }
 
     throw error;
@@ -126,54 +126,54 @@ function normalizeLocalUserTransferItem(item: {
   username: string;
   fullName: string;
   email: string;
-  role: "employee" | "manager" | "admin";
-  status: "active" | "inactive";
+  role: 'employee' | 'manager' | 'admin';
+  status: 'active' | 'inactive';
   managerUsername: string | null;
   assessor1Username: string | null;
   assessor2Username: string | null;
   reviewer1Username?: string | null;
   reviewer2Username?: string | null;
   id?: string;
-  credentialKind?: "password" | "password-hash" | "unset";
+  credentialKind?: 'password' | 'password-hash' | 'unset';
   passwordResetRequired?: boolean;
 }) {
   return {
     ...item,
     reviewer1Username: item.reviewer1Username ?? null,
     reviewer2Username: item.reviewer2Username ?? null,
-    credentialKind: item.credentialKind ?? "password",
+    credentialKind: item.credentialKind ?? 'password',
     passwordResetRequired: item.passwordResetRequired ?? false,
   };
 }
 
 function buildBackupFilename(exportedAt: string) {
-  return `revu-backup-${exportedAt.replace(/[:.]/g, "-")}.json`;
+  return `revu-backup-${exportedAt.replace(/[:.]/g, '-')}.json`;
 }
 
 function parseMultipartFormData(body: Buffer, contentTypeHeader?: string) {
   const boundaryMatch = contentTypeHeader?.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
   const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
   if (!boundary) {
-    throw new ApiError(400, "Multipart boundary is required");
+    throw new ApiError(400, 'Multipart boundary is required');
   }
 
   const parts = new Map<string, { value: string; filename?: string; contentType?: string }>();
-  const sections = body.toString("utf8").split(`--${boundary}`);
+  const sections = body.toString('utf8').split(`--${boundary}`);
 
   for (const rawSection of sections) {
-    if (rawSection === "" || rawSection === "--\r\n" || rawSection === "--") {
+    if (rawSection === '' || rawSection === '--\r\n' || rawSection === '--') {
       continue;
     }
 
-    const section = rawSection.startsWith("\r\n") ? rawSection.slice(2) : rawSection;
-    const trimmedSection = section.endsWith("\r\n") ? section.slice(0, -2) : section;
-    if (trimmedSection === "" || trimmedSection === "--") {
+    const section = rawSection.startsWith('\r\n') ? rawSection.slice(2) : rawSection;
+    const trimmedSection = section.endsWith('\r\n') ? section.slice(0, -2) : section;
+    if (trimmedSection === '' || trimmedSection === '--') {
       continue;
     }
 
-    const headerSeparator = trimmedSection.indexOf("\r\n\r\n");
+    const headerSeparator = trimmedSection.indexOf('\r\n\r\n');
     if (headerSeparator === -1) {
-      throw new ApiError(400, "Invalid multipart form data");
+      throw new ApiError(400, 'Invalid multipart form data');
     }
 
     const headerBlock = trimmedSection.slice(0, headerSeparator);
@@ -182,45 +182,45 @@ function parseMultipartFormData(body: Buffer, contentTypeHeader?: string) {
     let filename: string | undefined;
     let fieldContentType: string | undefined;
 
-    for (const headerLine of headerBlock.split("\r\n")) {
-      const separatorIndex = headerLine.indexOf(":");
+    for (const headerLine of headerBlock.split('\r\n')) {
+      const separatorIndex = headerLine.indexOf(':');
       if (separatorIndex === -1) {
-        throw new ApiError(400, "Invalid multipart form data header");
+        throw new ApiError(400, 'Invalid multipart form data header');
       }
 
       const headerName = headerLine.slice(0, separatorIndex).trim().toLowerCase();
       const headerValue = headerLine.slice(separatorIndex + 1).trim();
-      if (headerName === "content-type") {
+      if (headerName === 'content-type') {
         fieldContentType = headerValue;
         continue;
       }
 
-      if (headerName !== "content-disposition") {
+      if (headerName !== 'content-disposition') {
         continue;
       }
 
-      const segments = headerValue.split(";").map((segment) => segment.trim());
-      if (segments[0]?.toLowerCase() !== "form-data") {
-        throw new ApiError(400, "Invalid multipart content disposition");
+      const segments = headerValue.split(';').map((segment) => segment.trim());
+      if (segments[0]?.toLowerCase() !== 'form-data') {
+        throw new ApiError(400, 'Invalid multipart content disposition');
       }
 
       for (const segment of segments.slice(1)) {
-        const [name, rawValue] = segment.split("=");
+        const [name, rawValue] = segment.split('=');
         if (!name || rawValue === undefined) {
           continue;
         }
 
-        const parsedValue = rawValue.trim().replace(/^"|"$/g, "");
-        if (name === "name") {
+        const parsedValue = rawValue.trim().replace(/^"|"$/g, '');
+        if (name === 'name') {
           fieldName = parsedValue;
-        } else if (name === "filename") {
+        } else if (name === 'filename') {
           filename = parsedValue;
         }
       }
     }
 
     if (!fieldName) {
-      throw new ApiError(400, "Multipart field name is required");
+      throw new ApiError(400, 'Multipart field name is required');
     }
     if (parts.has(fieldName)) {
       throw new ApiError(400, `Multipart field ${fieldName} must be provided only once`);
@@ -238,31 +238,31 @@ function parseMultipartFormData(body: Buffer, contentTypeHeader?: string) {
 
 function parseBackupRestoreRequestFromMultipart(request: FastifyRequest): BackupRestoreRequest {
   if (!Buffer.isBuffer(request.body)) {
-    throw new ApiError(400, "Backup restore requests must use multipart form data");
+    throw new ApiError(400, 'Backup restore requests must use multipart form data');
   }
 
-  const parts = parseMultipartFormData(request.body, request.headers["content-type"]);
-  const filePart = parts.get("file");
+  const parts = parseMultipartFormData(request.body, request.headers['content-type']);
+  const filePart = parts.get('file');
   if (!filePart) {
-    throw new ApiError(400, "Backup restore file is required");
+    throw new ApiError(400, 'Backup restore file is required');
   }
 
   let backup: unknown;
   try {
     backup = JSON.parse(filePart.value);
   } catch {
-    throw new ApiError(400, "Backup restore file must contain valid JSON");
+    throw new ApiError(400, 'Backup restore file must contain valid JSON');
   }
 
   try {
     return backupRestoreRequestSchema.parse({
-      mode: parts.get("mode")?.value.trim(),
-      target: parts.get("target")?.value.trim(),
+      mode: parts.get('mode')?.value.trim(),
+      target: parts.get('target')?.value.trim(),
       backup,
     });
   } catch (error) {
     if (error instanceof ZodError) {
-      throw new ApiError(400, error.issues[0]?.message ?? "Invalid request");
+      throw new ApiError(400, error.issues[0]?.message ?? 'Invalid request');
     }
 
     throw error;
@@ -271,17 +271,17 @@ function parseBackupRestoreRequestFromMultipart(request: FastifyRequest): Backup
 
 function parseStoredBackupUploadRequestFromMultipart(request: FastifyRequest) {
   if (!Buffer.isBuffer(request.body)) {
-    throw new ApiError(400, "Stored backup uploads must use multipart form data");
+    throw new ApiError(400, 'Stored backup uploads must use multipart form data');
   }
 
-  const parts = parseMultipartFormData(request.body, request.headers["content-type"]);
-  const filePart = parts.get("file");
+  const parts = parseMultipartFormData(request.body, request.headers['content-type']);
+  const filePart = parts.get('file');
   if (!filePart) {
-    throw new ApiError(400, "Stored backup upload file is required");
+    throw new ApiError(400, 'Stored backup upload file is required');
   }
 
   return {
-    fileName: filePart.filename?.trim() || "backup.json",
+    fileName: filePart.filename?.trim() || 'backup.json',
     content: filePart.value,
   };
 }
@@ -296,21 +296,25 @@ function sendError(reply: FastifyReply, error: unknown) {
 
 function getBearerToken(request: FastifyRequest) {
   const header = request.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    throw new ApiError(401, "Authentication required");
+  if (!header?.startsWith('Bearer ')) {
+    throw new ApiError(401, 'Authentication required');
   }
 
-  return header.slice("Bearer ".length);
+  return header.slice('Bearer '.length);
 }
 
-async function requireSession(request: FastifyRequest, store: ApiStore, options?: { allowPasswordReset?: boolean }) {
+async function requireSession(
+  request: FastifyRequest,
+  store: ApiStore,
+  options?: { allowPasswordReset?: boolean },
+) {
   const session = await store.getSession(getBearerToken(request));
   if (!session) {
-    throw new ApiError(401, "Authentication required");
+    throw new ApiError(401, 'Authentication required');
   }
 
   if (!options?.allowPasswordReset && session.passwordResetRequired) {
-    throw new ApiError(403, "Password change required before accessing this resource");
+    throw new ApiError(403, 'Password change required before accessing this resource');
   }
 
   return session;
@@ -318,15 +322,22 @@ async function requireSession(request: FastifyRequest, store: ApiStore, options?
 
 function requirePermissions(session: AuthSession, permissions: AuthPermission[]) {
   if (!permissions.every((permission) => session.permissions.includes(permission))) {
-    throw new ApiError(403, "You do not have permission to perform this action");
+    throw new ApiError(403, 'You do not have permission to perform this action');
   }
 }
 
-async function sendBackupExport(reply: FastifyReply, store: ApiStore, mode: "preserve-passwords" | "rotate-passcodes") {
+async function sendBackupExport(
+  reply: FastifyReply,
+  store: ApiStore,
+  mode: 'preserve-passwords' | 'rotate-passcodes',
+) {
   const backup = backupExportResponseSchema.parse(await store.createBackup(mode));
-  reply.header("cache-control", "no-store");
-  reply.header("content-disposition", `attachment; filename="${buildBackupFilename(backup.exportedAt)}"`);
-  reply.type("application/json; charset=utf-8");
+  reply.header('cache-control', 'no-store');
+  reply.header(
+    'content-disposition',
+    `attachment; filename="${buildBackupFilename(backup.exportedAt)}"`,
+  );
+  reply.type('application/json; charset=utf-8');
   return backup;
 }
 
@@ -343,30 +354,36 @@ async function restoreBackupFromMultipart(request: FastifyRequest, store: ApiSto
   );
 }
 
-export const registerInternalBackupRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
-  app.get("/backups/export", async (_request, reply) => {
+export const registerInternalBackupRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
+  app,
+  { store },
+) => {
+  app.get('/backups/export', async (_request, reply) => {
     try {
-      return await sendBackupExport(reply, store, "preserve-passwords");
+      return await sendBackupExport(reply, store, 'preserve-passwords');
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, async (request, reply) => {
-    try {
-      return await restoreBackupFromMultipart(request, store);
-    } catch (error) {
-      return sendError(reply, error);
-    }
-  });
+  app.post(
+    '/backups/restore',
+    { bodyLimit: adminBackupRestoreBodyLimit },
+    async (request, reply) => {
+      try {
+        return await restoreBackupFromMultipart(request, store);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
 };
 
 export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (app, { store }) => {
-
   const handleBackupStatus = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:read"]);
+      requirePermissions(session, ['backups:read']);
       return backupStatusResponseSchema.parse(await store.getBackupStatus());
     } catch (error) {
       return sendError(reply, error);
@@ -376,9 +393,9 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleBackupExport = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:create"]);
+      requirePermissions(session, ['backups:create']);
       const query = parseWithSchema(backupExportQuerySchema, request.query);
-      return await sendBackupExport(reply, store, query.mode ?? "preserve-passwords");
+      return await sendBackupExport(reply, store, query.mode ?? 'preserve-passwords');
     } catch (error) {
       return sendError(reply, error);
     }
@@ -387,7 +404,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleBackupRestore = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:restore"]);
+      requirePermissions(session, ['backups:restore']);
       return await restoreBackupFromMultipart(request, store);
     } catch (error) {
       return sendError(reply, error);
@@ -397,7 +414,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleBackupStatusUpdate = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:create"]);
+      requirePermissions(session, ['backups:create']);
       const body = parseWithSchema(updateBackupStatusRequestSchema, request.body);
       return backupStatusResponseSchema.parse(await store.updateBackupStatus(body));
     } catch (error) {
@@ -408,7 +425,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupsList = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:read"]);
+      requirePermissions(session, ['backups:read']);
       return backupStoredFilesResponseSchema.parse({
         items: await store.listStoredBackups(),
       });
@@ -420,7 +437,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupCreate = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:create"]);
+      requirePermissions(session, ['backups:create']);
       return backupStoredFileResponseSchema.parse({
         item: await store.createStoredBackup(),
       });
@@ -432,9 +449,11 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupUpload = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:create"]);
+      requirePermissions(session, ['backups:create']);
       const upload = parseStoredBackupUploadRequestFromMultipart(request);
-      return backupStoredFileResponseSchema.parse(await store.uploadStoredBackup(upload.fileName, upload.content));
+      return backupStoredFileResponseSchema.parse(
+        await store.uploadStoredBackup(upload.fileName, upload.content),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
@@ -443,13 +462,13 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupDownload = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:read"]);
+      requirePermissions(session, ['backups:read']);
       const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
       const query = parseWithSchema(backupStoredFileDownloadQuerySchema, request.query);
       const download = await store.downloadStoredBackup(fileName, query.mode);
-      reply.header("cache-control", "no-store");
-      reply.header("content-disposition", `attachment; filename="${download.fileName}"`);
-      reply.type("application/json; charset=utf-8");
+      reply.header('cache-control', 'no-store');
+      reply.header('content-disposition', `attachment; filename="${download.fileName}"`);
+      reply.type('application/json; charset=utf-8');
       return reply.send(download.content);
     } catch (error) {
       return sendError(reply, error);
@@ -459,7 +478,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupRestore = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:restore"]);
+      requirePermissions(session, ['backups:restore']);
       const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
       const { target } = backupStoredFileRestoreRequestSchema.parse(request.body);
       return backupRestoreResponseSchema.parse(await store.restoreStoredBackup(fileName, target));
@@ -471,7 +490,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
   const handleStoredBackupDelete = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["backups:create"]);
+      requirePermissions(session, ['backups:create']);
       const { fileName } = parseWithSchema(storedBackupParamsSchema, request.params);
       return backupStoredFileDeleteResponseSchema.parse(await store.deleteStoredBackup(fileName));
     } catch (error) {
@@ -479,15 +498,17 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   };
 
-  app.get("/", async () =>
+  app.get('/', async () =>
     apiIndexResponseSchema.parse({
       ...apiIndexExample,
       seededAccountsAvailable: await store.areSeededAccountsAvailable(),
     }),
   );
-  app.get("/domain-rules", async () => domainRulesExample);
-  app.get("/review-periods", async () => reviewPeriodsListResponseSchema.parse({ items: await store.listReviewPeriods() }));
-  app.get("/review-periods/:id", async (request, reply) => {
+  app.get('/domain-rules', async () => domainRulesExample);
+  app.get('/review-periods', async () =>
+    reviewPeriodsListResponseSchema.parse({ items: await store.listReviewPeriods() }),
+  );
+  app.get('/review-periods/:id', async (request, reply) => {
     try {
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
@@ -497,7 +518,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
-  app.get("/question-sets", async (request, reply) => {
+  app.get('/question-sets', async (request, reply) => {
     try {
       const query = parseWithSchema(reviewPeriodScopedQuerySchema, request.query);
       return questionSetsListResponseSchema.parse({
@@ -507,7 +528,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
-  app.get("/question-sets/:id", async (request, reply) => {
+  app.get('/question-sets/:id', async (request, reply) => {
     try {
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return questionSetResponseSchema.parse({
@@ -517,7 +538,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
-  app.get("/assignments", async (request, reply) => {
+  app.get('/assignments', async (request, reply) => {
     try {
       const query = parseWithSchema(reviewPeriodScopedQuerySchema, request.query);
       return assignmentsListResponseSchema.parse({
@@ -527,7 +548,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
-  app.get("/assignments/:id", async (request, reply) => {
+  app.get('/assignments/:id', async (request, reply) => {
     try {
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return assignmentResponseSchema.parse({
@@ -537,17 +558,19 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
       return sendError(reply, error);
     }
   });
-  app.get("/assessments", async (request, reply) => {
+  app.get('/assessments', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const query = parseWithSchema(assessmentsListQuerySchema, request.query);
-      return assessmentsListResponseSchema.parse({ items: await store.listAssessments(session, query) });
+      return assessmentsListResponseSchema.parse({
+        items: await store.listAssessments(session, query),
+      });
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.get("/assessments/:id", async (request, reply) => {
+  app.get('/assessments/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
@@ -559,7 +582,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/foundation", async (request, reply) => {
+  app.get('/foundation', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       return foundationSnapshotSchema.parse(await store.foundationSnapshot(session));
@@ -568,10 +591,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/workflow-settings", async (request, reply) => {
+  app.patch('/workflow-settings', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["workflow:update"]);
+      requirePermissions(session, ['workflow:update']);
       const body = parseWithSchema(updateWorkflowSettingsRequestSchema, request.body);
       return workflowSettingsResponseSchema.parse({
         item: await store.updateWorkflowSettings(body),
@@ -581,7 +604,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post('/auth/login', async (request, reply) => {
     try {
       const body = parseWithSchema(authLoginRequestSchema, request.body);
       return authLoginResponseSchema.parse({
@@ -592,7 +615,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/auth/me", async (request, reply) => {
+  app.get('/auth/me', async (request, reply) => {
     try {
       const session = await requireSession(request, store, { allowPasswordReset: true });
       return authMeResponseSchema.parse({ session });
@@ -601,7 +624,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/auth/logout", async (request, reply) => {
+  app.post('/auth/logout', async (request, reply) => {
     try {
       const session = await requireSession(request, store, { allowPasswordReset: true });
       await store.logout(session.token);
@@ -611,7 +634,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/auth/password/change", async (request, reply) => {
+  app.post('/auth/password/change', async (request, reply) => {
     try {
       const session = await requireSession(request, store, { allowPasswordReset: true });
       const body = parseWithSchema(authChangePasswordRequestSchema, request.body);
@@ -623,7 +646,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/auth/me", async (request, reply) => {
+  app.patch('/auth/me', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const body = parseWithSchema(authUpdateProfileRequestSchema, request.body);
@@ -635,10 +658,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/employees", async (request, reply) => {
+  app.get('/employees', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:read"]);
+      requirePermissions(session, ['employees:read']);
       return employeesListResponseSchema.parse({
         items: await store.listEmployees(),
       });
@@ -647,10 +670,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/employees/:id", async (request, reply) => {
+  app.get('/employees/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:read"]);
+      requirePermissions(session, ['employees:read']);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return employeeResponseSchema.parse({
         item: await store.getEmployee(employeeId),
@@ -660,16 +683,16 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/employees", async (request, reply) => {
+  app.post('/employees', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:create"]);
+      requirePermissions(session, ['employees:create']);
       const body = parseWithSchema(createEmployeeRequestSchema, request.body);
       reply.code(201);
       return employeeResponseSchema.parse({
         item: await store.createEmployee({
           ...body,
-          status: body.status ?? "active",
+          status: body.status ?? 'active',
         }),
       });
     } catch (error) {
@@ -677,10 +700,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/employees/:id", async (request, reply) => {
+  app.patch('/employees/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:update"]);
+      requirePermissions(session, ['employees:update']);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateEmployeeRequestSchema, request.body);
       return employeeResponseSchema.parse({
@@ -691,10 +714,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.delete("/employees/:id", async (request, reply) => {
+  app.delete('/employees/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:delete"]);
+      requirePermissions(session, ['employees:delete']);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return deleteEmployeeResponseSchema.parse(await store.deleteEmployee(employeeId));
     } catch (error) {
@@ -702,21 +725,23 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/employees/export", async (request, reply) => {
+  app.get('/employees/export', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:export"]);
+      requirePermissions(session, ['employees:export']);
       const query = parseWithSchema(localUsersExportQuerySchema, request.query);
-      return localUsersExportResponseSchema.parse(await store.exportLocalUsers(query.format ?? "json", query.mode));
+      return localUsersExportResponseSchema.parse(
+        await store.exportLocalUsers(query.format ?? 'json', query.mode),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/employees/import", async (request, reply) => {
+  app.post('/employees/import', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:import"]);
+      requirePermissions(session, ['employees:import']);
       const body = parseWithSchema(localUsersImportRequestSchema, request.body);
       return localUsersImportResponseSchema.parse(
         await store.importLocalUsers(
@@ -729,40 +754,44 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/employees/:id/password/set", async (request, reply) => {
+  app.post('/employees/:id/password/set', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:password:set"]);
+      requirePermissions(session, ['employees:password:set']);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(setEmployeePasswordRequestSchema, request.body);
-      return setEmployeePasswordResponseSchema.parse(await store.setPassword(employeeId, body.password));
+      return setEmployeePasswordResponseSchema.parse(
+        await store.setPassword(employeeId, body.password),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/employees/:id/password/reset", async (request, reply) => {
+  app.post('/employees/:id/password/reset', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["employees:password:reset"]);
+      requirePermissions(session, ['employees:password:reset']);
       const employeeId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(resetEmployeePasswordRequestSchema, request.body ?? {});
-      return resetEmployeePasswordResponseSchema.parse(await store.resetPassword(employeeId, body.password));
+      return resetEmployeePasswordResponseSchema.parse(
+        await store.resetPassword(employeeId, body.password),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods", async (request, reply) => {
+  app.post('/review-periods', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:create"]);
+      requirePermissions(session, ['reviewPeriods:create']);
       const body = parseWithSchema(createReviewPeriodRequestSchema, request.body);
       reply.code(201);
       return reviewPeriodResponseSchema.parse({
         item: await store.createReviewPeriod({
           ...body,
-          status: body.status ?? "inactive",
+          status: body.status ?? 'inactive',
         }),
       });
     } catch (error) {
@@ -770,10 +799,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/review-periods/:id", async (request, reply) => {
+  app.patch('/review-periods/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:update"]);
+      requirePermissions(session, ['reviewPeriods:update']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateReviewPeriodRequestSchema, request.body);
       return reviewPeriodResponseSchema.parse({
@@ -784,10 +813,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.delete("/review-periods/:id", async (request, reply) => {
+  app.delete('/review-periods/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:delete"]);
+      requirePermissions(session, ['reviewPeriods:delete']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return deleteReviewPeriodResponseSchema.parse(await store.deleteReviewPeriod(reviewPeriodId));
     } catch (error) {
@@ -795,10 +824,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/review-periods/:id/archive", async (request, reply) => {
+  app.post('/review-periods/:id/archive', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:archive"]);
+      requirePermissions(session, ['reviewPeriods:archive']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
         item: await store.archiveReviewPeriod(reviewPeriodId, session.user.id),
@@ -808,10 +837,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/review-periods/:id/unarchive", async (request, reply) => {
+  app.post('/review-periods/:id/unarchive', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:archive"]);
+      requirePermissions(session, ['reviewPeriods:archive']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return reviewPeriodResponseSchema.parse({
         item: await store.unarchiveReviewPeriod(reviewPeriodId),
@@ -821,18 +850,18 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/review-periods/:id/question-sets", async (request, reply) => {
+  app.post('/review-periods/:id/question-sets', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:create"]);
+      requirePermissions(session, ['questionSets:create']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(createQuestionSetRequestSchema, request.body);
       reply.code(201);
       return questionSetResponseSchema.parse({
         item: await store.createQuestionSet(reviewPeriodId, {
           ...body,
-          headerMarkdown: body.headerMarkdown ?? "",
-          footerMarkdown: body.footerMarkdown ?? "",
+          headerMarkdown: body.headerMarkdown ?? '',
+          footerMarkdown: body.footerMarkdown ?? '',
         }),
       });
     } catch (error) {
@@ -840,10 +869,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/question-categories", async (request, reply) => {
+  app.get('/question-categories', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:update"]);
+      requirePermissions(session, ['questionSets:update']);
       return questionCategoriesListResponseSchema.parse({
         items: await store.listQuestionCategories(),
       });
@@ -852,10 +881,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.put("/question-categories", async (request, reply) => {
+  app.put('/question-categories', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:update"]);
+      requirePermissions(session, ['questionSets:update']);
       const body = parseWithSchema(updateQuestionCategoriesRequestSchema, request.body);
       return questionCategoriesListResponseSchema.parse({
         items: await store.replaceQuestionCategories(body),
@@ -865,10 +894,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/question-sets/:id", async (request, reply) => {
+  app.patch('/question-sets/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:update"]);
+      requirePermissions(session, ['questionSets:update']);
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateQuestionSetRequestSchema, request.body);
       return questionSetResponseSchema.parse({
@@ -879,10 +908,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/question-sets/:id/activate", async (request, reply) => {
+  app.post('/question-sets/:id/activate', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:activate"]);
+      requirePermissions(session, ['questionSets:activate']);
       const questionSetId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return questionSetResponseSchema.parse({
         item: await store.activateQuestionSet(questionSetId),
@@ -892,56 +921,64 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/review-periods/:id/question-sets/export", async (request, reply) => {
+  app.get('/review-periods/:id/question-sets/export', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:export"]);
+      requirePermissions(session, ['questionSets:export']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return questionSetsExportResponseSchema.parse(await store.exportQuestionSets(reviewPeriodId, query.format ?? "json"));
+      return questionSetsExportResponseSchema.parse(
+        await store.exportQuestionSets(reviewPeriodId, query.format ?? 'json'),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:id/question-sets/import", async (request, reply) => {
+  app.post('/review-periods/:id/question-sets/import', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["questionSets:import"]);
+      requirePermissions(session, ['questionSets:import']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = questionSetsImportRequestSchema.parse(request.body ?? {});
-      return questionSetsImportResponseSchema.parse(await store.importQuestionSets(reviewPeriodId, body.format, body.items));
+      return questionSetsImportResponseSchema.parse(
+        await store.importQuestionSets(reviewPeriodId, body.format, body.items),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:id/sync-assessments", async (request, reply) => {
+  app.post('/review-periods/:id/sync-assessments', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:update"]);
+      requirePermissions(session, ['reviewPeriods:update']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      return syncAssessmentsResponseSchema.parse(await store.syncAssessmentsToAssignments(reviewPeriodId));
+      return syncAssessmentsResponseSchema.parse(
+        await store.syncAssessmentsToAssignments(reviewPeriodId),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:id/clear-ready-assessments", async (request, reply) => {
+  app.post('/review-periods/:id/clear-ready-assessments', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["reviewPeriods:update"]);
+      requirePermissions(session, ['reviewPeriods:update']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      return clearReadyAssessmentsResponseSchema.parse(await store.clearReadyToStartAssessments(reviewPeriodId));
+      return clearReadyAssessmentsResponseSchema.parse(
+        await store.clearReadyToStartAssessments(reviewPeriodId),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:id/assignments", async (request, reply) => {
+  app.post('/review-periods/:id/assignments', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assignments:create"]);
+      requirePermissions(session, ['assignments:create']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(createAssignmentRequestSchema, request.body);
       reply.code(201);
@@ -953,10 +990,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/assignments/:id", async (request, reply) => {
+  app.patch('/assignments/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assignments:update"]);
+      requirePermissions(session, ['assignments:update']);
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(updateAssignmentRequestSchema, request.body);
       return assignmentResponseSchema.parse({
@@ -967,10 +1004,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.delete("/assignments/:id", async (request, reply) => {
+  app.delete('/assignments/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assignments:delete"]);
+      requirePermissions(session, ['assignments:delete']);
       const assignmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       return deleteAssignmentResponseSchema.parse(await store.deleteAssignment(assignmentId));
     } catch (error) {
@@ -978,43 +1015,55 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.get("/review-periods/:id/assignments/export", async (request, reply) => {
+  app.get('/review-periods/:id/assignments/export', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assignments:export"]);
+      requirePermissions(session, ['assignments:export']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const query = parseWithSchema(exportFormatQuerySchema, request.query);
-      return assignmentsExportResponseSchema.parse(await store.exportAssignments(reviewPeriodId, query.format ?? "json"));
+      return assignmentsExportResponseSchema.parse(
+        await store.exportAssignments(reviewPeriodId, query.format ?? 'json'),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:id/assignments/import", async (request, reply) => {
+  app.post('/review-periods/:id/assignments/import', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assignments:import"]);
+      requirePermissions(session, ['assignments:import']);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = assignmentsImportRequestSchema.parse(request.body ?? {});
-      return assignmentsImportResponseSchema.parse(await store.importAssignments(reviewPeriodId, body.format, body.items));
+      return assignmentsImportResponseSchema.parse(
+        await store.importAssignments(reviewPeriodId, body.format, body.items),
+      );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.get("/backups/status", handleBackupStatus);
-  app.get("/admin/backups/status", handleBackupStatus);
-  app.patch("/admin/backups/status", handleBackupStatusUpdate);
-  app.get("/admin/backups/export", handleBackupExport);
-  app.post("/admin/backups/restore", { bodyLimit: adminBackupRestoreBodyLimit }, handleBackupRestore);
-  app.get("/admin/backups/files", handleStoredBackupsList);
-  app.post("/admin/backups/files/create", handleStoredBackupCreate);
-  app.post("/admin/backups/files/upload", { bodyLimit: adminBackupRestoreBodyLimit }, handleStoredBackupUpload);
-  app.get("/admin/backups/files/:fileName/download", handleStoredBackupDownload);
-  app.post("/admin/backups/files/:fileName/restore", handleStoredBackupRestore);
-  app.delete("/admin/backups/files/:fileName", handleStoredBackupDelete);
+  app.get('/backups/status', handleBackupStatus);
+  app.get('/admin/backups/status', handleBackupStatus);
+  app.patch('/admin/backups/status', handleBackupStatusUpdate);
+  app.get('/admin/backups/export', handleBackupExport);
+  app.post(
+    '/admin/backups/restore',
+    { bodyLimit: adminBackupRestoreBodyLimit },
+    handleBackupRestore,
+  );
+  app.get('/admin/backups/files', handleStoredBackupsList);
+  app.post('/admin/backups/files/create', handleStoredBackupCreate);
+  app.post(
+    '/admin/backups/files/upload',
+    { bodyLimit: adminBackupRestoreBodyLimit },
+    handleStoredBackupUpload,
+  );
+  app.get('/admin/backups/files/:fileName/download', handleStoredBackupDownload);
+  app.post('/admin/backups/files/:fileName/restore', handleStoredBackupRestore);
+  app.delete('/admin/backups/files/:fileName', handleStoredBackupDelete);
 
-  app.post("/review-periods/:id/assessments", async (request, reply) => {
+  app.post('/review-periods/:id/assessments', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const reviewPeriodId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
@@ -1028,7 +1077,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/assessments/:id/save", async (request, reply) => {
+  app.patch('/assessments/:id/save', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
@@ -1043,7 +1092,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/assessments/:id/submit", async (request, reply) => {
+  app.post('/assessments/:id/submit', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
@@ -1058,10 +1107,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/assessments/:id/accept", async (request, reply) => {
+  app.post('/assessments/:id/accept', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assessments:accept"]);
+      requirePermissions(session, ['assessments:accept']);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(acceptAssessmentRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
@@ -1072,10 +1121,10 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.post("/assessments/:id/reject-to-draft", async (request, reply) => {
+  app.post('/assessments/:id/reject-to-draft', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assessments:accept"]);
+      requirePermissions(session, ['assessments:accept']);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(rejectAssessmentToDraftRequestSchema, request.body ?? {});
       return assessmentItemResponseSchema.parse({
@@ -1086,7 +1135,7 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.patch("/assessments/:id/admin", async (request, reply) => {
+  app.patch('/assessments/:id/admin', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
@@ -1099,65 +1148,87 @@ export const registerRoutes: FastifyPluginAsync<RegisterRoutesOptions> = async (
     }
   });
 
-  app.delete("/assessments/:id", async (request, reply) => {
+  app.delete('/assessments/:id', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
-      return deleteAssessmentResponseSchema.parse(await store.deleteAssessmentByAdmin(session, assessmentId));
-    } catch (error) {
-      return sendError(reply, error);
-    }
-  });
-
-  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/ready-for-meeting", async (request, reply) => {
-    try {
-      const session = await requireSession(request, store);
-      requirePermissions(session, ["assessments:review"]);
-      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
-      return assessmentSetResponseSchema.parse(
-        await store.markAssessmentSetReadyForMeeting(session, reviewPeriodId, employeeId),
+      return deleteAssessmentResponseSchema.parse(
+        await store.deleteAssessmentByAdmin(session, assessmentId),
       );
     } catch (error) {
       return sendError(reply, error);
     }
   });
 
-  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/schedule", async (request, reply) => {
-    try {
-      const session = await requireSession(request, store);
-      requirePermissions(session, ["assessments:review"]);
-      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
-      return assessmentSetResponseSchema.parse(
-        await store.scheduleAssessmentSet(session, reviewPeriodId, employeeId),
-      );
-    } catch (error) {
-      return sendError(reply, error);
-    }
-  });
+  app.post(
+    '/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/ready-for-meeting',
+    async (request, reply) => {
+      try {
+        const session = await requireSession(request, store);
+        requirePermissions(session, ['assessments:review']);
+        const { reviewPeriodId, employeeId } = parseWithSchema(
+          assessmentSetParamsSchema,
+          request.params,
+        );
+        return assessmentSetResponseSchema.parse(
+          await store.markAssessmentSetReadyForMeeting(session, reviewPeriodId, employeeId),
+        );
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
 
-  app.post("/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/conclude", async (request, reply) => {
-    try {
-      const session = await requireSession(request, store);
-      const { reviewPeriodId, employeeId } = parseWithSchema(assessmentSetParamsSchema, request.params);
-      const body = parseWithSchema(concludeAssessmentRequestSchema, request.body ?? {});
-      return assessmentSetResponseSchema.parse(
-        await store.concludeAssessmentSet(session, reviewPeriodId, employeeId, {
-          ...body,
-          completed: body.completed ?? false,
-        }),
-      );
-    } catch (error) {
-      return sendError(reply, error);
-    }
-  });
+  app.post(
+    '/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/schedule',
+    async (request, reply) => {
+      try {
+        const session = await requireSession(request, store);
+        requirePermissions(session, ['assessments:review']);
+        const { reviewPeriodId, employeeId } = parseWithSchema(
+          assessmentSetParamsSchema,
+          request.params,
+        );
+        return assessmentSetResponseSchema.parse(
+          await store.scheduleAssessmentSet(session, reviewPeriodId, employeeId),
+        );
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
 
-  app.post("/assessments/:id/reassign", async (request, reply) => {
+  app.post(
+    '/review-periods/:reviewPeriodId/employees/:employeeId/assessment-set/conclude',
+    async (request, reply) => {
+      try {
+        const session = await requireSession(request, store);
+        const { reviewPeriodId, employeeId } = parseWithSchema(
+          assessmentSetParamsSchema,
+          request.params,
+        );
+        const body = parseWithSchema(concludeAssessmentRequestSchema, request.body ?? {});
+        return assessmentSetResponseSchema.parse(
+          await store.concludeAssessmentSet(session, reviewPeriodId, employeeId, {
+            ...body,
+            completed: body.completed ?? false,
+          }),
+        );
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
+
+  app.post('/assessments/:id/reassign', async (request, reply) => {
     try {
       const session = await requireSession(request, store);
-      requirePermissions(session, ["assessments:reassign"]);
+      requirePermissions(session, ['assessments:reassign']);
       const assessmentId = parseWithSchema(idSchema, (request.params as { id?: unknown }).id);
       const body = parseWithSchema(reassignAssessmentRequestSchema, request.body);
-      return assessmentReassignmentResponseSchema.parse(await store.reassignAssessment(session, assessmentId, body));
+      return assessmentReassignmentResponseSchema.parse(
+        await store.reassignAssessment(session, assessmentId, body),
+      );
     } catch (error) {
       return sendError(reply, error);
     }

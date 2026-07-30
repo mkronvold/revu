@@ -1,6 +1,14 @@
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 
 import type {
   AdminUpdateAssessmentRequest,
@@ -61,11 +69,15 @@ import type {
   UpdateReviewPeriodRequest,
   UpdateWorkflowSettingsRequest,
   WorkflowSettings,
-} from "@revu/contracts";
-import { backupSnapshotSchema, defaultWorkflowMarkdown, defaultWorkflowVisibility } from "@revu/contracts";
-import type { Pool, PoolClient } from "pg";
+} from '@revu/contracts';
+import {
+  backupSnapshotSchema,
+  defaultWorkflowMarkdown,
+  defaultWorkflowVisibility,
+} from '@revu/contracts';
+import type { Pool, PoolClient } from 'pg';
 
-import { getPool, withTransaction } from "./db.js";
+import { getPool, withTransaction } from './db.js';
 
 type DbClient = Pool | PoolClient;
 
@@ -87,8 +99,8 @@ type EmployeeRow = {
   username: string;
   full_name: string;
   email: string;
-  role: Employee["role"];
-  status: Employee["status"];
+  role: Employee['role'];
+  status: Employee['status'];
   manager_employee_id: string | null;
   assessor1_employee_id: string | null;
   assessor2_employee_id: string | null;
@@ -110,7 +122,7 @@ type ReviewPeriodRow = {
   due_date: Date | string;
   assessment_due_date: Date | string;
   review_due_date: Date | string;
-  status: ReviewPeriod["status"];
+  status: ReviewPeriod['status'];
   archived_at: Date | string | null;
   archived_by_employee_id: string | null;
   created_at: Date | string;
@@ -119,14 +131,14 @@ type ReviewPeriodRow = {
 
 type WorkflowSettingsRow = {
   markdown: string;
-  visibility: WorkflowSettings["visibility"];
+  visibility: WorkflowSettings['visibility'];
 };
 
 type QuestionSetRow = {
   id: string;
   review_period_id: string;
-  target: QuestionSet["target"];
-  status: QuestionSet["status"];
+  target: QuestionSet['target'];
+  status: QuestionSet['status'];
   is_read_only: boolean;
   title: string;
   header_markdown: string;
@@ -139,7 +151,7 @@ type QuestionRow = {
   id: string;
   question_set_id: string;
   display_order: number;
-  type: CreateQuestionInput["type"];
+  type: CreateQuestionInput['type'];
   category: string | null;
   prompt: string;
 };
@@ -159,7 +171,7 @@ type AssessmentRow = {
   review_period_id: string;
   question_set_id: string;
   assignment_id: string | null;
-  target: Assessment["target"];
+  target: Assessment['target'];
   employee_id: string;
   assessor_employee_id: string;
   review_state: AssessmentReviewState;
@@ -219,8 +231,8 @@ type AuthSessionRow = {
 
 type RelationshipRow = {
   id: string;
-  role: Employee["role"];
-  status: Employee["status"];
+  role: Employee['role'];
+  status: Employee['status'];
   deleted_at: Date | string | null;
 };
 
@@ -247,65 +259,72 @@ export class ApiError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
 const eightHoursInMs = 8 * 60 * 60 * 1000;
-const supportedBackupSchedules: BackupSchedule[] = ["1hr", "3hr", "6hr", "12hr", "daily", "weekly"];
+const supportedBackupSchedules: BackupSchedule[] = ['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly'];
 
 type BackupStatusConfig = Pick<
   BackupStatusResponse,
-  "automaticBackupsEnabled" | "schedule" | "retentionCount" | "lastBackupAt" | "lastRestoreAt"
+  'automaticBackupsEnabled' | 'schedule' | 'retentionCount' | 'lastBackupAt' | 'lastRestoreAt'
 >;
 
 const seedPasswordsByUsername: Record<string, string> = {
-  "ada.admin": "AdminPass123!",
-  "manny.manager": "ManagerPass123!",
-  "elliot.employee": "EmployeePass123!",
-  "pat.peer": "PeerPass123!",
+  'ada.admin': 'AdminPass123!',
+  'manny.manager': 'ManagerPass123!',
+  'elliot.employee': 'EmployeePass123!',
+  'pat.peer': 'PeerPass123!',
 };
 
-const permissionsByRole: Record<Employee["role"], AuthPermission[]> = {
+const permissionsByRole: Record<Employee['role'], AuthPermission[]> = {
   employee: [],
-  manager: ["employees:read", "employees:update", "assessments:read", "assessments:accept", "assessments:review", "assessments:reassign"],
+  manager: [
+    'employees:read',
+    'employees:update',
+    'assessments:read',
+    'assessments:accept',
+    'assessments:review',
+    'assessments:reassign',
+  ],
   admin: [
-    "employees:read",
-    "employees:create",
-    "employees:update",
-    "employees:delete",
-    "employees:import",
-    "employees:export",
-    "employees:password:set",
-    "employees:password:reset",
-    "reviewPeriods:create",
-    "reviewPeriods:update",
-    "reviewPeriods:delete",
-    "reviewPeriods:archive",
-    "questionSets:create",
-    "questionSets:update",
-    "questionSets:activate",
-    "questionSets:import",
-    "questionSets:export",
-    "assignments:create",
-    "assignments:update",
-    "assignments:delete",
-    "assignments:import",
-    "assignments:export",
-    "assessments:read",
-    "assessments:accept",
-    "assessments:review",
-    "assessments:reassign",
-    "workflow:update",
-    "backups:read",
-    "backups:create",
-    "backups:restore",
+    'employees:read',
+    'employees:create',
+    'employees:update',
+    'employees:delete',
+    'employees:import',
+    'employees:export',
+    'employees:password:set',
+    'employees:password:reset',
+    'reviewPeriods:create',
+    'reviewPeriods:update',
+    'reviewPeriods:delete',
+    'reviewPeriods:archive',
+    'questionSets:create',
+    'questionSets:update',
+    'questionSets:activate',
+    'questionSets:import',
+    'questionSets:export',
+    'assignments:create',
+    'assignments:update',
+    'assignments:delete',
+    'assignments:import',
+    'assignments:export',
+    'assessments:read',
+    'assessments:accept',
+    'assessments:review',
+    'assessments:reassign',
+    'workflow:update',
+    'backups:read',
+    'backups:create',
+    'backups:restore',
   ],
 };
 
 function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
   return `${salt}:${hash}`;
 }
 
@@ -314,13 +333,13 @@ function verifyPassword(password: string, value: string | null) {
     return false;
   }
 
-  const [salt, expectedHash] = value.split(":");
+  const [salt, expectedHash] = value.split(':');
   if (!salt || !expectedHash) {
     return false;
   }
 
   const actualHash = scryptSync(password, salt, 64);
-  const expectedBuffer = Buffer.from(expectedHash, "hex");
+  const expectedBuffer = Buffer.from(expectedHash, 'hex');
 
   return actualHash.length === expectedBuffer.length && timingSafeEqual(actualHash, expectedBuffer);
 }
@@ -334,11 +353,11 @@ function clone<T>(value: T): T {
 }
 
 function generateTemporaryPassword() {
-  return `tmp-${randomBytes(9).toString("base64url")}`;
+  return `tmp-${randomBytes(9).toString('base64url')}`;
 }
 
 function hashToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function toIsoTimestamp(value: Date | string | null) {
@@ -357,8 +376,10 @@ function toIsoDate(value: Date | string) {
   return value;
 }
 
-function isPgError(error: unknown): error is { code?: string; constraint?: string; message: string } {
-  return typeof error === "object" && error !== null && "message" in error;
+function isPgError(
+  error: unknown,
+): error is { code?: string; constraint?: string; message: string } {
+  return typeof error === 'object' && error !== null && 'message' in error;
 }
 
 function mapDatabaseError(error: unknown) {
@@ -366,77 +387,86 @@ function mapDatabaseError(error: unknown) {
     return null;
   }
 
-  if (error.code === "23505") {
+  if (error.code === '23505') {
     switch (error.constraint) {
-      case "employees_username_unique_idx":
-      case "employees_username_unique_ci_idx":
-      case "employees_username_active_unique_ci_idx":
-        return new ApiError(409, "Username already exists");
-      case "employees_email_key":
-      case "employees_email_active_unique_idx":
-        return new ApiError(409, "Email already exists");
-      case "review_periods_key_key":
-        return new ApiError(409, "Review period key already exists");
-      case "uq_assignment_employee_per_period":
-        return new ApiError(409, "Assignment already exists for this employee in the review period");
-      case "uq_assessment_actor_per_period":
-        return new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
-      case "uq_question_order_per_set":
-        return new ApiError(400, "Question order must be unique within a question set");
+      case 'employees_username_unique_idx':
+      case 'employees_username_unique_ci_idx':
+      case 'employees_username_active_unique_ci_idx':
+        return new ApiError(409, 'Username already exists');
+      case 'employees_email_key':
+      case 'employees_email_active_unique_idx':
+        return new ApiError(409, 'Email already exists');
+      case 'review_periods_key_key':
+        return new ApiError(409, 'Review period key already exists');
+      case 'uq_assignment_employee_per_period':
+        return new ApiError(
+          409,
+          'Assignment already exists for this employee in the review period',
+        );
+      case 'uq_assessment_actor_per_period':
+        return new ApiError(
+          409,
+          'An assessment already exists for this review period, employee, and assessor',
+        );
+      case 'uq_question_order_per_set':
+        return new ApiError(400, 'Question order must be unique within a question set');
       default:
         return null;
     }
   }
 
-  if (error.code === "23514") {
+  if (error.code === '23514') {
     switch (error.constraint) {
-      case "employees_username_format":
-        return new ApiError(400, "Username must contain only letters, numbers, dots, underscores, or dashes");
+      case 'employees_username_format':
+        return new ApiError(
+          400,
+          'Username must contain only letters, numbers, dots, underscores, or dashes',
+        );
       default:
         return null;
     }
   }
 
-  if (error.code === "P0001") {
+  if (error.code === 'P0001') {
     switch (error.message) {
-      case "Question sets for archived review periods are read-only":
-      case "Assignments for archived review periods are read-only":
-      case "Accepted, reviewed, or archived assessments are read-only":
-      case "Reviewed or archived assessments are read-only":
-      case "Accepted, reviewed, or archived assessments have immutable authored fields":
-      case "Assessment review state cannot change after review period archive":
+      case 'Question sets for archived review periods are read-only':
+      case 'Assignments for archived review periods are read-only':
+      case 'Accepted, reviewed, or archived assessments are read-only':
+      case 'Reviewed or archived assessments are read-only':
+      case 'Accepted, reviewed, or archived assessments have immutable authored fields':
+      case 'Assessment review state cannot change after review period archive':
         return new ApiError(409, error.message);
-      case "Assessment responses must reference questions from the selected question set":
-      case "Assessment question set must exist":
-      case "Assessment review period must match question set review period":
-      case "Assessment target must match question set target":
+      case 'Assessment responses must reference questions from the selected question set':
+      case 'Assessment question set must exist':
+      case 'Assessment review period must match question set review period':
+      case 'Assessment target must match question set target':
         return new ApiError(400, error.message);
       default:
         return null;
     }
   }
 
-  if (error.code === "23503") {
+  if (error.code === '23503') {
     switch (error.constraint) {
-      case "review_period_assignments_employee_id_fkey":
-      case "assessments_employee_id_fkey":
-        return new ApiError(400, "Employee not found");
-      case "review_period_assignments_manager_employee_id_fkey":
-        return new ApiError(400, "Manager not found");
-      case "employees_assessor1_employee_id_fkey":
-      case "employees_assessor2_employee_id_fkey":
-      case "review_period_assignments_assessor_employee_id_fkey":
-      case "assessments_assessor_employee_id_fkey":
-        return new ApiError(400, "Assessor not found");
+      case 'review_period_assignments_employee_id_fkey':
+      case 'assessments_employee_id_fkey':
+        return new ApiError(400, 'Employee not found');
+      case 'review_period_assignments_manager_employee_id_fkey':
+        return new ApiError(400, 'Manager not found');
+      case 'employees_assessor1_employee_id_fkey':
+      case 'employees_assessor2_employee_id_fkey':
+      case 'review_period_assignments_assessor_employee_id_fkey':
+      case 'assessments_assessor_employee_id_fkey':
+        return new ApiError(400, 'Assessor not found');
       default:
         return null;
     }
   }
 
-  if (error.code === "23514") {
+  if (error.code === '23514') {
     switch (error.constraint) {
-      case "employees_distinct_assessors":
-        return new ApiError(400, "Assessor 1 and assessor 2 must be different users");
+      case 'employees_distinct_assessors':
+        return new ApiError(400, 'Assessor 1 and assessor 2 must be different users');
       default:
         return null;
     }
@@ -809,7 +839,7 @@ export class ApiStore {
     const values: Array<string | readonly string[]> = [];
 
     if (!filters.includeDeleted) {
-      clauses.push("deleted_at IS NULL");
+      clauses.push('deleted_at IS NULL');
     }
 
     if (filters.employeeId) {
@@ -827,7 +857,7 @@ export class ApiStore {
       clauses.push(`id = ANY($${values.length}::uuid[])`);
     }
 
-    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const result = await client.query<EmployeeRow>(
       `
         SELECT
@@ -858,10 +888,17 @@ export class ApiStore {
     return result.rows;
   }
 
-  private async employeeOrThrow(client: DbClient, employeeId: string, options: { includeDeleted?: boolean } = {}) {
-    const [employee] = await this.loadEmployeeRows(client, { employeeId, includeDeleted: options.includeDeleted });
+  private async employeeOrThrow(
+    client: DbClient,
+    employeeId: string,
+    options: { includeDeleted?: boolean } = {},
+  ) {
+    const [employee] = await this.loadEmployeeRows(client, {
+      employeeId,
+      includeDeleted: options.includeDeleted,
+    });
     if (!employee) {
-      throw new ApiError(404, "Employee not found");
+      throw new ApiError(404, 'Employee not found');
     }
 
     return employee;
@@ -891,7 +928,7 @@ export class ApiStore {
 
     const reviewPeriod = result.rows[0];
     if (!reviewPeriod) {
-      throw new ApiError(404, "Review period not found");
+      throw new ApiError(404, 'Review period not found');
     }
 
     return reviewPeriod;
@@ -916,7 +953,13 @@ export class ApiStore {
 
   private async loadQuestionSets(
     client: DbClient,
-    filters: { reviewPeriodId?: string; questionSetId?: string; reviewPeriodStatus?: ReviewPeriod["status"]; status?: QuestionSet["status"]; target?: QuestionSet["target"] } = {},
+    filters: {
+      reviewPeriodId?: string;
+      questionSetId?: string;
+      reviewPeriodStatus?: ReviewPeriod['status'];
+      status?: QuestionSet['status'];
+      target?: QuestionSet['target'];
+    } = {},
   ) {
     const clauses: string[] = [];
     const values: Array<string> = [];
@@ -946,7 +989,7 @@ export class ApiStore {
       clauses.push(`qs.target = $${values.length}`);
     }
 
-    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const questionSetsResult = await client.query<QuestionSetRow>(
       `
         SELECT
@@ -969,9 +1012,10 @@ export class ApiStore {
     );
 
     const questionSetIds = questionSetsResult.rows.map((row) => row.id);
-    const questionsResult = questionSetIds.length > 0
-      ? await client.query<QuestionRow>(
-          `
+    const questionsResult =
+      questionSetIds.length > 0
+        ? await client.query<QuestionRow>(
+            `
             SELECT
               id,
               question_set_id,
@@ -983,11 +1027,11 @@ export class ApiStore {
             WHERE question_set_id = ANY($1::uuid[])
             ORDER BY question_set_id, display_order
           `,
-          [questionSetIds],
-        )
-      : { rows: [] as QuestionRow[] };
+            [questionSetIds],
+          )
+        : { rows: [] as QuestionRow[] };
 
-    const questionsBySetId = new Map<string, QuestionSet["questions"]>();
+    const questionsBySetId = new Map<string, QuestionSet['questions']>();
     for (const question of questionsResult.rows) {
       const items = questionsBySetId.get(question.question_set_id) ?? [];
       items.push({
@@ -1000,25 +1044,28 @@ export class ApiStore {
       questionsBySetId.set(question.question_set_id, items);
     }
 
-    return questionSetsResult.rows.map((row) => ({
-      id: row.id,
-      reviewPeriodId: row.review_period_id,
-      target: row.target,
-      status: row.status,
-      isReadOnly: row.is_read_only,
-      title: row.title,
-      headerMarkdown: row.header_markdown,
-      footerMarkdown: row.footer_markdown,
-      questions: questionsBySetId.get(row.id) ?? [],
-      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
-      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
-    } satisfies QuestionSet));
+    return questionSetsResult.rows.map(
+      (row) =>
+        ({
+          id: row.id,
+          reviewPeriodId: row.review_period_id,
+          target: row.target,
+          status: row.status,
+          isReadOnly: row.is_read_only,
+          title: row.title,
+          headerMarkdown: row.header_markdown,
+          footerMarkdown: row.footer_markdown,
+          questions: questionsBySetId.get(row.id) ?? [],
+          createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+          updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+        }) satisfies QuestionSet,
+    );
   }
 
   private async questionSetOrThrow(client: DbClient, questionSetId: string) {
     const [questionSet] = await this.loadQuestionSets(client, { questionSetId });
     if (!questionSet) {
-      throw new ApiError(404, "Question set not found");
+      throw new ApiError(404, 'Question set not found');
     }
 
     return questionSet;
@@ -1041,7 +1088,7 @@ export class ApiStore {
       clauses.push(`a.id = $${values.length}`);
     }
 
-    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const result = await client.query<AssignmentRow>(
       `
         SELECT
@@ -1060,21 +1107,24 @@ export class ApiStore {
       values,
     );
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      reviewPeriodId: row.review_period_id,
-      employeeId: row.employee_id,
-      managerId: row.manager_employee_id,
-      assessorId: row.assessor_employee_id,
-      createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
-      updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
-    } satisfies Assignment));
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id,
+          reviewPeriodId: row.review_period_id,
+          employeeId: row.employee_id,
+          managerId: row.manager_employee_id,
+          assessorId: row.assessor_employee_id,
+          createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+          updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+        }) satisfies Assignment,
+    );
   }
 
   private async assignmentOrThrow(client: DbClient, assignmentId: string) {
     const [assignment] = await this.loadAssignments(client, { assignmentId });
     if (!assignment) {
-      throw new ApiError(404, "Assignment not found");
+      throw new ApiError(404, 'Assignment not found');
     }
 
     return assignment;
@@ -1088,7 +1138,7 @@ export class ApiStore {
       employeeId?: string;
       assessorId?: string;
       assignmentId?: string;
-      target?: Assessment["target"];
+      target?: Assessment['target'];
       reviewState?: AssessmentReviewState;
       archiveState?: AssessmentArchiveState;
     } = {},
@@ -1138,7 +1188,7 @@ export class ApiStore {
       clauses.push(`a.archive_state = $${values.length}`);
     }
 
-    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const assessmentsResult = await client.query<AssessmentRow>(
       `
         SELECT
@@ -1184,9 +1234,10 @@ export class ApiStore {
     );
 
     const assessmentIds = assessmentsResult.rows.map((row) => row.id);
-    const responsesResult = assessmentIds.length > 0
-      ? await client.query<AssessmentResponseRow>(
-          `
+    const responsesResult =
+      assessmentIds.length > 0
+        ? await client.query<AssessmentResponseRow>(
+            `
             SELECT
               response.assessment_id,
               response.question_id,
@@ -1197,9 +1248,9 @@ export class ApiStore {
             WHERE response.assessment_id = ANY($1::uuid[])
             ORDER BY response.assessment_id, question.display_order
           `,
-          [assessmentIds],
-        )
-      : { rows: [] as AssessmentResponseRow[] };
+            [assessmentIds],
+          )
+        : { rows: [] as AssessmentResponseRow[] };
 
     const responsesByAssessmentId = new Map<string, AssessmentResponse[]>();
     for (const response of responsesResult.rows) {
@@ -1212,44 +1263,51 @@ export class ApiStore {
       responsesByAssessmentId.set(response.assessment_id, items);
     }
 
-    return assessmentsResult.rows.map((row) => ({
-        assessment: {
-          id: row.id,
-          reviewPeriodId: row.review_period_id,
-          questionSetId: row.question_set_id,
-        assignmentId: row.assignment_id,
-        target: row.target,
-          employeeId: row.employee_id,
-          assessorId: row.assessor_employee_id,
-          reviewState: row.review_state,
-          archiveState: row.archive_state,
-          isReadOnly: row.archive_state === "archived" || ["accepted", "ready_for_meeting", "scheduled", "concluded", "reviewed"].includes(row.review_state),
-          responses: responsesByAssessmentId.get(row.id) ?? [],
-          submittedAt: toIsoTimestamp(row.submitted_at),
-          acceptedAt: toIsoTimestamp(row.accepted_at),
-          acceptedByEmployeeId: row.accepted_by_employee_id,
-          readyForMeetingAt: toIsoTimestamp(row.ready_for_meeting_at),
-          managerNotes: row.manager_notes,
-          scheduledAt: toIsoTimestamp(row.scheduled_at),
-          scheduledByEmployeeId: row.scheduled_by_employee_id,
-          reviewer1Notes: row.reviewer1_notes,
-          reviewer1CompletedAt: toIsoTimestamp(row.reviewer1_completed_at),
-          reviewer1CompletedByEmployeeId: row.reviewer1_completed_by_employee_id,
-          reviewer2Notes: row.reviewer2_notes,
-          reviewer2CompletedAt: toIsoTimestamp(row.reviewer2_completed_at),
-          reviewer2CompletedByEmployeeId: row.reviewer2_completed_by_employee_id,
-          concludedAt: toIsoTimestamp(row.concluded_at),
-          concludedByEmployeeId: row.concluded_by_employee_id,
-          reviewedAt: toIsoTimestamp(row.reviewed_at),
-          reviewedByEmployeeId: row.reviewed_by_employee_id,
-          createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
-        updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
-      },
-      assignmentManagerId: row.assignment_manager_employee_id,
-      employeeManagerId: row.employee_manager_employee_id,
-      employeeReviewer1Id: row.employee_reviewer1_employee_id,
-      employeeReviewer2Id: row.employee_reviewer2_employee_id,
-    } satisfies AssessmentRecord));
+    return assessmentsResult.rows.map(
+      (row) =>
+        ({
+          assessment: {
+            id: row.id,
+            reviewPeriodId: row.review_period_id,
+            questionSetId: row.question_set_id,
+            assignmentId: row.assignment_id,
+            target: row.target,
+            employeeId: row.employee_id,
+            assessorId: row.assessor_employee_id,
+            reviewState: row.review_state,
+            archiveState: row.archive_state,
+            isReadOnly:
+              row.archive_state === 'archived' ||
+              ['accepted', 'ready_for_meeting', 'scheduled', 'concluded', 'reviewed'].includes(
+                row.review_state,
+              ),
+            responses: responsesByAssessmentId.get(row.id) ?? [],
+            submittedAt: toIsoTimestamp(row.submitted_at),
+            acceptedAt: toIsoTimestamp(row.accepted_at),
+            acceptedByEmployeeId: row.accepted_by_employee_id,
+            readyForMeetingAt: toIsoTimestamp(row.ready_for_meeting_at),
+            managerNotes: row.manager_notes,
+            scheduledAt: toIsoTimestamp(row.scheduled_at),
+            scheduledByEmployeeId: row.scheduled_by_employee_id,
+            reviewer1Notes: row.reviewer1_notes,
+            reviewer1CompletedAt: toIsoTimestamp(row.reviewer1_completed_at),
+            reviewer1CompletedByEmployeeId: row.reviewer1_completed_by_employee_id,
+            reviewer2Notes: row.reviewer2_notes,
+            reviewer2CompletedAt: toIsoTimestamp(row.reviewer2_completed_at),
+            reviewer2CompletedByEmployeeId: row.reviewer2_completed_by_employee_id,
+            concludedAt: toIsoTimestamp(row.concluded_at),
+            concludedByEmployeeId: row.concluded_by_employee_id,
+            reviewedAt: toIsoTimestamp(row.reviewed_at),
+            reviewedByEmployeeId: row.reviewed_by_employee_id,
+            createdAt: toIsoTimestamp(row.created_at) ?? nowIso(),
+            updatedAt: toIsoTimestamp(row.updated_at) ?? nowIso(),
+          },
+          assignmentManagerId: row.assignment_manager_employee_id,
+          employeeManagerId: row.employee_manager_employee_id,
+          employeeReviewer1Id: row.employee_reviewer1_employee_id,
+          employeeReviewer2Id: row.employee_reviewer2_employee_id,
+        }) satisfies AssessmentRecord,
+    );
   }
 
   private async loadNotStartedAssessments(client: DbClient, reviewPeriodId: string) {
@@ -1295,7 +1353,12 @@ export class ApiStore {
     expectedAssessmentKeys: Set<string>,
   ) {
     const staleAssessmentIds = (await this.loadNotStartedAssessments(client, reviewPeriodId))
-      .filter((assessment) => !expectedAssessmentKeys.has(`${assessment.employee_id}:${assessment.assessor_employee_id}`))
+      .filter(
+        (assessment) =>
+          !expectedAssessmentKeys.has(
+            `${assessment.employee_id}:${assessment.assessor_employee_id}`,
+          ),
+      )
       .map((assessment) => assessment.id);
 
     return this.deleteAssessmentsById(client, staleAssessmentIds);
@@ -1352,29 +1415,43 @@ export class ApiStore {
   private async assessmentOrThrow(client: DbClient, assessmentId: string) {
     const [assessment] = await this.loadAssessmentRecords(client, { assessmentId });
     if (!assessment) {
-      throw new ApiError(404, "Assessment not found");
+      throw new ApiError(404, 'Assessment not found');
     }
 
     return assessment;
   }
 
-  private async activeQuestionSetOrThrow(reviewPeriodId: string, target: Assessment["target"], client: DbClient) {
-    const [questionSet] = [...await this.loadQuestionSets(client, { reviewPeriodId, target })].sort((left, right) => {
+  private async activeQuestionSetOrThrow(
+    reviewPeriodId: string,
+    target: Assessment['target'],
+    client: DbClient,
+  ) {
+    const [questionSet] = [
+      ...(await this.loadQuestionSets(client, { reviewPeriodId, target })),
+    ].sort((left, right) => {
       if (left.status !== right.status) {
-        return left.status === "active" ? -1 : 1;
+        return left.status === 'active' ? -1 : 1;
       }
 
       return right.updatedAt.localeCompare(left.updatedAt);
     });
 
-    if (!questionSet || (this.questionSetStatusEnabled() && questionSet.status !== "active")) {
-      throw new ApiError(409, `No active ${target} question set is available for this review period`);
+    if (!questionSet || (this.questionSetStatusEnabled() && questionSet.status !== 'active')) {
+      throw new ApiError(
+        409,
+        `No active ${target} question set is available for this review period`,
+      );
     }
 
     return questionSet;
   }
 
-  private async findAssessmentByKey(client: DbClient, reviewPeriodId: string, employeeId: string, assessorId: string) {
+  private async findAssessmentByKey(
+    client: DbClient,
+    reviewPeriodId: string,
+    employeeId: string,
+    assessorId: string,
+  ) {
     const result = await client.query<{ id: string }>(
       `
         SELECT id
@@ -1405,8 +1482,8 @@ export class ApiStore {
       return null;
     }
 
-    if (Date.parse(toIsoTimestamp(sessionRow.expires_at) ?? "") <= Date.now()) {
-      await client.query("DELETE FROM auth_sessions WHERE id = $1", [sessionRow.id]);
+    if (Date.parse(toIsoTimestamp(sessionRow.expires_at) ?? '') <= Date.now()) {
+      await client.query('DELETE FROM auth_sessions WHERE id = $1', [sessionRow.id]);
       return null;
     }
 
@@ -1427,13 +1504,16 @@ export class ApiStore {
   private async sessionOrThrow(client: DbClient, token: string) {
     const session = await this.loadSessionRecord(client, token);
     if (!session) {
-      throw new ApiError(401, "Authentication required");
+      throw new ApiError(401, 'Authentication required');
     }
 
     return session;
   }
 
-  private async assertUniqueEmployeeFields(client: DbClient, candidate: { id?: string; username: string; email: string }) {
+  private async assertUniqueEmployeeFields(
+    client: DbClient,
+    candidate: { id?: string; username: string; email: string },
+  ) {
     const result = await client.query<UniqueEmployeeFieldsRow>(
       `
         SELECT
@@ -1457,11 +1537,11 @@ export class ApiStore {
 
     const row = result.rows[0];
     if (row?.username_exists) {
-      throw new ApiError(409, "Username already exists");
+      throw new ApiError(409, 'Username already exists');
     }
 
     if (row?.email_exists) {
-      throw new ApiError(409, "Email already exists");
+      throw new ApiError(409, 'Email already exists');
     }
   }
 
@@ -1485,38 +1565,39 @@ export class ApiStore {
       candidate.reviewer2Id ?? null,
     ].filter((value): value is string => value !== null);
     const allowDeletedIds = new Set(options.allowDeletedIds ?? []);
-    const result = relationshipIds.length > 0
-      ? await client.query<RelationshipRow>(
-          `
+    const result =
+      relationshipIds.length > 0
+        ? await client.query<RelationshipRow>(
+            `
             SELECT id, role, status, deleted_at
             FROM employees
             WHERE id = ANY($1::uuid[])
           `,
-          [relationshipIds],
-        )
-      : { rows: [] as RelationshipRow[] };
+            [relationshipIds],
+          )
+        : { rows: [] as RelationshipRow[] };
 
     const employeeById = new Map(result.rows.map((row) => [row.id, row]));
 
     if (candidate.managerId) {
       const manager = employeeById.get(candidate.managerId);
       if (!manager) {
-        throw new ApiError(400, "Manager not found");
+        throw new ApiError(400, 'Manager not found');
       }
       if (manager.deleted_at !== null && !allowDeletedIds.has(manager.id)) {
-        throw new ApiError(400, "Manager not found");
+        throw new ApiError(400, 'Manager not found');
       }
       if (manager.id === candidate.id) {
-        throw new ApiError(400, "Employee cannot be their own manager");
+        throw new ApiError(400, 'Employee cannot be their own manager');
       }
-      if (manager.deleted_at === null && manager.role !== "manager" && manager.role !== "admin") {
-        throw new ApiError(400, "Manager must reference a manager or admin");
+      if (manager.deleted_at === null && manager.role !== 'manager' && manager.role !== 'admin') {
+        throw new ApiError(400, 'Manager must reference a manager or admin');
       }
     }
 
     for (const [label, assessorId] of [
-      ["Assessor 1", candidate.assessor1Id],
-      ["Assessor 2", candidate.assessor2Id],
+      ['Assessor 1', candidate.assessor1Id],
+      ['Assessor 2', candidate.assessor2Id],
     ] as const) {
       if (!assessorId) {
         continue;
@@ -1530,20 +1611,24 @@ export class ApiStore {
         throw new ApiError(400, `${label} not found`);
       }
       if (assessor.id === candidate.id) {
-        throw new ApiError(400, "Employee cannot be their own assessor");
+        throw new ApiError(400, 'Employee cannot be their own assessor');
       }
-      if (assessor.deleted_at === null && assessor.status !== "active") {
+      if (assessor.deleted_at === null && assessor.status !== 'active') {
         throw new ApiError(400, `${label} must be active`);
       }
     }
 
-    if (candidate.assessor1Id && candidate.assessor2Id && candidate.assessor1Id === candidate.assessor2Id) {
-      throw new ApiError(400, "Assessor 1 and assessor 2 must be different users");
+    if (
+      candidate.assessor1Id &&
+      candidate.assessor2Id &&
+      candidate.assessor1Id === candidate.assessor2Id
+    ) {
+      throw new ApiError(400, 'Assessor 1 and assessor 2 must be different users');
     }
 
     for (const [label, reviewerId] of [
-      ["Reviewer 1", candidate.reviewer1Id ?? null],
-      ["Reviewer 2", candidate.reviewer2Id ?? null],
+      ['Reviewer 1', candidate.reviewer1Id ?? null],
+      ['Reviewer 2', candidate.reviewer2Id ?? null],
     ] as const) {
       if (!reviewerId) {
         continue;
@@ -1559,7 +1644,7 @@ export class ApiStore {
       if (reviewer.id === candidate.id) {
         throw new ApiError(400, `${label} cannot be the employee`);
       }
-      if (reviewer.deleted_at === null && reviewer.status !== "active") {
+      if (reviewer.deleted_at === null && reviewer.status !== 'active') {
         throw new ApiError(400, `${label} must be active`);
       }
     }
@@ -1569,7 +1654,7 @@ export class ApiStore {
       candidate.reviewer2Id &&
       candidate.reviewer1Id === candidate.reviewer2Id
     ) {
-      throw new ApiError(400, "Reviewer 1 and reviewer 2 must be different users");
+      throw new ApiError(400, 'Reviewer 1 and reviewer 2 must be different users');
     }
   }
 
@@ -1582,7 +1667,7 @@ export class ApiStore {
       dueDate: string;
       assessmentDueDate: string;
       reviewDueDate: string;
-      status: ReviewPeriod["status"];
+      status: ReviewPeriod['status'];
     },
   ) {
     const result = await client.query<UniqueReviewPeriodKeyRow>(
@@ -1598,19 +1683,19 @@ export class ApiStore {
     );
 
     if (result.rows[0]?.key_exists) {
-      throw new ApiError(409, "Review period key already exists");
+      throw new ApiError(409, 'Review period key already exists');
     }
 
     if (candidate.startDate > candidate.dueDate) {
-      throw new ApiError(400, "Review period start date must be on or before the end date");
+      throw new ApiError(400, 'Review period start date must be on or before the end date');
     }
 
     if (candidate.assessmentDueDate > candidate.reviewDueDate) {
-      throw new ApiError(400, "Assessment due date must be on or before the review due date");
+      throw new ApiError(400, 'Assessment due date must be on or before the review due date');
     }
 
-    if (candidate.status === "archived") {
-      throw new ApiError(400, "Archived status must be managed through archive controls");
+    if (candidate.status === 'archived') {
+      throw new ApiError(400, 'Archived status must be managed through archive controls');
     }
   }
 
@@ -1633,14 +1718,14 @@ export class ApiStore {
     const questionIds = new Set<string>();
     for (const question of questions) {
       if (orders.has(question.order)) {
-        throw new ApiError(400, "Question order must be unique within a question set");
+        throw new ApiError(400, 'Question order must be unique within a question set');
       }
 
       orders.add(question.order);
 
       if (question.id) {
         if (questionIds.has(question.id)) {
-          throw new ApiError(400, "Question ids must be unique within a question set");
+          throw new ApiError(400, 'Question ids must be unique within a question set');
         }
         questionIds.add(question.id);
       }
@@ -1649,38 +1734,46 @@ export class ApiStore {
 
   private async assertReviewPeriodMutable(client: DbClient, reviewPeriodId: string) {
     const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
-    if (reviewPeriod.status === "archived") {
-      throw new ApiError(409, "Archived review periods are read-only");
+    if (reviewPeriod.status === 'archived') {
+      throw new ApiError(409, 'Archived review periods are read-only');
     }
 
     return reviewPeriod;
   }
 
   private isManagerForAssessment(actorEmployeeId: string, assessment: AssessmentRecord) {
-    return assessment.assignmentManagerId === actorEmployeeId || assessment.employeeManagerId === actorEmployeeId;
+    return (
+      assessment.assignmentManagerId === actorEmployeeId ||
+      assessment.employeeManagerId === actorEmployeeId
+    );
   }
 
   private reviewerRoleForAssessment(
     actorEmployeeId: string,
-    assessment: Pick<AssessmentRecord, "employeeReviewer1Id" | "employeeReviewer2Id">,
+    assessment: Pick<AssessmentRecord, 'employeeReviewer1Id' | 'employeeReviewer2Id'>,
   ): AssessmentReviewerRole | null {
     if (assessment.employeeReviewer1Id === actorEmployeeId) {
-      return "reviewer1";
+      return 'reviewer1';
     }
 
     if (assessment.employeeReviewer2Id === actorEmployeeId) {
-      return "reviewer2";
+      return 'reviewer2';
     }
 
     return null;
   }
 
   private canReadReviewSubjectAssessment(assessment: Assessment) {
-    return assessment.archiveState === "archived" || ["accepted", "ready_for_meeting", "scheduled", "concluded", "reviewed"].includes(assessment.reviewState);
+    return (
+      assessment.archiveState === 'archived' ||
+      ['accepted', 'ready_for_meeting', 'scheduled', 'concluded', 'reviewed'].includes(
+        assessment.reviewState,
+      )
+    );
   }
 
   private canReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
-    if (session.user.role === "admin") {
+    if (session.user.role === 'admin') {
       return true;
     }
 
@@ -1689,9 +1782,9 @@ export class ApiStore {
     }
 
     if (
-      session.user.role === "manager"
-      && this.isManagerForAssessment(session.user.id, assessment)
-      && !["new", "draft"].includes(assessment.assessment.reviewState)
+      session.user.role === 'manager' &&
+      this.isManagerForAssessment(session.user.id, assessment) &&
+      !['new', 'draft'].includes(assessment.assessment.reviewState)
     ) {
       return true;
     }
@@ -1700,45 +1793,50 @@ export class ApiStore {
       return this.canReadReviewSubjectAssessment(assessment.assessment);
     }
 
-    return this.reviewerRoleForAssessment(session.user.id, assessment) !== null
-      && this.canReadReviewSubjectAssessment(assessment.assessment);
+    return (
+      this.reviewerRoleForAssessment(session.user.id, assessment) !== null &&
+      this.canReadReviewSubjectAssessment(assessment.assessment)
+    );
   }
 
   private assertCanReadAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (!this.canReadAssessment(session, assessment)) {
-      throw new ApiError(403, "You do not have permission to view this assessment");
+      throw new ApiError(403, 'You do not have permission to view this assessment');
     }
   }
 
   private assertCanAuthorAssessment(session: AuthSession, assessment: AssessmentRecord) {
     if (assessment.assessment.assessorId !== session.user.id) {
-      throw new ApiError(403, "Only the assigned assessor can edit this assessment");
+      throw new ApiError(403, 'Only the assigned assessor can edit this assessment');
     }
 
-    if (assessment.assessment.archiveState === "archived") {
-      throw new ApiError(409, "Archived assessments are read-only");
+    if (assessment.assessment.archiveState === 'archived') {
+      throw new ApiError(409, 'Archived assessments are read-only');
     }
 
-    if (!["new", "draft"].includes(assessment.assessment.reviewState)) {
-      throw new ApiError(409, "Submitted or accepted assessments cannot be edited by the assessor");
+    if (!['new', 'draft'].includes(assessment.assessment.reviewState)) {
+      throw new ApiError(409, 'Submitted or accepted assessments cannot be edited by the assessor');
     }
   }
 
   private assertCanManageAssessment(session: AuthSession, assessment: AssessmentRecord) {
-    if (session.user.role === "admin") {
+    if (session.user.role === 'admin') {
       return;
     }
 
-    if (session.user.role === "manager" && this.isManagerForAssessment(session.user.id, assessment)) {
+    if (
+      session.user.role === 'manager' &&
+      this.isManagerForAssessment(session.user.id, assessment)
+    ) {
       return;
     }
 
-    throw new ApiError(403, "You do not have permission to manage this assessment");
+    throw new ApiError(403, 'You do not have permission to manage this assessment');
   }
 
   private assertCanAdminOverrideAssessment(session: AuthSession) {
-    if (session.user.role !== "admin") {
-      throw new ApiError(403, "Only admins can override assessments");
+    if (session.user.role !== 'admin') {
+      throw new ApiError(403, 'Only admins can override assessments');
     }
   }
 
@@ -1749,7 +1847,7 @@ export class ApiStore {
     actorEmployeeId: string,
     timestamp: string,
   ) {
-    if (nextState === "new") {
+    if (nextState === 'new') {
       await client.query(
         `
           UPDATE assessments
@@ -1776,7 +1874,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "draft") {
+    if (nextState === 'draft') {
       await client.query(
         `
           UPDATE assessments
@@ -1803,7 +1901,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "submitted") {
+    if (nextState === 'submitted') {
       await client.query(
         `
           UPDATE assessments
@@ -1830,7 +1928,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "accepted") {
+    if (nextState === 'accepted') {
       await client.query(
         `
           UPDATE assessments
@@ -1857,7 +1955,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "ready_for_meeting") {
+    if (nextState === 'ready_for_meeting') {
       await client.query(
         `
           UPDATE assessments
@@ -1884,7 +1982,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "scheduled") {
+    if (nextState === 'scheduled') {
       await client.query(
         `
           UPDATE assessments
@@ -1911,7 +2009,9 @@ export class ApiStore {
       return;
     }
 
-    const employee = this.toEmployee(await this.employeeOrThrow(client, assessment.assessment.employeeId));
+    const employee = this.toEmployee(
+      await this.employeeOrThrow(client, assessment.assessment.employeeId),
+    );
     await client.query(
       `
         UPDATE assessments
@@ -1955,12 +2055,17 @@ export class ApiStore {
     );
   }
 
-  private async loadActiveAssessmentSet(client: DbClient, reviewPeriodId: string, employeeId: string) {
-    const items = (await this.loadAssessmentRecords(client, { reviewPeriodId, employeeId }))
-      .filter((item) => item.assessment.archiveState === "active");
+  private async loadActiveAssessmentSet(
+    client: DbClient,
+    reviewPeriodId: string,
+    employeeId: string,
+  ) {
+    const items = (await this.loadAssessmentRecords(client, { reviewPeriodId, employeeId })).filter(
+      (item) => item.assessment.archiveState === 'active',
+    );
 
     if (items.length === 0) {
-      throw new ApiError(404, "Assessment set not found");
+      throw new ApiError(404, 'Assessment set not found');
     }
 
     return items;
@@ -1969,7 +2074,7 @@ export class ApiStore {
   private toAssessmentSetResponse(items: AssessmentRecord[]): AssessmentSetResponse {
     const [first] = items;
     if (!first) {
-      throw new ApiError(500, "Assessment set is unexpectedly empty");
+      throw new ApiError(500, 'Assessment set is unexpectedly empty');
     }
 
     return {
@@ -1990,22 +2095,22 @@ export class ApiStore {
   }
 
   private assertCanManageAssessmentSet(session: AuthSession, items: AssessmentRecord[]) {
-    if (session.user.role === "admin") {
+    if (session.user.role === 'admin') {
       return;
     }
 
     if (
-      session.user.role === "manager"
-      && items.every((item) => this.isManagerForAssessment(session.user.id, item))
+      session.user.role === 'manager' &&
+      items.every((item) => this.isManagerForAssessment(session.user.id, item))
     ) {
       return;
     }
 
-    throw new ApiError(403, "You do not have permission to manage this assessment set");
+    throw new ApiError(403, 'You do not have permission to manage this assessment set');
   }
 
   private reviewerEmployeeIdForRole(employee: Employee, reviewerRole: AssessmentReviewerRole) {
-    return reviewerRole === "reviewer1" ? employee.reviewer1Id : employee.reviewer2Id;
+    return reviewerRole === 'reviewer1' ? employee.reviewer1Id : employee.reviewer2Id;
   }
 
   private assertCanConcludeAssessmentSet(
@@ -2015,10 +2120,13 @@ export class ApiStore {
   ) {
     const reviewerEmployeeId = this.reviewerEmployeeIdForRole(employee, reviewerRole);
     if (!reviewerEmployeeId) {
-      throw new ApiError(409, `${reviewerRole === "reviewer1" ? "Reviewer 1" : "Reviewer 2"} is not assigned`);
+      throw new ApiError(
+        409,
+        `${reviewerRole === 'reviewer1' ? 'Reviewer 1' : 'Reviewer 2'} is not assigned`,
+      );
     }
 
-    if (session.user.role === "admin") {
+    if (session.user.role === 'admin') {
       return reviewerEmployeeId;
     }
 
@@ -2026,25 +2134,32 @@ export class ApiStore {
       return reviewerEmployeeId;
     }
 
-    throw new ApiError(403, "You do not have permission to conclude this assessment set");
+    throw new ApiError(403, 'You do not have permission to conclude this assessment set');
   }
 
-  private assertAssessmentResponses(questionSet: QuestionSet, responses: AssessmentResponse[], complete: boolean) {
+  private assertAssessmentResponses(
+    questionSet: QuestionSet,
+    responses: AssessmentResponse[],
+    complete: boolean,
+  ) {
     const questionsById = new Map(questionSet.questions.map((question) => [question.id, question]));
     const seenQuestionIds = new Set<string>();
 
     for (const response of responses) {
       const question = questionsById.get(response.questionId);
       if (!question) {
-        throw new ApiError(400, "Responses must reference questions from the selected question set");
+        throw new ApiError(
+          400,
+          'Responses must reference questions from the selected question set',
+        );
       }
 
       if (seenQuestionIds.has(response.questionId)) {
-        throw new ApiError(400, "Responses must reference each question at most once");
+        throw new ApiError(400, 'Responses must reference each question at most once');
       }
 
       if (question.order !== response.order) {
-        throw new ApiError(400, "Response order must match the question order");
+        throw new ApiError(400, 'Response order must match the question order');
       }
 
       seenQuestionIds.add(response.questionId);
@@ -2052,18 +2167,24 @@ export class ApiStore {
 
     if (complete) {
       if (responses.length !== questionSet.questions.length) {
-        throw new ApiError(400, "All questions must be answered before submission");
+        throw new ApiError(400, 'All questions must be answered before submission');
       }
 
       if (responses.some((response) => response.response.trim().length === 0)) {
-        throw new ApiError(400, "Submitted responses cannot be blank");
+        throw new ApiError(400, 'Submitted responses cannot be blank');
       }
     }
   }
 
-  private async replaceAssessmentResponses(client: DbClient, assessmentId: string, responses: AssessmentResponse[]) {
+  private async replaceAssessmentResponses(
+    client: DbClient,
+    assessmentId: string,
+    responses: AssessmentResponse[],
+  ) {
     if (responses.length === 0) {
-      await client.query("DELETE FROM assessment_responses WHERE assessment_id = $1", [assessmentId]);
+      await client.query('DELETE FROM assessment_responses WHERE assessment_id = $1', [
+        assessmentId,
+      ]);
       return;
     }
 
@@ -2096,12 +2217,12 @@ export class ApiStore {
     nextState: AssessmentReviewState,
   ) {
     const questionSet = await this.questionSetOrThrow(client, assessment.assessment.questionSetId);
-    this.assertAssessmentResponses(questionSet, responses, nextState === "submitted");
+    this.assertAssessmentResponses(questionSet, responses, nextState === 'submitted');
 
     await this.replaceAssessmentResponses(client, assessment.assessment.id, responses);
 
     const timestamp = nowIso();
-    if (nextState === "submitted") {
+    if (nextState === 'submitted') {
       await client.query(
         `
           UPDATE assessments
@@ -2114,7 +2235,7 @@ export class ApiStore {
       return;
     }
 
-    if (nextState === "draft") {
+    if (nextState === 'draft') {
       await client.query(
         `
           UPDATE assessments
@@ -2150,7 +2271,11 @@ export class ApiStore {
     );
   }
 
-  private async invalidateEmployeeSessions(client: DbClient, employeeId: string, keepSessionId?: string) {
+  private async invalidateEmployeeSessions(
+    client: DbClient,
+    employeeId: string,
+    keepSessionId?: string,
+  ) {
     if (keepSessionId) {
       await client.query(
         `
@@ -2163,20 +2288,24 @@ export class ApiStore {
       return;
     }
 
-    await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
+    await client.query('DELETE FROM auth_sessions WHERE employee_id = $1', [employeeId]);
   }
 
   private usernameForEmployee(employeeId: string | null, employeesById: Map<string, Employee>) {
-    return employeeId ? employeesById.get(employeeId)?.username ?? null : null;
+    return employeeId ? (employeesById.get(employeeId)?.username ?? null) : null;
   }
 
-  private passwordForTransfer(auth: StoredAuthMetadata, credentialKind: LocalUserCredentialKind, password: string) {
-    if (credentialKind === "unset") {
-      return "";
+  private passwordForTransfer(
+    auth: StoredAuthMetadata,
+    credentialKind: LocalUserCredentialKind,
+    password: string,
+  ) {
+    if (credentialKind === 'unset') {
+      return '';
     }
 
-    if (credentialKind === "password-hash") {
-      return auth.passwordHash ?? "";
+    if (credentialKind === 'password-hash') {
+      return auth.passwordHash ?? '';
     }
 
     return password;
@@ -2187,7 +2316,7 @@ export class ApiStore {
     auth: StoredAuthMetadata,
     password: string,
     employeesById: Map<string, Employee>,
-    credentialKind: LocalUserCredentialKind = "password",
+    credentialKind: LocalUserCredentialKind = 'password',
   ): LocalUserTransferItem {
     return {
       id: employee.id,
@@ -2208,11 +2337,11 @@ export class ApiStore {
   }
 
   private passwordHashForTransferItem(item: LocalUserTransferItem) {
-    if (item.credentialKind === "unset") {
+    if (item.credentialKind === 'unset') {
       return null;
     }
 
-    return item.credentialKind === "password-hash" ? item.password : hashPassword(item.password);
+    return item.credentialKind === 'password-hash' ? item.password : hashPassword(item.password);
   }
 
   private parseBooleanEnv(value: string | undefined) {
@@ -2220,7 +2349,7 @@ export class ApiStore {
       return false;
     }
 
-    return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
   }
 
   private questionSetStatusEnabled() {
@@ -2246,7 +2375,9 @@ export class ApiStore {
   }
 
   private parseBackupScheduleEnv(value: string | undefined): BackupSchedule {
-    return supportedBackupSchedules.includes(value as BackupSchedule) ? (value as BackupSchedule) : "daily";
+    return supportedBackupSchedules.includes(value as BackupSchedule)
+      ? (value as BackupSchedule)
+      : 'daily';
   }
 
   private readBackupStatusOverrides() {
@@ -2256,32 +2387,39 @@ export class ApiStore {
     }
 
     try {
-      const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
       return {
         automaticBackupsEnabled:
-          typeof parsed.automaticBackupsEnabled === "boolean"
+          typeof parsed.automaticBackupsEnabled === 'boolean'
             ? parsed.automaticBackupsEnabled
-            : typeof parsed.dailyBackupsEnabled === "boolean"
+            : typeof parsed.dailyBackupsEnabled === 'boolean'
               ? parsed.dailyBackupsEnabled
               : undefined,
         schedule:
-          typeof parsed.schedule === "string" && supportedBackupSchedules.includes(parsed.schedule as BackupSchedule)
+          typeof parsed.schedule === 'string' &&
+          supportedBackupSchedules.includes(parsed.schedule as BackupSchedule)
             ? (parsed.schedule as BackupSchedule)
             : undefined,
         retentionCount:
-          typeof parsed.retentionCount === "number" && Number.isInteger(parsed.retentionCount) && parsed.retentionCount > 0
+          typeof parsed.retentionCount === 'number' &&
+          Number.isInteger(parsed.retentionCount) &&
+          parsed.retentionCount > 0
             ? parsed.retentionCount
-            : typeof parsed.retentionDays === "number" && Number.isInteger(parsed.retentionDays) && parsed.retentionDays > 0
+            : typeof parsed.retentionDays === 'number' &&
+                Number.isInteger(parsed.retentionDays) &&
+                parsed.retentionDays > 0
               ? parsed.retentionDays
               : undefined,
         lastBackupAt:
-          typeof parsed.lastBackupAt === "string" && !Number.isNaN(new Date(parsed.lastBackupAt).valueOf())
+          typeof parsed.lastBackupAt === 'string' &&
+          !Number.isNaN(new Date(parsed.lastBackupAt).valueOf())
             ? new Date(parsed.lastBackupAt).toISOString()
             : parsed.lastBackupAt === null
               ? null
               : undefined,
         lastRestoreAt:
-          typeof parsed.lastRestoreAt === "string" && !Number.isNaN(new Date(parsed.lastRestoreAt).valueOf())
+          typeof parsed.lastRestoreAt === 'string' &&
+          !Number.isNaN(new Date(parsed.lastRestoreAt).valueOf())
             ? new Date(parsed.lastRestoreAt).toISOString()
             : parsed.lastRestoreAt === null
               ? null
@@ -2298,14 +2436,20 @@ export class ApiStore {
     return {
       automaticBackupsEnabled:
         overrides?.automaticBackupsEnabled ??
-        this.parseBooleanEnv(process.env.BACKUP_AUTOMATIC_ENABLED ?? process.env.BACKUP_DAILY_ENABLED),
+        this.parseBooleanEnv(
+          process.env.BACKUP_AUTOMATIC_ENABLED ?? process.env.BACKUP_DAILY_ENABLED,
+        ),
       schedule: overrides?.schedule ?? this.parseBackupScheduleEnv(process.env.BACKUP_SCHEDULE),
       retentionCount:
         overrides?.retentionCount ??
-        this.parseNumberEnv(process.env.BACKUP_RETENTION_COUNT ?? process.env.BACKUP_RETENTION_DAYS) ??
+        this.parseNumberEnv(
+          process.env.BACKUP_RETENTION_COUNT ?? process.env.BACKUP_RETENTION_DAYS,
+        ) ??
         14,
-      lastBackupAt: overrides?.lastBackupAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_BACKUP_AT),
-      lastRestoreAt: overrides?.lastRestoreAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_RESTORE_AT),
+      lastBackupAt:
+        overrides?.lastBackupAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_BACKUP_AT),
+      lastRestoreAt:
+        overrides?.lastRestoreAt ?? this.parseTimestampEnv(process.env.BACKUP_LAST_RESTORE_AT),
     };
   }
 
@@ -2321,19 +2465,19 @@ export class ApiStore {
     } satisfies BackupStatusConfig;
 
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${JSON.stringify(nextStatus, null, 2)}\n`, "utf8");
+    writeFileSync(path, `${JSON.stringify(nextStatus, null, 2)}\n`, 'utf8');
   }
 
   private getBackupArchiveDir() {
-    return process.env.BACKUP_ARCHIVE_DIR ?? "/var/lib/revu/backups/archive";
+    return process.env.BACKUP_ARCHIVE_DIR ?? '/var/lib/revu/backups/archive';
   }
 
   private getBackupFilePrefix() {
-    return process.env.BACKUP_FILE_PREFIX?.trim() || "revu-backup";
+    return process.env.BACKUP_FILE_PREFIX?.trim() || 'revu-backup';
   }
 
   private getBackupFileExtension() {
-    return process.env.BACKUP_FILE_EXTENSION?.trim().replace(/^\.+/u, "") || "json";
+    return process.env.BACKUP_FILE_EXTENSION?.trim().replace(/^\.+/u, '') || 'json';
   }
 
   private ensureBackupArchiveDir() {
@@ -2343,17 +2487,20 @@ export class ApiStore {
   }
 
   private buildStoredBackupFilename(exportedAt: string) {
-    const compactTimestamp = exportedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/u, "Z");
+    const compactTimestamp = exportedAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/u, 'Z');
     return `${this.getBackupFilePrefix()}-${compactTimestamp}.${this.getBackupFileExtension()}`;
   }
 
   private sanitizeUploadedBackupFilename(fileName: string) {
     const fallbackExtension = this.getBackupFileExtension();
     const trimmedName = basename(fileName).trim();
-    const originalExtension = extname(trimmedName).replace(/^\.+/u, "").toLowerCase();
-    const extension = (originalExtension || fallbackExtension).replace(/[^a-z0-9]+/giu, "") || fallbackExtension;
-    const rawBaseName = trimmedName.slice(0, trimmedName.length - extname(trimmedName).length) || "uploaded-backup";
-    const normalizedBaseName = rawBaseName.replace(/[^A-Za-z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "") || "uploaded-backup";
+    const originalExtension = extname(trimmedName).replace(/^\.+/u, '').toLowerCase();
+    const extension =
+      (originalExtension || fallbackExtension).replace(/[^a-z0-9]+/giu, '') || fallbackExtension;
+    const rawBaseName =
+      trimmedName.slice(0, trimmedName.length - extname(trimmedName).length) || 'uploaded-backup';
+    const normalizedBaseName =
+      rawBaseName.replace(/[^A-Za-z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '') || 'uploaded-backup';
     return `${normalizedBaseName}.${extension}`;
   }
 
@@ -2375,7 +2522,7 @@ export class ApiStore {
   private getStoredBackupFilePath(fileName: string) {
     const safeName = basename(fileName).trim();
     if (!safeName || safeName !== fileName) {
-      throw new ApiError(400, "Stored backup name is invalid");
+      throw new ApiError(400, 'Stored backup name is invalid');
     }
 
     const filePath = join(this.ensureBackupArchiveDir(), safeName);
@@ -2403,7 +2550,7 @@ export class ApiStore {
 
   private readStoredBackupSnapshot(fileName: string) {
     const filePath = this.getStoredBackupFilePath(fileName);
-    const raw = readFileSync(filePath, "utf8");
+    const raw = readFileSync(filePath, 'utf8');
 
     try {
       return {
@@ -2416,12 +2563,12 @@ export class ApiStore {
   }
 
   private canManagerEdit(target: Employee, updates: UpdateEmployeeRequest) {
-    if (target.role === "admin") {
-      throw new ApiError(403, "Managers cannot edit admin accounts");
+    if (target.role === 'admin') {
+      throw new ApiError(403, 'Managers cannot edit admin accounts');
     }
 
     if (updates.role !== undefined) {
-      throw new ApiError(403, "Managers cannot change app roles");
+      throw new ApiError(403, 'Managers cannot change app roles');
     }
   }
 
@@ -2453,19 +2600,23 @@ export class ApiStore {
     );
 
     if (result.rows[0]?.exists) {
-      throw new ApiError(409, "Assignment already exists for this employee in the review period");
+      throw new ApiError(409, 'Assignment already exists for this employee in the review period');
     }
   }
 
   private async applyQuestionSetQuestionUpdates(
     client: DbClient,
     questionSetId: string,
-    existingQuestions: QuestionSet["questions"],
+    existingQuestions: QuestionSet['questions'],
     nextQuestions: CreateQuestionInput[],
   ) {
     const existingQuestionIds = new Set(existingQuestions.map((question) => question.id));
     const retainedQuestionIds = Array.from(
-      new Set(nextQuestions.flatMap((question) => (question.id && existingQuestionIds.has(question.id) ? [question.id] : []))),
+      new Set(
+        nextQuestions.flatMap((question) =>
+          question.id && existingQuestionIds.has(question.id) ? [question.id] : [],
+        ),
+      ),
     );
     const retainedQuestionIdSet = new Set(retainedQuestionIds);
     const removedQuestionIds = existingQuestions
@@ -2485,7 +2636,7 @@ export class ApiStore {
       if (referencedQuestionResult.rows.length > 0) {
         throw new ApiError(
           409,
-          "Questions with recorded assessment responses cannot be removed from a question set. Create a new question set instead.",
+          'Questions with recorded assessment responses cannot be removed from a question set. Create a new question set instead.',
         );
       }
     }
@@ -2504,10 +2655,10 @@ export class ApiStore {
     }
 
     if (removedQuestionIds.length > 0) {
-      await client.query("DELETE FROM question_set_questions WHERE question_set_id = $1 AND id = ANY($2::uuid[])", [
-        questionSetId,
-        removedQuestionIds,
-      ]);
+      await client.query(
+        'DELETE FROM question_set_questions WHERE question_set_id = $1 AND id = ANY($2::uuid[])',
+        [questionSetId, removedQuestionIds],
+      );
     }
 
     for (const question of nextQuestions) {
@@ -2522,7 +2673,14 @@ export class ApiStore {
             WHERE id = $1
               AND question_set_id = $2
           `,
-          [question.id, questionSetId, question.order, question.type, question.category, question.prompt],
+          [
+            question.id,
+            questionSetId,
+            question.order,
+            question.type,
+            question.category,
+            question.prompt,
+          ],
         );
         continue;
       }
@@ -2532,7 +2690,14 @@ export class ApiStore {
           INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
           VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [question.id ?? randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+        [
+          question.id ?? randomUUID(),
+          questionSetId,
+          question.order,
+          question.type,
+          question.category,
+          question.prompt,
+        ],
       );
     }
   }
@@ -2550,18 +2715,21 @@ export class ApiStore {
   async areSeededAccountsAvailable() {
     const usernames = Object.keys(seedPasswordsByUsername);
     const employees = await this.loadEmployeeRows(this.pool, { usernames });
-    return employees.length === usernames.length && employees.every((employee) => employee.status === "active");
+    return (
+      employees.length === usernames.length &&
+      employees.every((employee) => employee.status === 'active')
+    );
   }
 
   async authenticate(username: string, password: string) {
     const [employee] = await this.loadEmployeeRows(this.pool, { usernames: [username] });
-    if (!employee || employee.status !== "active") {
-      throw new ApiError(401, "Invalid username or password");
+    if (!employee || employee.status !== 'active') {
+      throw new ApiError(401, 'Invalid username or password');
     }
 
     const auth = this.toStoredAuthMetadata(employee);
     if (!verifyPassword(password, auth.passwordHash)) {
-      throw new ApiError(401, "Invalid username or password");
+      throw new ApiError(401, 'Invalid username or password');
     }
 
     const issuedAt = nowIso();
@@ -2580,7 +2748,7 @@ export class ApiStore {
 
       const row = sessionResult.rows[0];
       if (!row) {
-        throw new ApiError(500, "Session creation failed");
+        throw new ApiError(500, 'Session creation failed');
       }
 
       return this.toSession(
@@ -2609,17 +2777,23 @@ export class ApiStore {
   }
 
   async logout(token: string) {
-    const result = await this.pool.query("DELETE FROM auth_sessions WHERE token_hash = $1", [hashToken(token)]);
+    const result = await this.pool.query('DELETE FROM auth_sessions WHERE token_hash = $1', [
+      hashToken(token),
+    ]);
     return (result.rowCount ?? 0) > 0;
   }
 
-  async changeOwnPassword(token: string, currentPassword: string, newPassword: string): Promise<AuthChangePasswordResponse> {
+  async changeOwnPassword(
+    token: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthChangePasswordResponse> {
     try {
       return await withTransaction(async (client) => {
         const session = await this.sessionOrThrow(client, token);
         const auth = this.toStoredAuthMetadata(session.employee);
         if (!verifyPassword(currentPassword, auth.passwordHash)) {
-          throw new ApiError(401, "Invalid username or password");
+          throw new ApiError(401, 'Invalid username or password');
         }
 
         const timestamp = nowIso();
@@ -2634,7 +2808,11 @@ export class ApiStore {
           `,
           [session.employee.id, hashPassword(newPassword), timestamp],
         );
-        await this.invalidateEmployeeSessions(client, session.employee.id, session.session.sessionId);
+        await this.invalidateEmployeeSessions(
+          client,
+          session.employee.id,
+          session.session.sessionId,
+        );
 
         const updatedEmployee = await this.employeeOrThrow(client, session.employee.id);
         return {
@@ -2650,7 +2828,10 @@ export class ApiStore {
     }
   }
 
-  async updateOwnProfile(token: string, updates: { fullName?: string; email?: string }): Promise<AuthSession> {
+  async updateOwnProfile(
+    token: string,
+    updates: { fullName?: string; email?: string },
+  ): Promise<AuthSession> {
     try {
       return await withTransaction(async (client) => {
         const session = await this.sessionOrThrow(client, token);
@@ -2693,7 +2874,7 @@ export class ApiStore {
 
         const updatedEmployee = result.rows[0];
         if (!updatedEmployee) {
-          throw new ApiError(404, "Employee not found");
+          throw new ApiError(404, 'Employee not found');
         }
 
         return this.toSession(session.session, updatedEmployee);
@@ -2785,7 +2966,7 @@ export class ApiStore {
             input.fullName,
             input.email,
             input.role,
-            input.status ?? "active",
+            input.status ?? 'active',
             input.managerId ?? null,
             input.assessor1Id ?? null,
             input.assessor2Id ?? null,
@@ -2799,7 +2980,7 @@ export class ApiStore {
 
         const employee = employeeResult.rows[0];
         if (!employee) {
-          throw new ApiError(500, "Employee creation failed");
+          throw new ApiError(500, 'Employee creation failed');
         }
 
         return this.toEmployeeAdmin(employee);
@@ -2812,14 +2993,18 @@ export class ApiStore {
     }
   }
 
-  async updateEmployee(actor: Pick<Employee, "id" | "role">, employeeId: string, updates: UpdateEmployeeRequest) {
+  async updateEmployee(
+    actor: Pick<Employee, 'id' | 'role'>,
+    employeeId: string,
+    updates: UpdateEmployeeRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         await this.ensureEmployeeUsernameStorage(client);
         const existingRow = await this.employeeOrThrow(client, employeeId);
         const existing = this.toEmployee(existingRow);
 
-        if (actor.role === "manager") {
+        if (actor.role === 'manager') {
           this.canManagerEdit(existing, updates);
         }
 
@@ -2829,24 +3014,26 @@ export class ApiStore {
         };
 
         await this.assertUniqueEmployeeFields(client, nextEmployee);
-        await this.assertRelationships(client, {
-          id: nextEmployee.id,
-          managerId: nextEmployee.managerId,
-          assessor1Id: nextEmployee.assessor1Id,
-          assessor2Id: nextEmployee.assessor2Id,
-          reviewer1Id: nextEmployee.reviewer1Id,
-          reviewer2Id: nextEmployee.reviewer2Id,
-        }, {
-          allowDeletedIds: [
-            existing.managerId,
-            existing.assessor1Id,
-            existing.assessor2Id,
-            existing.reviewer1Id,
-            existing.reviewer2Id,
-          ].filter(
-            (value): value is string => value !== null,
-          ),
-        });
+        await this.assertRelationships(
+          client,
+          {
+            id: nextEmployee.id,
+            managerId: nextEmployee.managerId,
+            assessor1Id: nextEmployee.assessor1Id,
+            assessor2Id: nextEmployee.assessor2Id,
+            reviewer1Id: nextEmployee.reviewer1Id,
+            reviewer2Id: nextEmployee.reviewer2Id,
+          },
+          {
+            allowDeletedIds: [
+              existing.managerId,
+              existing.assessor1Id,
+              existing.assessor2Id,
+              existing.reviewer1Id,
+              existing.reviewer2Id,
+            ].filter((value): value is string => value !== null),
+          },
+        );
 
         const result = await client.query<EmployeeRow>(
           `
@@ -2898,10 +3085,10 @@ export class ApiStore {
 
         const updatedEmployee = result.rows[0];
         if (!updatedEmployee) {
-          throw new ApiError(404, "Employee not found");
+          throw new ApiError(404, 'Employee not found');
         }
 
-        if (existing.status !== "inactive" && nextEmployee.status === "inactive") {
+        if (existing.status !== 'inactive' && nextEmployee.status === 'inactive') {
           await this.removeEmployeeNotStartedAssessments(client, employeeId);
         }
 
@@ -2922,7 +3109,7 @@ export class ApiStore {
         await this.employeeOrThrow(client, employeeId);
 
         const tombstonedAt = nowIso();
-        await client.query("DELETE FROM auth_sessions WHERE employee_id = $1", [employeeId]);
+        await client.query('DELETE FROM auth_sessions WHERE employee_id = $1', [employeeId]);
         await this.removeDeletedEmployeeAssessments(client, employeeId);
         const deleteResult = await client.query(
           `
@@ -2939,7 +3126,7 @@ export class ApiStore {
           [employeeId, tombstonedAt],
         );
         if (deleteResult.rowCount === 0) {
-          throw new ApiError(404, "Employee not found");
+          throw new ApiError(404, 'Employee not found');
         }
 
         return {
@@ -2987,7 +3174,10 @@ export class ApiStore {
     }
   }
 
-  async resetPassword(employeeId: string, password?: string): Promise<ResetEmployeePasswordResponse> {
+  async resetPassword(
+    employeeId: string,
+    password?: string,
+  ): Promise<ResetEmployeePasswordResponse> {
     try {
       return await withTransaction(async (client) => {
         await this.employeeOrThrow(client, employeeId);
@@ -3057,7 +3247,7 @@ export class ApiStore {
 
         const timestamp = nowIso();
         const reviewPeriodId = randomUUID();
-        if (input.status === "active") {
+        if (input.status === 'active') {
           await this.deactivateOtherReviewPeriods(client, reviewPeriodId);
         }
         const result = await client.query<ReviewPeriodRow>(
@@ -3118,7 +3308,7 @@ export class ApiStore {
 
         const reviewPeriod = result.rows[0];
         if (!reviewPeriod) {
-          throw new ApiError(500, "Review period creation failed");
+          throw new ApiError(500, 'Review period creation failed');
         }
 
         return this.toReviewPeriod(reviewPeriod);
@@ -3134,14 +3324,16 @@ export class ApiStore {
   async updateReviewPeriod(reviewPeriodId: string, updates: UpdateReviewPeriodRequest) {
     try {
       return await withTransaction(async (client) => {
-        const reviewPeriod = this.toReviewPeriod(await this.assertReviewPeriodMutable(client, reviewPeriodId));
+        const reviewPeriod = this.toReviewPeriod(
+          await this.assertReviewPeriodMutable(client, reviewPeriodId),
+        );
         const nextReviewPeriod = {
           ...reviewPeriod,
           ...updates,
         };
         await this.assertReviewPeriodFields(client, nextReviewPeriod);
 
-        if (nextReviewPeriod.status === "active") {
+        if (nextReviewPeriod.status === 'active') {
           await this.deactivateOtherReviewPeriods(client, reviewPeriodId);
         }
 
@@ -3184,7 +3376,7 @@ export class ApiStore {
 
         const updatedReviewPeriod = result.rows[0];
         if (!updatedReviewPeriod) {
-          throw new ApiError(404, "Review period not found");
+          throw new ApiError(404, 'Review period not found');
         }
 
         return this.toReviewPeriod(updatedReviewPeriod);
@@ -3216,10 +3408,10 @@ export class ApiStore {
         );
         const counts = countResult.rows[0];
         if (!counts) {
-          throw new ApiError(500, "Review period deletion summary failed");
+          throw new ApiError(500, 'Review period deletion summary failed');
         }
 
-        if (reviewPeriod.status === "archived") {
+        if (reviewPeriod.status === 'archived') {
           await client.query(
             `
               UPDATE review_periods
@@ -3232,22 +3424,28 @@ export class ApiStore {
           );
         }
 
-        await client.query("DELETE FROM assessments WHERE review_period_id = $1", [reviewPeriodId]);
-        await client.query("DELETE FROM review_period_assignments WHERE review_period_id = $1", [reviewPeriodId]);
-        await client.query("DELETE FROM question_sets WHERE review_period_id = $1", [reviewPeriodId]);
+        await client.query('DELETE FROM assessments WHERE review_period_id = $1', [reviewPeriodId]);
+        await client.query('DELETE FROM review_period_assignments WHERE review_period_id = $1', [
+          reviewPeriodId,
+        ]);
+        await client.query('DELETE FROM question_sets WHERE review_period_id = $1', [
+          reviewPeriodId,
+        ]);
 
-        const deleteResult = await client.query("DELETE FROM review_periods WHERE id = $1", [reviewPeriodId]);
+        const deleteResult = await client.query('DELETE FROM review_periods WHERE id = $1', [
+          reviewPeriodId,
+        ]);
         if ((deleteResult.rowCount ?? 0) !== 1) {
-          throw new ApiError(404, "Review period not found");
+          throw new ApiError(404, 'Review period not found');
         }
 
         return {
           reviewPeriodId,
           label: reviewPeriod.label,
           deleted: true as const,
-          questionSetCount: Number(counts.question_set_count ?? "0"),
-          assessmentCount: Number(counts.assessment_count ?? "0"),
-          assignmentCount: Number(counts.assignment_count ?? "0"),
+          questionSetCount: Number(counts.question_set_count ?? '0'),
+          assessmentCount: Number(counts.assessment_count ?? '0'),
+          assignmentCount: Number(counts.assignment_count ?? '0'),
         };
       });
     } catch (error) {
@@ -3263,8 +3461,8 @@ export class ApiStore {
       return await withTransaction(async (client) => {
         await this.employeeOrThrow(client, actorEmployeeId);
         const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
-        if (reviewPeriod.status === "archived") {
-          throw new ApiError(409, "Review period is already archived");
+        if (reviewPeriod.status === 'archived') {
+          throw new ApiError(409, 'Review period is already archived');
         }
 
         const timestamp = nowIso();
@@ -3294,7 +3492,7 @@ export class ApiStore {
 
         const archivedReviewPeriod = result.rows[0];
         if (!archivedReviewPeriod) {
-          throw new ApiError(404, "Review period not found");
+          throw new ApiError(404, 'Review period not found');
         }
 
         return this.toReviewPeriod(archivedReviewPeriod);
@@ -3311,8 +3509,8 @@ export class ApiStore {
     try {
       return await withTransaction(async (client) => {
         const reviewPeriod = await this.reviewPeriodOrThrow(client, reviewPeriodId);
-        if (reviewPeriod.status === "inactive") {
-          throw new ApiError(409, "Review period is already available in the workspace");
+        if (reviewPeriod.status === 'inactive') {
+          throw new ApiError(409, 'Review period is already available in the workspace');
         }
 
         const result = await client.query<ReviewPeriodRow>(
@@ -3341,7 +3539,7 @@ export class ApiStore {
 
         const unarchivedReviewPeriod = result.rows[0];
         if (!unarchivedReviewPeriod) {
-          throw new ApiError(404, "Review period not found");
+          throw new ApiError(404, 'Review period not found');
         }
 
         return this.toReviewPeriod(unarchivedReviewPeriod);
@@ -3357,32 +3555,54 @@ export class ApiStore {
   async syncAssessmentsToAssignments(reviewPeriodId: string): Promise<SyncAssessmentsResponse> {
     try {
       return await withTransaction(async (client) => {
-        const reviewPeriod = this.toReviewPeriod(await this.reviewPeriodOrThrow(client, reviewPeriodId));
-        if (reviewPeriod.status !== "active") {
-          throw new ApiError(409, "Assessments can only be synced for the active review period");
+        const reviewPeriod = this.toReviewPeriod(
+          await this.reviewPeriodOrThrow(client, reviewPeriodId),
+        );
+        if (reviewPeriod.status !== 'active') {
+          throw new ApiError(409, 'Assessments can only be synced for the active review period');
         }
 
-        const selfQuestionSet = await this.activeQuestionSetOrThrow(reviewPeriodId, "self", client);
+        const selfQuestionSet = await this.activeQuestionSetOrThrow(reviewPeriodId, 'self', client);
         const employeeRows = await this.loadEmployeeRows(client);
-        const employees = employeeRows.map((row) => this.toEmployee(row)).filter((employee) => employee.status === "active");
-        const activeEmployeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
+        const employees = employeeRows
+          .map((row) => this.toEmployee(row))
+          .filter((employee) => employee.status === 'active');
+        const activeEmployeesById = new Map(
+          employees.map((employee) => [employee.id, employee] as const),
+        );
         const expectedAssessmentKeys = new Set<string>();
         for (const employee of employees) {
           expectedAssessmentKeys.add(`${employee.id}:${employee.id}`);
-          for (const assessorId of new Set([employee.assessor1Id, employee.assessor2Id].filter((value): value is string => value !== null))) {
+          for (const assessorId of new Set(
+            [employee.assessor1Id, employee.assessor2Id].filter(
+              (value): value is string => value !== null,
+            ),
+          )) {
             if (assessorId !== employee.id && activeEmployeesById.has(assessorId)) {
               expectedAssessmentKeys.add(`${employee.id}:${assessorId}`);
             }
           }
         }
 
-        await this.removeUnexpectedNotStartedAssessments(client, reviewPeriodId, expectedAssessmentKeys);
+        await this.removeUnexpectedNotStartedAssessments(
+          client,
+          reviewPeriodId,
+          expectedAssessmentKeys,
+        );
 
         const assignments = await this.loadAssignments(client, { reviewPeriodId });
-        const assignmentByKey = new Map(assignments.map((assignment) => [`${assignment.employeeId}:${assignment.assessorId}`, assignment] as const));
+        const assignmentByKey = new Map(
+          assignments.map(
+            (assignment) =>
+              [`${assignment.employeeId}:${assignment.assessorId}`, assignment] as const,
+          ),
+        );
         const existingAssessments = await this.loadAssessmentRecords(client, { reviewPeriodId });
         const existingAssessmentKeys = new Set(
-          existingAssessments.map((assessment) => `${assessment.assessment.employeeId}:${assessment.assessment.assessorId}`),
+          existingAssessments.map(
+            (assessment) =>
+              `${assessment.assessment.employeeId}:${assessment.assessment.assessorId}`,
+          ),
         );
 
         let peerQuestionSet: QuestionSet | null = null;
@@ -3440,8 +3660,14 @@ export class ApiStore {
           }
 
           const peerAssessors = Array.from(
-            new Set([employee.assessor1Id, employee.assessor2Id].filter((value): value is string => value !== null)),
-          ).filter((assessorId) => assessorId !== employee.id && activeEmployeesById.has(assessorId));
+            new Set(
+              [employee.assessor1Id, employee.assessor2Id].filter(
+                (value): value is string => value !== null,
+              ),
+            ),
+          ).filter(
+            (assessorId) => assessorId !== employee.id && activeEmployeesById.has(assessorId),
+          );
 
           for (const assessorId of peerAssessors) {
             const assessmentKey = `${employee.id}:${assessorId}`;
@@ -3449,7 +3675,7 @@ export class ApiStore {
               continue;
             }
 
-            peerQuestionSet ??= await this.activeQuestionSetOrThrow(reviewPeriodId, "peer", client);
+            peerQuestionSet ??= await this.activeQuestionSetOrThrow(reviewPeriodId, 'peer', client);
             const assignment = assignmentByKey.get(`${employee.id}:${assessorId}`) ?? null;
 
             await client.query(
@@ -3492,7 +3718,15 @@ export class ApiStore {
                   $7::timestamptz
                 )
               `,
-              [randomUUID(), reviewPeriodId, peerQuestionSet.id, assignment?.id ?? null, employee.id, assessorId, createdAt],
+              [
+                randomUUID(),
+                reviewPeriodId,
+                peerQuestionSet.id,
+                assignment?.id ?? null,
+                employee.id,
+                assessorId,
+                createdAt,
+              ],
             );
             existingAssessmentKeys.add(assessmentKey);
             createdPeerAssessments += 1;
@@ -3513,19 +3747,28 @@ export class ApiStore {
     }
   }
 
-  async clearReadyToStartAssessments(reviewPeriodId: string): Promise<ClearReadyAssessmentsResponse> {
+  async clearReadyToStartAssessments(
+    reviewPeriodId: string,
+  ): Promise<ClearReadyAssessmentsResponse> {
     try {
       return await withTransaction(async (client) => {
-        const reviewPeriod = this.toReviewPeriod(await this.reviewPeriodOrThrow(client, reviewPeriodId));
-        if (reviewPeriod.status !== "active") {
-          throw new ApiError(409, "Not started assessments can only be cleared for the active review period");
+        const reviewPeriod = this.toReviewPeriod(
+          await this.reviewPeriodOrThrow(client, reviewPeriodId),
+        );
+        if (reviewPeriod.status !== 'active') {
+          throw new ApiError(
+            409,
+            'Not started assessments can only be cleared for the active review period',
+          );
         }
 
         return {
           reviewPeriodId,
           clearedAssessments: await this.deleteAssessmentsById(
             client,
-            (await this.loadNotStartedAssessments(client, reviewPeriodId)).map((assessment) => assessment.id),
+            (await this.loadNotStartedAssessments(client, reviewPeriodId)).map(
+              (assessment) => assessment.id,
+            ),
           ),
         };
       });
@@ -3553,8 +3796,10 @@ export class ApiStore {
 
         const timestamp = nowIso();
         const questionSetId = randomUUID();
-        const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? "draft" : "active";
-        if (nextStatus === "active") {
+        const nextStatus: QuestionSet['status'] = this.questionSetStatusEnabled()
+          ? 'draft'
+          : 'active';
+        if (nextStatus === 'active') {
           await client.query(
             `
               UPDATE question_sets
@@ -3590,7 +3835,16 @@ export class ApiStore {
               $8::timestamptz
             )
           `,
-          [questionSetId, reviewPeriodId, input.target, nextStatus, input.title, input.headerMarkdown, input.footerMarkdown, timestamp],
+          [
+            questionSetId,
+            reviewPeriodId,
+            input.target,
+            nextStatus,
+            input.title,
+            input.headerMarkdown,
+            input.footerMarkdown,
+            timestamp,
+          ],
         );
 
         for (const question of input.questions) {
@@ -3599,11 +3853,21 @@ export class ApiStore {
               INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
               VALUES ($1, $2, $3, $4, $5, $6)
             `,
-            [question.id ?? randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+            [
+              question.id ?? randomUUID(),
+              questionSetId,
+              question.order,
+              question.type,
+              question.category,
+              question.prompt,
+            ],
           );
         }
 
-        await this.insertQuestionCategories(client, input.questions.map((question) => question.category));
+        await this.insertQuestionCategories(
+          client,
+          input.questions.map((question) => question.category),
+        );
 
         return await this.questionSetOrThrow(client, questionSetId);
       });
@@ -3629,9 +3893,9 @@ export class ApiStore {
           ...questionSet,
           ...updates,
         };
-        const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled()
-          ? updates.status ?? questionSet.status
-          : "active";
+        const nextStatus: QuestionSet['status'] = this.questionSetStatusEnabled()
+          ? (updates.status ?? questionSet.status)
+          : 'active';
 
         await client.query(
           `
@@ -3652,11 +3916,19 @@ export class ApiStore {
         );
 
         if (updates.questions !== undefined) {
-          await this.applyQuestionSetQuestionUpdates(client, questionSetId, questionSet.questions, updates.questions);
-          await this.insertQuestionCategories(client, updates.questions.map((question) => question.category));
+          await this.applyQuestionSetQuestionUpdates(
+            client,
+            questionSetId,
+            questionSet.questions,
+            updates.questions,
+          );
+          await this.insertQuestionCategories(
+            client,
+            updates.questions.map((question) => question.category),
+          );
         }
 
-        if (nextStatus === "active") {
+        if (nextStatus === 'active') {
           await client.query(
             `
               UPDATE question_sets
@@ -3668,7 +3940,9 @@ export class ApiStore {
             `,
             [questionSet.reviewPeriodId, questionSet.target, questionSetId],
           );
-          await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [questionSetId]);
+          await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [
+            questionSetId,
+          ]);
         }
 
         return await this.questionSetOrThrow(client, questionSetId);
@@ -3698,7 +3972,9 @@ export class ApiStore {
           `,
           [questionSet.reviewPeriodId, questionSet.target, questionSetId],
         );
-        await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [questionSetId]);
+        await client.query("UPDATE question_sets SET status = 'active' WHERE id = $1", [
+          questionSetId,
+        ]);
 
         return await this.questionSetOrThrow(client, questionSetId);
       });
@@ -3710,7 +3986,10 @@ export class ApiStore {
     }
   }
 
-  async exportQuestionSets(reviewPeriodId: string, format: "json" | "csv"): Promise<QuestionSetsExportResponse> {
+  async exportQuestionSets(
+    reviewPeriodId: string,
+    format: 'json' | 'csv',
+  ): Promise<QuestionSetsExportResponse> {
     const reviewPeriod = await this.reviewPeriodOrThrow(this.pool, reviewPeriodId);
     const items = await this.loadQuestionSets(this.pool, { reviewPeriodId });
 
@@ -3725,7 +4004,7 @@ export class ApiStore {
 
   async importQuestionSets(
     reviewPeriodId: string,
-    format: "json" | "csv",
+    format: 'json' | 'csv',
     items: QuestionSetTransferItem[],
   ): Promise<QuestionSetsImportResponse> {
     try {
@@ -3735,21 +4014,26 @@ export class ApiStore {
 
         const importedAt = nowIso();
         const seenQuestionSetKeys = new Set<string>();
-        const buildQuestionSetKey = (item: Pick<QuestionSetTransferItem, "target" | "title">) =>
+        const buildQuestionSetKey = (item: Pick<QuestionSetTransferItem, 'target' | 'title'>) =>
           `${item.target}\u0000${item.title.trim().toLowerCase()}`;
 
         for (const item of items) {
           this.assertQuestionInputs(item.questions);
           const questionSetKey = buildQuestionSetKey(item);
           if (seenQuestionSetKeys.has(questionSetKey)) {
-            throw new ApiError(400, `Imported question sets must be unique by target and title: ${item.title}`);
+            throw new ApiError(
+              400,
+              `Imported question sets must be unique by target and title: ${item.title}`,
+            );
           }
           seenQuestionSetKeys.add(questionSetKey);
         }
 
         const existingQuestionSets = await this.loadQuestionSets(client, { reviewPeriodId });
         const existingByKey = new Map(
-          existingQuestionSets.map((questionSet) => [buildQuestionSetKey(questionSet), questionSet] as const),
+          existingQuestionSets.map(
+            (questionSet) => [buildQuestionSetKey(questionSet), questionSet] as const,
+          ),
         );
 
         let createdCount = 0;
@@ -3761,8 +4045,10 @@ export class ApiStore {
           if (existing) {
             updatedCount += 1;
 
-            const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? item.status : "active";
-            if (nextStatus === "active") {
+            const nextStatus: QuestionSet['status'] = this.questionSetStatusEnabled()
+              ? item.status
+              : 'active';
+            if (nextStatus === 'active') {
               await client.query(
                 `
                   UPDATE question_sets
@@ -3788,20 +4074,33 @@ export class ApiStore {
               [existing.id, item.title, item.headerMarkdown, item.footerMarkdown, nextStatus],
             );
 
-            await this.applyQuestionSetQuestionUpdates(client, existing.id, existing.questions, item.questions);
-            await this.insertQuestionCategories(client, item.questions.map((question) => question.category));
+            await this.applyQuestionSetQuestionUpdates(
+              client,
+              existing.id,
+              existing.questions,
+              item.questions,
+            );
+            await this.insertQuestionCategories(
+              client,
+              item.questions.map((question) => question.category),
+            );
 
             importedQuestionSetIds.push(existing.id);
-            existingByKey.set(buildQuestionSetKey(item), await this.questionSetOrThrow(client, existing.id));
+            existingByKey.set(
+              buildQuestionSetKey(item),
+              await this.questionSetOrThrow(client, existing.id),
+            );
             continue;
           }
 
           createdCount += 1;
 
           const questionSetId = randomUUID();
-          const nextStatus: QuestionSet["status"] = this.questionSetStatusEnabled() ? item.status : "active";
+          const nextStatus: QuestionSet['status'] = this.questionSetStatusEnabled()
+            ? item.status
+            : 'active';
 
-          if (nextStatus === "active") {
+          if (nextStatus === 'active') {
             await client.query(
               `
                 UPDATE question_sets
@@ -3838,7 +4137,16 @@ export class ApiStore {
                 $8::timestamptz
               )
             `,
-            [questionSetId, reviewPeriodId, item.target, nextStatus, item.title, item.headerMarkdown, item.footerMarkdown, importedAt],
+            [
+              questionSetId,
+              reviewPeriodId,
+              item.target,
+              nextStatus,
+              item.title,
+              item.headerMarkdown,
+              item.footerMarkdown,
+              importedAt,
+            ],
           );
 
           for (const question of item.questions) {
@@ -3847,14 +4155,27 @@ export class ApiStore {
                 INSERT INTO question_set_questions (id, question_set_id, display_order, type, category, prompt)
                 VALUES ($1, $2, $3, $4, $5, $6)
               `,
-              [randomUUID(), questionSetId, question.order, question.type, question.category, question.prompt],
+              [
+                randomUUID(),
+                questionSetId,
+                question.order,
+                question.type,
+                question.category,
+                question.prompt,
+              ],
             );
           }
 
-          await this.insertQuestionCategories(client, item.questions.map((question) => question.category));
+          await this.insertQuestionCategories(
+            client,
+            item.questions.map((question) => question.category),
+          );
 
           importedQuestionSetIds.push(questionSetId);
-          existingByKey.set(buildQuestionSetKey(item), await this.questionSetOrThrow(client, questionSetId));
+          existingByKey.set(
+            buildQuestionSetKey(item),
+            await this.questionSetOrThrow(client, questionSetId),
+          );
         }
 
         const importedQuestionSets: QuestionSet[] = [];
@@ -3881,8 +4202,8 @@ export class ApiStore {
   }
 
   async exportLocalUsers(
-    format: "json" | "csv",
-    mode: LocalUsersExportMode = "rotate-passcodes",
+    format: 'json' | 'csv',
+    mode: LocalUsersExportMode = 'rotate-passcodes',
   ): Promise<LocalUsersExportResponse> {
     try {
       return await withTransaction(async (client) => {
@@ -3895,10 +4216,15 @@ export class ApiStore {
         for (const employeeRow of employeeRows) {
           const auth = this.toStoredAuthMetadata(employeeRow);
           const credentialKind: LocalUserCredentialKind =
-            mode === "preserve-passwords" ? (auth.passwordHash ? "password-hash" : "unset") : "password";
-          const password = mode === "preserve-passwords" ? auth.passwordHash ?? "" : generateTemporaryPassword();
+            mode === 'preserve-passwords'
+              ? auth.passwordHash
+                ? 'password-hash'
+                : 'unset'
+              : 'password';
+          const password =
+            mode === 'preserve-passwords' ? (auth.passwordHash ?? '') : generateTemporaryPassword();
 
-          if (mode === "rotate-passcodes") {
+          if (mode === 'rotate-passcodes') {
             await client.query(
               `
                 UPDATE employees
@@ -3915,7 +4241,7 @@ export class ApiStore {
           items.push(
             this.toLocalUserTransferItem(
               this.toEmployee(employeeRow),
-              mode === "rotate-passcodes"
+              mode === 'rotate-passcodes'
                 ? {
                     ...auth,
                     passwordHash: password,
@@ -3931,8 +4257,10 @@ export class ApiStore {
           );
         }
 
-        if (mode === "rotate-passcodes" && employeeRows.length > 0) {
-          await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [employeeRows.map((employee) => employee.id)]);
+        if (mode === 'rotate-passcodes' && employeeRows.length > 0) {
+          await client.query('DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])', [
+            employeeRows.map((employee) => employee.id),
+          ]);
         }
 
         return {
@@ -3951,7 +4279,10 @@ export class ApiStore {
     }
   }
 
-  async importLocalUsers(format: "json" | "csv", items: LocalUserTransferItem[]): Promise<LocalUsersImportResponse> {
+  async importLocalUsers(
+    format: 'json' | 'csv',
+    items: LocalUserTransferItem[],
+  ): Promise<LocalUsersImportResponse> {
     try {
       return await withTransaction(async (client) => {
         await this.ensureEmployeeUsernameStorage(client);
@@ -3962,10 +4293,10 @@ export class ApiStore {
         for (const item of items) {
           const normalizedUsername = this.normalizeUsername(item.username);
           if (seenUsernames.has(normalizedUsername)) {
-            throw new ApiError(400, "Imported usernames must be unique");
+            throw new ApiError(400, 'Imported usernames must be unique');
           }
           if (seenEmails.has(item.email)) {
-            throw new ApiError(400, "Imported emails must be unique");
+            throw new ApiError(400, 'Imported emails must be unique');
           }
           seenUsernames.add(normalizedUsername);
           seenEmails.add(item.email);
@@ -3976,7 +4307,9 @@ export class ApiStore {
           includeDeleted: true,
         });
         const existingByUsername = new Map(
-          existingRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+          existingRows.map(
+            (employee) => [this.normalizeUsername(employee.username), employee] as const,
+          ),
         );
 
         let createdCount = 0;
@@ -4038,7 +4371,15 @@ export class ApiStore {
                 $7::timestamptz
               )
             `,
-            [item.id ?? randomUUID(), item.username, item.fullName, item.email, item.role, item.status, importedAt],
+            [
+              item.id ?? randomUUID(),
+              item.username,
+              item.fullName,
+              item.email,
+              item.role,
+              item.status,
+              importedAt,
+            ],
           );
         }
 
@@ -4058,40 +4399,64 @@ export class ApiStore {
         );
         const finalRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
         const finalByUsername = new Map(
-          finalRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+          finalRows.map(
+            (employee) => [this.normalizeUsername(employee.username), employee] as const,
+          ),
         );
 
         for (const item of items) {
           const employee = finalByUsername.get(this.normalizeUsername(item.username));
           if (!employee) {
-            throw new ApiError(500, "Imported employee missing after merge");
+            throw new ApiError(500, 'Imported employee missing after merge');
           }
 
-          const managerId = item.managerUsername === null
-            ? null
-            : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
-                throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
-              })();
-          const assessor1Id = item.assessor1Username === null
-            ? null
-            : finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ?? (() => {
-                throw new ApiError(400, `Assessor 1 username not found: ${item.assessor1Username}`);
-              })();
-          const assessor2Id = item.assessor2Username === null
-            ? null
-            : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
-                throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
-              })();
-          const reviewer1Id = item.reviewer1Username === null
-            ? null
-            : finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ?? (() => {
-                throw new ApiError(400, `Reviewer 1 username not found: ${item.reviewer1Username}`);
-              })();
-          const reviewer2Id = item.reviewer2Username === null
-            ? null
-            : finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ?? (() => {
-                throw new ApiError(400, `Reviewer 2 username not found: ${item.reviewer2Username}`);
-              })();
+          const managerId =
+            item.managerUsername === null
+              ? null
+              : (finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ??
+                (() => {
+                  throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+                })());
+          const assessor1Id =
+            item.assessor1Username === null
+              ? null
+              : (finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ??
+                (() => {
+                  throw new ApiError(
+                    400,
+                    `Assessor 1 username not found: ${item.assessor1Username}`,
+                  );
+                })());
+          const assessor2Id =
+            item.assessor2Username === null
+              ? null
+              : (finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ??
+                (() => {
+                  throw new ApiError(
+                    400,
+                    `Assessor 2 username not found: ${item.assessor2Username}`,
+                  );
+                })());
+          const reviewer1Id =
+            item.reviewer1Username === null
+              ? null
+              : (finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ??
+                (() => {
+                  throw new ApiError(
+                    400,
+                    `Reviewer 1 username not found: ${item.reviewer1Username}`,
+                  );
+                })());
+          const reviewer2Id =
+            item.reviewer2Username === null
+              ? null
+              : (finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ??
+                (() => {
+                  throw new ApiError(
+                    400,
+                    `Reviewer 2 username not found: ${item.reviewer2Username}`,
+                  );
+                })());
 
           await this.assertRelationships(client, {
             id: employee.id,
@@ -4130,18 +4495,24 @@ export class ApiStore {
           );
         }
 
-        const importedRows = await this.loadEmployeeRows(client, { usernames: items.map((item) => item.username) });
+        const importedRows = await this.loadEmployeeRows(client, {
+          usernames: items.map((item) => item.username),
+        });
         if (importedRows.length > 0) {
-          await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [importedRows.map((employee) => employee.id)]);
+          await client.query('DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])', [
+            importedRows.map((employee) => employee.id),
+          ]);
         }
 
         const importedByUsername = new Map(
-          importedRows.map((employee) => [this.normalizeUsername(employee.username), employee] as const),
+          importedRows.map(
+            (employee) => [this.normalizeUsername(employee.username), employee] as const,
+          ),
         );
         const importedEmployees = items.map((item) => {
           const employee = importedByUsername.get(this.normalizeUsername(item.username));
           if (!employee) {
-            throw new ApiError(500, "Imported employee missing after commit");
+            throw new ApiError(500, 'Imported employee missing after commit');
           }
 
           return this.toEmployeeAdmin(employee);
@@ -4203,7 +4574,14 @@ export class ApiStore {
               $6::timestamptz
             )
           `,
-          [assignmentId, reviewPeriodId, input.employeeId, input.managerId, input.assessorId, timestamp],
+          [
+            assignmentId,
+            reviewPeriodId,
+            input.employeeId,
+            input.managerId,
+            input.assessorId,
+            timestamp,
+          ],
         );
 
         return await this.assignmentOrThrow(client, assignmentId);
@@ -4251,7 +4629,7 @@ export class ApiStore {
 
         const updatedAssignment = result.rows[0];
         if (!updatedAssignment) {
-          throw new ApiError(404, "Assignment not found");
+          throw new ApiError(404, 'Assignment not found');
         }
 
         return {
@@ -4289,10 +4667,10 @@ export class ApiStore {
           [assignmentId],
         );
         if (assessmentReference.rows[0]?.exists) {
-          throw new ApiError(409, "Assignment is still referenced by assessments");
+          throw new ApiError(409, 'Assignment is still referenced by assessments');
         }
 
-        await client.query("DELETE FROM review_period_assignments WHERE id = $1", [assignmentId]);
+        await client.query('DELETE FROM review_period_assignments WHERE id = $1', [assignmentId]);
 
         return {
           assignmentId,
@@ -4307,7 +4685,10 @@ export class ApiStore {
     }
   }
 
-  async exportAssignments(reviewPeriodId: string, format: "json" | "csv"): Promise<AssignmentsExportResponse> {
+  async exportAssignments(
+    reviewPeriodId: string,
+    format: 'json' | 'csv',
+  ): Promise<AssignmentsExportResponse> {
     return withTransaction(async (client) => {
       await this.reviewPeriodOrThrow(client, reviewPeriodId);
 
@@ -4315,21 +4696,26 @@ export class ApiStore {
       const employeeIds = Array.from(
         new Set(
           assignments.flatMap((assignment) =>
-            [assignment.employeeId, assignment.managerId, assignment.assessorId].filter((value): value is string => value !== null),
+            [assignment.employeeId, assignment.managerId, assignment.assessorId].filter(
+              (value): value is string => value !== null,
+            ),
           ),
         ),
       );
-      const employeeRows = employeeIds.length > 0
-        ? await this.loadEmployeeRows(client, { employeeIds, includeDeleted: true })
-        : [];
+      const employeeRows =
+        employeeIds.length > 0
+          ? await this.loadEmployeeRows(client, { employeeIds, includeDeleted: true })
+          : [];
       const employeesById = new Map(employeeRows.map((row) => [row.id, row] as const));
 
       const items = assignments.map((assignment) => {
         const employee = employeesById.get(assignment.employeeId);
-        const manager = assignment.managerId ? employeesById.get(assignment.managerId) ?? null : null;
+        const manager = assignment.managerId
+          ? (employeesById.get(assignment.managerId) ?? null)
+          : null;
         const assessor = employeesById.get(assignment.assessorId);
         if (!employee || !assessor) {
-          throw new ApiError(500, "Assignment export could not resolve employee details");
+          throw new ApiError(500, 'Assignment export could not resolve employee details');
         }
 
         return {
@@ -4355,7 +4741,7 @@ export class ApiStore {
 
   async importAssignments(
     reviewPeriodId: string,
-    format: "json" | "csv",
+    format: 'json' | 'csv',
     items: AssignmentTransferItem[],
   ): Promise<AssignmentsImportResponse> {
     try {
@@ -4368,7 +4754,10 @@ export class ApiStore {
         for (const item of items) {
           const normalizedUsername = this.normalizeUsername(item.employeeUsername);
           if (seenEmployeeUsernames.has(normalizedUsername)) {
-            throw new ApiError(400, `Imported assignments must be unique by employee username: ${item.employeeUsername}`);
+            throw new ApiError(
+              400,
+              `Imported assignments must be unique by employee username: ${item.employeeUsername}`,
+            );
           }
           seenEmployeeUsernames.add(normalizedUsername);
         }
@@ -4376,16 +4765,24 @@ export class ApiStore {
         const referencedUsernames = Array.from(
           new Set(
             items
-              .flatMap((item) => [item.employeeUsername, item.managerUsername, item.assessorUsername])
+              .flatMap((item) => [
+                item.employeeUsername,
+                item.managerUsername,
+                item.assessorUsername,
+              ])
               .filter((value): value is string => value !== null),
           ),
         );
-        const employeeRows = await this.loadEmployeeRows(client, { usernames: referencedUsernames });
+        const employeeRows = await this.loadEmployeeRows(client, {
+          usernames: referencedUsernames,
+        });
         const employeesByUsername = new Map(
           employeeRows.map((row) => [this.normalizeUsername(row.username), row] as const),
         );
         const existingAssignments = await this.loadAssignments(client, { reviewPeriodId });
-        const existingByEmployeeId = new Map(existingAssignments.map((assignment) => [assignment.employeeId, assignment] as const));
+        const existingByEmployeeId = new Map(
+          existingAssignments.map((assignment) => [assignment.employeeId, assignment] as const),
+        );
 
         let createdCount = 0;
         let updatedCount = 0;
@@ -4397,14 +4794,18 @@ export class ApiStore {
             throw new ApiError(400, `Employee username not found: ${item.employeeUsername}`);
           }
 
-          const managerId = item.managerUsername === null
-            ? null
-            : employeesByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
-                throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
-              })();
-          const assessorId = employeesByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ?? (() => {
-            throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
-          })();
+          const managerId =
+            item.managerUsername === null
+              ? null
+              : (employeesByUsername.get(this.normalizeUsername(item.managerUsername))?.id ??
+                (() => {
+                  throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+                })());
+          const assessorId =
+            employeesByUsername.get(this.normalizeUsername(item.assessorUsername))?.id ??
+            (() => {
+              throw new ApiError(400, `Assessor username not found: ${item.assessorUsername}`);
+            })();
           const existing = existingByEmployeeId.get(employee.id) ?? null;
 
           await this.ensureAssignmentCandidate(client, reviewPeriodId, {
@@ -4497,7 +4898,7 @@ export class ApiStore {
   async replaceQuestionCategories(input: UpdateQuestionCategoriesRequest) {
     return withTransaction(async (client) => {
       await this.ensureQuestionCategoriesTable(client);
-      await client.query("DELETE FROM question_categories");
+      await client.query('DELETE FROM question_categories');
       await this.insertQuestionCategories(client, input.items);
       return this.loadQuestionCategories(client);
     });
@@ -4545,7 +4946,7 @@ export class ApiStore {
 
     const row = result.rows[0];
     if (!row) {
-      throw new ApiError(500, "Workflow settings are unavailable");
+      throw new ApiError(500, 'Workflow settings are unavailable');
     }
 
     return this.toWorkflowSettings(row);
@@ -4581,13 +4982,13 @@ export class ApiStore {
       retentionCount: config.retentionCount,
       lastBackupAt: config.lastBackupAt,
       lastRestoreAt: config.lastRestoreAt,
-      defaultUserExportMode: "preserve-passwords",
-      replaceStrategy: "replace",
-      supportedFormats: ["json"],
+      defaultUserExportMode: 'preserve-passwords',
+      replaceStrategy: 'replace',
+      supportedFormats: ['json'],
       supportedSchedules: supportedBackupSchedules,
-      supportedRestoreModes: ["replace"],
-      supportedRestoreScopes: ["all", "users", "questions", "reviews"],
-      supportedUserExportModes: ["rotate-passcodes", "preserve-passwords"],
+      supportedRestoreModes: ['replace'],
+      supportedRestoreScopes: ['all', 'users', 'questions', 'reviews'],
+      supportedUserExportModes: ['rotate-passcodes', 'preserve-passwords'],
     };
   }
 
@@ -4601,9 +5002,17 @@ export class ApiStore {
     return this.getBackupStatus();
   }
 
-  async createBackup(mode: LocalUsersExportMode = "preserve-passwords"): Promise<BackupSnapshot> {
-    const [users, reviewPeriods, questionSets, questionCategories, assignments, assessments, workflow] = await Promise.all([
-      this.exportLocalUsers("json", mode),
+  async createBackup(mode: LocalUsersExportMode = 'preserve-passwords'): Promise<BackupSnapshot> {
+    const [
+      users,
+      reviewPeriods,
+      questionSets,
+      questionCategories,
+      assignments,
+      assessments,
+      workflow,
+    ] = await Promise.all([
+      this.exportLocalUsers('json', mode),
       this.listReviewPeriods(),
       this.listQuestionSets(),
       this.listQuestionCategories(),
@@ -4659,33 +5068,38 @@ export class ApiStore {
   }
 
   async createStoredBackup(): Promise<BackupStoredFile> {
-    const backup = await this.createBackup("preserve-passwords");
+    const backup = await this.createBackup('preserve-passwords');
     const archiveDir = this.ensureBackupArchiveDir();
-    const fileName = this.buildUniqueStoredBackupFilename(this.buildStoredBackupFilename(backup.exportedAt));
-    writeFileSync(join(archiveDir, fileName), `${JSON.stringify(backup, null, 2)}\n`, "utf8");
+    const fileName = this.buildUniqueStoredBackupFilename(
+      this.buildStoredBackupFilename(backup.exportedAt),
+    );
+    writeFileSync(join(archiveDir, fileName), `${JSON.stringify(backup, null, 2)}\n`, 'utf8');
     return this.toStoredBackupFile(fileName);
   }
 
-  async uploadStoredBackup(fileName: string, rawBackup: string): Promise<{ item: BackupStoredFile; renamedFrom?: string }> {
+  async uploadStoredBackup(
+    fileName: string,
+    rawBackup: string,
+  ): Promise<{ item: BackupStoredFile; renamedFrom?: string }> {
     try {
       backupSnapshotSchema.parse(JSON.parse(rawBackup));
     } catch {
-      throw new ApiError(400, "Uploaded backup must contain valid Revu JSON backup data");
+      throw new ApiError(400, 'Uploaded backup must contain valid Revu JSON backup data');
     }
 
     const sanitizedName = this.sanitizeUploadedBackupFilename(fileName);
     const uniqueName = this.buildUniqueStoredBackupFilename(sanitizedName);
     const archiveDir = this.ensureBackupArchiveDir();
-    writeFileSync(join(archiveDir, uniqueName), rawBackup, "utf8");
+    writeFileSync(join(archiveDir, uniqueName), rawBackup, 'utf8');
     return {
       item: this.toStoredBackupFile(uniqueName),
       renamedFrom: uniqueName === fileName ? undefined : fileName,
     };
   }
 
-  async downloadStoredBackup(fileName: string, mode: LocalUsersExportMode = "preserve-passwords") {
-    if (mode === "rotate-passcodes") {
-      const backup = await this.createBackup("rotate-passcodes");
+  async downloadStoredBackup(fileName: string, mode: LocalUsersExportMode = 'preserve-passwords') {
+    if (mode === 'rotate-passcodes') {
+      const backup = await this.createBackup('rotate-passcodes');
       return {
         fileName: this.buildStoredBackupFilename(backup.exportedAt),
         content: `${JSON.stringify(backup, null, 2)}\n`,
@@ -4695,7 +5109,7 @@ export class ApiStore {
     const filePath = this.getStoredBackupFilePath(fileName);
     return {
       fileName,
-      content: readFileSync(filePath, "utf8"),
+      content: readFileSync(filePath, 'utf8'),
     };
   }
 
@@ -4718,7 +5132,11 @@ export class ApiStore {
       new Set(
         [
           ...reviewData.reviewPeriods.map((item) => item.archivedByEmployeeId),
-          ...reviewData.assignments.flatMap((item) => [item.employeeId, item.managerId, item.assessorId]),
+          ...reviewData.assignments.flatMap((item) => [
+            item.employeeId,
+            item.managerId,
+            item.assessorId,
+          ]),
           ...reviewData.assessments.flatMap((item) => [
             item.employeeId,
             item.assessorId,
@@ -4741,7 +5159,7 @@ export class ApiStore {
     const existingIds = new Set(existingRows.map((row) => row.id));
     const missingIds = employeeIds.filter((employeeId) => !existingIds.has(employeeId));
     if (missingIds.length > 0) {
-      throw new ApiError(409, `Backup references missing employees: ${missingIds.join(", ")}`);
+      throw new ApiError(409, `Backup references missing employees: ${missingIds.join(', ')}`);
     }
   }
 
@@ -4851,7 +5269,7 @@ export class ApiStore {
     const normalized: string[] = [];
 
     for (const category of categories) {
-      if (typeof category !== "string") {
+      if (typeof category !== 'string') {
         continue;
       }
 
@@ -4869,7 +5287,9 @@ export class ApiStore {
       normalized.push(trimmedCategory);
     }
 
-    return normalized.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+    return normalized.sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    );
   }
 
   private async ensureQuestionCategoriesTable(client: DbClient) {
@@ -4884,7 +5304,10 @@ export class ApiStore {
     );
   }
 
-  private async insertQuestionCategories(client: DbClient, categories: Array<string | null | undefined>) {
+  private async insertQuestionCategories(
+    client: DbClient,
+    categories: Array<string | null | undefined>,
+  ) {
     const normalizedCategories = this.normalizeQuestionCategories(categories);
     await this.ensureQuestionCategoriesTable(client);
 
@@ -5033,7 +5456,13 @@ export class ApiStore {
               updated_at
             ) VALUES ($1,$2,$3,$4::timestamptz,$5::timestamptz)
           `,
-          [assessment.id, response.questionId, response.response, assessment.createdAt, assessment.updatedAt],
+          [
+            assessment.id,
+            response.questionId,
+            response.response,
+            assessment.createdAt,
+            assessment.updatedAt,
+          ],
         );
       }
     }
@@ -5051,17 +5480,17 @@ export class ApiStore {
 
       if (item.id) {
         if (seenIds.has(item.id)) {
-          throw new ApiError(400, "Backup user ids must be unique");
+          throw new ApiError(400, 'Backup user ids must be unique');
         }
         seenIds.add(item.id);
       }
 
       const normalizedUsername = this.normalizeUsername(item.username);
       if (seenUsernames.has(normalizedUsername)) {
-        throw new ApiError(400, "Backup usernames must be unique");
+        throw new ApiError(400, 'Backup usernames must be unique');
       }
       if (seenEmails.has(item.email)) {
-        throw new ApiError(400, "Backup emails must be unique");
+        throw new ApiError(400, 'Backup emails must be unique');
       }
 
       seenUsernames.add(normalizedUsername);
@@ -5069,7 +5498,11 @@ export class ApiStore {
     }
   }
 
-  private async upsertUsersSnapshot(client: DbClient, items: LocalUserTransferItem[], timestamp: string) {
+  private async upsertUsersSnapshot(
+    client: DbClient,
+    items: LocalUserTransferItem[],
+    timestamp: string,
+  ) {
     await this.ensureEmployeeUsernameStorage(client);
     this.validateRestoreUsers(items, true);
 
@@ -5086,7 +5519,10 @@ export class ApiStore {
       const currentById = existingById.get(item.id!);
       const currentByUsername = existingByUsername.get(this.normalizeUsername(item.username));
       if (currentByUsername && currentByUsername.id !== item.id) {
-        throw new ApiError(409, `Backup user id does not match the existing username: ${item.username}`);
+        throw new ApiError(
+          409,
+          `Backup user id does not match the existing username: ${item.username}`,
+        );
       }
 
       if (currentById) {
@@ -5180,38 +5616,50 @@ export class ApiStore {
     const finalRows = await this.loadEmployeeRows(client, {
       employeeIds: Array.from(itemsById.keys()),
     });
-    const finalByUsername = new Map(finalRows.map((row) => [this.normalizeUsername(row.username), row] as const));
+    const finalByUsername = new Map(
+      finalRows.map((row) => [this.normalizeUsername(row.username), row] as const),
+    );
     for (const item of items) {
       const employee = finalByUsername.get(this.normalizeUsername(item.username));
       if (!employee) {
-        throw new ApiError(500, "Restored employee missing after upsert");
+        throw new ApiError(500, 'Restored employee missing after upsert');
       }
 
-      const managerId = item.managerUsername === null
-        ? null
-        : finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ?? (() => {
-            throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
-          })();
-      const assessor1Id = item.assessor1Username === null
-        ? null
-        : finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ?? (() => {
-            throw new ApiError(400, `Assessor 1 username not found: ${item.assessor1Username}`);
-          })();
-      const assessor2Id = item.assessor2Username === null
-        ? null
-        : finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ?? (() => {
-            throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
-          })();
-      const reviewer1Id = item.reviewer1Username === null
-        ? null
-        : finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ?? (() => {
-            throw new ApiError(400, `Reviewer 1 username not found: ${item.reviewer1Username}`);
-          })();
-      const reviewer2Id = item.reviewer2Username === null
-        ? null
-        : finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ?? (() => {
-            throw new ApiError(400, `Reviewer 2 username not found: ${item.reviewer2Username}`);
-          })();
+      const managerId =
+        item.managerUsername === null
+          ? null
+          : (finalByUsername.get(this.normalizeUsername(item.managerUsername))?.id ??
+            (() => {
+              throw new ApiError(400, `Manager username not found: ${item.managerUsername}`);
+            })());
+      const assessor1Id =
+        item.assessor1Username === null
+          ? null
+          : (finalByUsername.get(this.normalizeUsername(item.assessor1Username))?.id ??
+            (() => {
+              throw new ApiError(400, `Assessor 1 username not found: ${item.assessor1Username}`);
+            })());
+      const assessor2Id =
+        item.assessor2Username === null
+          ? null
+          : (finalByUsername.get(this.normalizeUsername(item.assessor2Username))?.id ??
+            (() => {
+              throw new ApiError(400, `Assessor 2 username not found: ${item.assessor2Username}`);
+            })());
+      const reviewer1Id =
+        item.reviewer1Username === null
+          ? null
+          : (finalByUsername.get(this.normalizeUsername(item.reviewer1Username))?.id ??
+            (() => {
+              throw new ApiError(400, `Reviewer 1 username not found: ${item.reviewer1Username}`);
+            })());
+      const reviewer2Id =
+        item.reviewer2Username === null
+          ? null
+          : (finalByUsername.get(this.normalizeUsername(item.reviewer2Username))?.id ??
+            (() => {
+              throw new ApiError(400, `Reviewer 2 username not found: ${item.reviewer2Username}`);
+            })());
 
       await this.assertRelationships(client, {
         id: employee.id,
@@ -5242,7 +5690,9 @@ export class ApiStore {
 
     const existingRows = await this.loadEmployeeRows(client);
     const expectedIds = new Set(items.map((item) => item.id!));
-    const removableIds = existingRows.filter((row) => !expectedIds.has(row.id)).map((row) => row.id);
+    const removableIds = existingRows
+      .filter((row) => !expectedIds.has(row.id))
+      .map((row) => row.id);
     if (removableIds.length === 0) {
       return;
     }
@@ -5327,35 +5777,48 @@ export class ApiStore {
     if (referenceResult.rows.length > 0) {
       const existingById = new Map(existingRows.map((row) => [row.id, row.username]));
       const blockedUsernames = Array.from(
-        new Set(referenceResult.rows.map((row) => existingById.get(row.employee_id) ?? row.employee_id)),
+        new Set(
+          referenceResult.rows.map((row) => existingById.get(row.employee_id) ?? row.employee_id),
+        ),
       ).sort();
       throw new ApiError(
         409,
-        `User restore would remove employees still referenced by review data: ${blockedUsernames.join(", ")}`,
+        `User restore would remove employees still referenced by review data: ${blockedUsernames.join(', ')}`,
       );
     }
   }
 
-  private async replaceUsersOnly(client: DbClient, items: LocalUserTransferItem[], restoredAt: string) {
+  private async replaceUsersOnly(
+    client: DbClient,
+    items: LocalUserTransferItem[],
+    restoredAt: string,
+  ) {
     await this.assertUsersRestoreSafe(client, items);
 
     const existingRows = await this.loadEmployeeRows(client);
     const expectedIds = new Set(items.map((item) => item.id!));
-    const removableIds = existingRows.filter((row) => !expectedIds.has(row.id)).map((row) => row.id);
+    const removableIds = existingRows
+      .filter((row) => !expectedIds.has(row.id))
+      .map((row) => row.id);
 
     if (existingRows.length > 0) {
-      await client.query("DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])", [existingRows.map((row) => row.id)]);
+      await client.query('DELETE FROM auth_sessions WHERE employee_id = ANY($1::uuid[])', [
+        existingRows.map((row) => row.id),
+      ]);
     }
 
     if (removableIds.length > 0) {
-      await client.query("DELETE FROM employees WHERE id = ANY($1::uuid[])", [removableIds]);
+      await client.query('DELETE FROM employees WHERE id = ANY($1::uuid[])', [removableIds]);
     }
 
     await this.upsertUsersSnapshot(client, items, restoredAt);
   }
 
   private async replaceQuestionsOnly(client: DbClient, reviewData: BackupReviewData) {
-    const inUseResult = await client.query<{ assignments_count: string; assessments_count: string }>(
+    const inUseResult = await client.query<{
+      assignments_count: string;
+      assessments_count: string;
+    }>(
       `
         SELECT
           (SELECT COUNT(*)::text FROM review_period_assignments) AS assignments_count,
@@ -5363,15 +5826,21 @@ export class ApiStore {
       `,
     );
 
-    if (Number(inUseResult.rows[0]?.assignments_count ?? "0") > 0 || Number(inUseResult.rows[0]?.assessments_count ?? "0") > 0) {
-      throw new ApiError(409, "Question-only restores require assignments and assessments to be cleared first");
+    if (
+      Number(inUseResult.rows[0]?.assignments_count ?? '0') > 0 ||
+      Number(inUseResult.rows[0]?.assessments_count ?? '0') > 0
+    ) {
+      throw new ApiError(
+        409,
+        'Question-only restores require assignments and assessments to be cleared first',
+      );
     }
 
     await this.ensureQuestionCategoriesTable(client);
-    await client.query("DELETE FROM question_categories");
-    await client.query("DELETE FROM question_set_questions");
-    await client.query("DELETE FROM question_sets");
-    await client.query("DELETE FROM review_periods");
+    await client.query('DELETE FROM question_categories');
+    await client.query('DELETE FROM question_set_questions');
+    await client.query('DELETE FROM question_sets');
+    await client.query('DELETE FROM review_periods');
 
     await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
     await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
@@ -5382,15 +5851,15 @@ export class ApiStore {
   private async replaceReviewData(client: DbClient, reviewData: BackupReviewData) {
     await this.assertReviewDataEmployeesExist(client, reviewData);
 
-    await client.query("DELETE FROM assessment_review_events");
-    await client.query("DELETE FROM assessment_responses");
-    await client.query("DELETE FROM assessments");
-    await client.query("DELETE FROM review_period_assignments");
+    await client.query('DELETE FROM assessment_review_events');
+    await client.query('DELETE FROM assessment_responses');
+    await client.query('DELETE FROM assessments');
+    await client.query('DELETE FROM review_period_assignments');
     await this.ensureQuestionCategoriesTable(client);
-    await client.query("DELETE FROM question_categories");
-    await client.query("DELETE FROM question_set_questions");
-    await client.query("DELETE FROM question_sets");
-    await client.query("DELETE FROM review_periods");
+    await client.query('DELETE FROM question_categories');
+    await client.query('DELETE FROM question_set_questions');
+    await client.query('DELETE FROM question_sets');
+    await client.query('DELETE FROM review_periods');
 
     await this.insertReviewPeriodsSnapshot(client, reviewData.reviewPeriods);
     await this.insertQuestionSetsSnapshot(client, reviewData.questionSets);
@@ -5400,35 +5869,38 @@ export class ApiStore {
     await this.replaceWorkflowSettings(client, reviewData.workflow);
   }
 
-  async restoreBackup(scope: BackupRestoreScope, backup: BackupSnapshot): Promise<BackupRestoreResponse> {
+  async restoreBackup(
+    scope: BackupRestoreScope,
+    backup: BackupSnapshot,
+  ): Promise<BackupRestoreResponse> {
     try {
       const response = await withTransaction(async (client) => {
         const restoredAt = nowIso();
-        await client.query("SET LOCAL session_replication_role = replica");
+        await client.query('SET LOCAL session_replication_role = replica');
 
-        if (scope === "all") {
-          await client.query("DELETE FROM assessment_review_events");
-          await client.query("DELETE FROM assessment_responses");
-          await client.query("DELETE FROM assessments");
-          await client.query("DELETE FROM review_period_assignments");
-          await client.query("DELETE FROM question_set_questions");
-          await client.query("DELETE FROM question_sets");
-          await client.query("DELETE FROM review_periods");
-          await client.query("DELETE FROM auth_sessions");
-          await client.query("DELETE FROM employees");
+        if (scope === 'all') {
+          await client.query('DELETE FROM assessment_review_events');
+          await client.query('DELETE FROM assessment_responses');
+          await client.query('DELETE FROM assessments');
+          await client.query('DELETE FROM review_period_assignments');
+          await client.query('DELETE FROM question_set_questions');
+          await client.query('DELETE FROM question_sets');
+          await client.query('DELETE FROM review_periods');
+          await client.query('DELETE FROM auth_sessions');
+          await client.query('DELETE FROM employees');
 
           await this.upsertUsersSnapshot(client, backup.users.items, restoredAt);
           await this.replaceReviewData(client, backup.reviewData);
-        } else if (scope === "users") {
+        } else if (scope === 'users') {
           await this.replaceUsersOnly(client, backup.users.items, restoredAt);
-        } else if (scope === "questions") {
+        } else if (scope === 'questions') {
           await this.replaceQuestionsOnly(client, backup.reviewData);
         } else {
           await this.replaceReviewData(client, backup.reviewData);
         }
 
         return {
-          mode: "replace" as const,
+          mode: 'replace' as const,
           target: scope,
           restoredAt,
           userMode: backup.users.mode,
@@ -5457,7 +5929,11 @@ export class ApiStore {
 
   async listAssessments(session: AuthSession, query: AssessmentsListQuery = {}) {
     const records = await this.loadAssessmentRecords(this.pool, query);
-    return clone(records.filter((assessment) => this.canReadAssessment(session, assessment)).map((assessment) => assessment.assessment));
+    return clone(
+      records
+        .filter((assessment) => this.canReadAssessment(session, assessment))
+        .map((assessment) => assessment.assessment),
+    );
   }
 
   async getAssessment(session: AuthSession, assessmentId: string) {
@@ -5466,7 +5942,11 @@ export class ApiStore {
     return clone(assessment.assessment);
   }
 
-  async createAssessment(session: AuthSession, reviewPeriodId: string, input: CreateAssessmentRequest) {
+  async createAssessment(
+    session: AuthSession,
+    reviewPeriodId: string,
+    input: CreateAssessmentRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         await this.ensureAssessmentWorkflowColumns(client);
@@ -5475,9 +5955,12 @@ export class ApiStore {
         const assessorId = session.user.id;
         const target = input.target;
 
-        if (target === "self") {
+        if (target === 'self') {
           if (input.employeeId !== assessorId) {
-            throw new ApiError(403, "Self assessments can only be authored by the employee being reviewed");
+            throw new ApiError(
+              403,
+              'Self assessments can only be authored by the employee being reviewed',
+            );
           }
         } else {
           const assignment = input.assignmentId
@@ -5486,23 +5969,34 @@ export class ApiStore {
                 (item) => item.employeeId === input.employeeId && item.assessorId === assessorId,
               );
 
-          if (!assignment || assignment.reviewPeriodId !== reviewPeriodId || assignment.employeeId !== input.employeeId) {
-            throw new ApiError(403, "Peer assessments can only be authored by the assigned assessor");
+          if (
+            !assignment ||
+            assignment.reviewPeriodId !== reviewPeriodId ||
+            assignment.employeeId !== input.employeeId
+          ) {
+            throw new ApiError(
+              403,
+              'Peer assessments can only be authored by the assigned assessor',
+            );
           }
         }
 
         if (await this.findAssessmentByKey(client, reviewPeriodId, input.employeeId, assessorId)) {
-          throw new ApiError(409, "An assessment already exists for this review period, employee, and assessor");
+          throw new ApiError(
+            409,
+            'An assessment already exists for this review period, employee, and assessor',
+          );
         }
 
-        const assignment = target === "peer"
-          ? (await this.loadAssignments(client, { reviewPeriodId })).find(
-              (item) =>
-                item.employeeId === input.employeeId &&
-                item.assessorId === assessorId &&
-                (input.assignmentId ? item.id === input.assignmentId : true),
-            ) ?? null
-          : null;
+        const assignment =
+          target === 'peer'
+            ? ((await this.loadAssignments(client, { reviewPeriodId })).find(
+                (item) =>
+                  item.employeeId === input.employeeId &&
+                  item.assessorId === assessorId &&
+                  (input.assignmentId ? item.id === input.assignmentId : true),
+              ) ?? null)
+            : null;
 
         const questionSet = await this.activeQuestionSetOrThrow(reviewPeriodId, target, client);
         const timestamp = nowIso();
@@ -5547,7 +6041,16 @@ export class ApiStore {
               $8::timestamptz
             )
           `,
-          [assessmentId, reviewPeriodId, questionSet.id, assignment?.id ?? null, target, input.employeeId, assessorId, timestamp],
+          [
+            assessmentId,
+            reviewPeriodId,
+            questionSet.id,
+            assignment?.id ?? null,
+            target,
+            input.employeeId,
+            assessorId,
+            timestamp,
+          ],
         );
 
         return (await this.assessmentOrThrow(client, assessmentId)).assessment;
@@ -5560,14 +6063,18 @@ export class ApiStore {
     }
   }
 
-  async saveAssessmentDraft(session: AuthSession, assessmentId: string, input: SaveAssessmentDraftRequest) {
+  async saveAssessmentDraft(
+    session: AuthSession,
+    assessmentId: string,
+    input: SaveAssessmentDraftRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
         this.assertCanAuthorAssessment(session, assessment);
         await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
 
-        const nextState: AssessmentReviewState = input.responses.length > 0 ? "draft" : "new";
+        const nextState: AssessmentReviewState = input.responses.length > 0 ? 'draft' : 'new';
         await this.applyAssessmentResponses(client, assessment, input.responses, nextState);
         return (await this.assessmentOrThrow(client, assessmentId)).assessment;
       });
@@ -5579,13 +6086,17 @@ export class ApiStore {
     }
   }
 
-  async submitAssessment(session: AuthSession, assessmentId: string, input: SubmitAssessmentRequest) {
+  async submitAssessment(
+    session: AuthSession,
+    assessmentId: string,
+    input: SubmitAssessmentRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
         this.assertCanAuthorAssessment(session, assessment);
         await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
-        await this.applyAssessmentResponses(client, assessment, input.responses, "submitted");
+        await this.applyAssessmentResponses(client, assessment, input.responses, 'submitted');
         return (await this.assessmentOrThrow(client, assessmentId)).assessment;
       });
     } catch (error) {
@@ -5603,8 +6114,8 @@ export class ApiStore {
         this.assertCanManageAssessment(session, assessment);
         await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
 
-        if (assessment.assessment.reviewState !== "submitted") {
-          throw new ApiError(409, "Only submitted assessments can be accepted");
+        if (assessment.assessment.reviewState !== 'submitted') {
+          throw new ApiError(409, 'Only submitted assessments can be accepted');
         }
 
         const timestamp = nowIso();
@@ -5619,7 +6130,12 @@ export class ApiStore {
                 manager_notes = $4
             WHERE id = $1
           `,
-          [assessmentId, timestamp, session.user.id, managerNotes ?? assessment.assessment.managerNotes],
+          [
+            assessmentId,
+            timestamp,
+            session.user.id,
+            managerNotes ?? assessment.assessment.managerNotes,
+          ],
         );
 
         return (await this.assessmentOrThrow(client, assessmentId)).assessment;
@@ -5632,15 +6148,19 @@ export class ApiStore {
     }
   }
 
-  async rejectAssessmentToDraft(session: AuthSession, assessmentId: string, managerNotes?: string | null) {
+  async rejectAssessmentToDraft(
+    session: AuthSession,
+    assessmentId: string,
+    managerNotes?: string | null,
+  ) {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
         this.assertCanManageAssessment(session, assessment);
         await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
 
-        if (assessment.assessment.reviewState !== "submitted") {
-          throw new ApiError(409, "Only submitted assessments can be returned to draft");
+        if (assessment.assessment.reviewState !== 'submitted') {
+          throw new ApiError(409, 'Only submitted assessments can be returned to draft');
         }
 
         await client.query(
@@ -5668,7 +6188,11 @@ export class ApiStore {
     }
   }
 
-  async updateAssessmentByAdmin(session: AuthSession, assessmentId: string, input: AdminUpdateAssessmentRequest) {
+  async updateAssessmentByAdmin(
+    session: AuthSession,
+    assessmentId: string,
+    input: AdminUpdateAssessmentRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
@@ -5678,14 +6202,29 @@ export class ApiStore {
         const nextState = input.reviewState ?? assessment.assessment.reviewState;
         const nextResponses = input.responses ?? assessment.assessment.responses;
         const nextManagerNotes =
-          input.managerNotes !== undefined ? input.managerNotes : assessment.assessment.managerNotes;
-        const questionSet = await this.questionSetOrThrow(client, assessment.assessment.questionSetId);
-        this.assertAssessmentResponses(questionSet, nextResponses, !["new", "draft"].includes(nextState));
+          input.managerNotes !== undefined
+            ? input.managerNotes
+            : assessment.assessment.managerNotes;
+        const questionSet = await this.questionSetOrThrow(
+          client,
+          assessment.assessment.questionSetId,
+        );
+        this.assertAssessmentResponses(
+          questionSet,
+          nextResponses,
+          !['new', 'draft'].includes(nextState),
+        );
 
         await this.replaceAssessmentResponses(client, assessment.assessment.id, nextResponses);
 
         const timestamp = nowIso();
-        await this.applyAdminAssessmentState(client, assessment, nextState, session.user.id, timestamp);
+        await this.applyAdminAssessmentState(
+          client,
+          assessment,
+          nextState,
+          session.user.id,
+          timestamp,
+        );
 
         if (input.managerNotes !== undefined) {
           await client.query(
@@ -5709,7 +6248,10 @@ export class ApiStore {
     }
   }
 
-  async deleteAssessmentByAdmin(session: AuthSession, assessmentId: string): Promise<DeleteAssessmentResponse> {
+  async deleteAssessmentByAdmin(
+    session: AuthSession,
+    assessmentId: string,
+  ): Promise<DeleteAssessmentResponse> {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
@@ -5729,7 +6271,11 @@ export class ApiStore {
     }
   }
 
-  async markAssessmentSetReadyForMeeting(session: AuthSession, reviewPeriodId: string, employeeId: string) {
+  async markAssessmentSetReadyForMeeting(
+    session: AuthSession,
+    reviewPeriodId: string,
+    employeeId: string,
+  ) {
     try {
       return await withTransaction(async (client) => {
         await this.assertReviewPeriodMutable(client, reviewPeriodId);
@@ -5737,8 +6283,8 @@ export class ApiStore {
         this.assertCanManageAssessmentSet(session, items);
         this.assertAssessmentSetState(
           items,
-          "accepted",
-          "Only fully accepted assessment sets can be marked ready for meeting",
+          'accepted',
+          'Only fully accepted assessment sets can be marked ready for meeting',
         );
 
         const timestamp = nowIso();
@@ -5755,7 +6301,9 @@ export class ApiStore {
           [reviewPeriodId, employeeId, timestamp],
         );
 
-        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
+        return this.toAssessmentSetResponse(
+          await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId),
+        );
       });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -5771,8 +6319,17 @@ export class ApiStore {
         await this.assertReviewPeriodMutable(client, reviewPeriodId);
         const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
         this.assertCanManageAssessmentSet(session, items);
-        if (items.some((item) => item.assessment.reviewState !== "accepted" && item.assessment.reviewState !== "ready_for_meeting")) {
-          throw new ApiError(409, "Only accepted or ready-for-meeting assessment sets can be scheduled");
+        if (
+          items.some(
+            (item) =>
+              item.assessment.reviewState !== 'accepted' &&
+              item.assessment.reviewState !== 'ready_for_meeting',
+          )
+        ) {
+          throw new ApiError(
+            409,
+            'Only accepted or ready-for-meeting assessment sets can be scheduled',
+          );
         }
 
         const timestamp = nowIso();
@@ -5791,7 +6348,9 @@ export class ApiStore {
           [reviewPeriodId, employeeId, timestamp, session.user.id],
         );
 
-        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
+        return this.toAssessmentSetResponse(
+          await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId),
+        );
       });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -5811,14 +6370,23 @@ export class ApiStore {
       return await withTransaction(async (client) => {
         await this.assertReviewPeriodMutable(client, reviewPeriodId);
         const employee = this.toEmployee(await this.employeeOrThrow(client, employeeId));
-        const reviewerEmployeeId = this.assertCanConcludeAssessmentSet(session, employee, input.reviewerRole);
+        const reviewerEmployeeId = this.assertCanConcludeAssessmentSet(
+          session,
+          employee,
+          input.reviewerRole,
+        );
         const items = await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId);
 
-        if (items.some((item) => !["scheduled", "concluded"].includes(item.assessment.reviewState))) {
-          throw new ApiError(409, "Only scheduled or concluded assessment sets can record reviewer conclusions");
+        if (
+          items.some((item) => !['scheduled', 'concluded'].includes(item.assessment.reviewState))
+        ) {
+          throw new ApiError(
+            409,
+            'Only scheduled or concluded assessment sets can record reviewer conclusions',
+          );
         }
 
-        const reviewerPrefix = input.reviewerRole === "reviewer1" ? "reviewer1" : "reviewer2";
+        const reviewerPrefix = input.reviewerRole === 'reviewer1' ? 'reviewer1' : 'reviewer2';
         const notesColumn = `${reviewerPrefix}_notes`;
         const completedAtColumn = `${reviewerPrefix}_completed_at`;
         const completedByColumn = `${reviewerPrefix}_completed_by_employee_id`;
@@ -5841,7 +6409,7 @@ export class ApiStore {
             [reviewPeriodId, employeeId, notes, timestamp, reviewerEmployeeId, notesProvided],
           );
         } else {
-          const shouldReopen = items.some((item) => item.assessment.reviewState === "concluded");
+          const shouldReopen = items.some((item) => item.assessment.reviewState === 'concluded');
           await client.query(
             `
               UPDATE assessments
@@ -5864,12 +6432,17 @@ export class ApiStore {
         const reviewer1Required = employee.reviewer1Id !== null;
         const reviewer2Required = employee.reviewer2Id !== null;
         const allReviewersCompleted = updatedItems.every((item) => {
-          const reviewer1Completed = !reviewer1Required || item.assessment.reviewer1CompletedAt !== null;
-          const reviewer2Completed = !reviewer2Required || item.assessment.reviewer2CompletedAt !== null;
+          const reviewer1Completed =
+            !reviewer1Required || item.assessment.reviewer1CompletedAt !== null;
+          const reviewer2Completed =
+            !reviewer2Required || item.assessment.reviewer2CompletedAt !== null;
           return reviewer1Completed && reviewer2Completed;
         });
 
-        if (allReviewersCompleted && updatedItems.some((item) => item.assessment.reviewState !== "concluded")) {
+        if (
+          allReviewersCompleted &&
+          updatedItems.some((item) => item.assessment.reviewState !== 'concluded')
+        ) {
           const concludedAt = nowIso();
           await client.query(
             `
@@ -5886,7 +6459,9 @@ export class ApiStore {
           );
         }
 
-        return this.toAssessmentSetResponse(await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId));
+        return this.toAssessmentSetResponse(
+          await this.loadActiveAssessmentSet(client, reviewPeriodId, employeeId),
+        );
       });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -5896,24 +6471,35 @@ export class ApiStore {
     }
   }
 
-  async reassignAssessment(session: AuthSession, assessmentId: string, input: ReassignAssessmentRequest) {
+  async reassignAssessment(
+    session: AuthSession,
+    assessmentId: string,
+    input: ReassignAssessmentRequest,
+  ) {
     try {
       return await withTransaction(async (client) => {
         const assessment = await this.assessmentOrThrow(client, assessmentId);
         this.assertCanManageAssessment(session, assessment);
         await this.assertReviewPeriodMutable(client, assessment.assessment.reviewPeriodId);
 
-        const employee = this.toEmployee(await this.employeeOrThrow(client, assessment.assessment.employeeId));
+        const employee = this.toEmployee(
+          await this.employeeOrThrow(client, assessment.assessment.employeeId),
+        );
         const nextManagerId = input.managerId !== undefined ? input.managerId : employee.managerId;
-        const nextAssessorId = input.assessorId !== undefined ? input.assessorId : employee.assessor2Id;
+        const nextAssessorId =
+          input.assessorId !== undefined ? input.assessorId : employee.assessor2Id;
 
         if (assessment.assessment.assignmentId) {
-          const assignment = await this.assignmentOrThrow(client, assessment.assessment.assignmentId);
+          const assignment = await this.assignmentOrThrow(
+            client,
+            assessment.assessment.assignmentId,
+          );
           if (input.assessorId === null) {
-            throw new ApiError(400, "Peer assessment reassignments require an assessor");
+            throw new ApiError(400, 'Peer assessment reassignments require an assessor');
           }
 
-          const nextAssignmentAssessorId = input.assessorId !== undefined ? input.assessorId : assignment.assessorId;
+          const nextAssignmentAssessorId =
+            input.assessorId !== undefined ? input.assessorId : assignment.assessorId;
           await this.ensureAssignmentCandidate(client, assignment.reviewPeriodId, {
             id: assignment.id,
             employeeId: assignment.employeeId,
@@ -5942,16 +6528,22 @@ export class ApiStore {
           };
         }
 
-        await this.assertRelationships(client, {
-          id: employee.id,
-          managerId: nextManagerId,
-          assessor1Id: employee.assessor1Id,
-          assessor2Id: nextAssessorId,
-        }, {
-          allowDeletedIds: [employee.managerId, employee.assessor1Id, employee.assessor2Id].filter(
-            (value): value is string => value !== null,
-          ),
-        });
+        await this.assertRelationships(
+          client,
+          {
+            id: employee.id,
+            managerId: nextManagerId,
+            assessor1Id: employee.assessor1Id,
+            assessor2Id: nextAssessorId,
+          },
+          {
+            allowDeletedIds: [
+              employee.managerId,
+              employee.assessor1Id,
+              employee.assessor2Id,
+            ].filter((value): value is string => value !== null),
+          },
+        );
         await client.query(
           `
             UPDATE employees
@@ -5977,14 +6569,19 @@ export class ApiStore {
   }
 
   async foundationSnapshot(session?: AuthSession) {
-    const [employees, reviewPeriods, questionSets, assignments, assessments, workflow] = await Promise.all([
-      this.listEmployees(),
-      this.listReviewPeriods(),
-      this.listQuestionSets(),
-      this.listAssignments(),
-      session ? this.listAssessments(session) : this.loadAssessmentRecords(this.pool).then((items) => items.map((item) => item.assessment)),
-      this.getWorkflowSettings(),
-    ]);
+    const [employees, reviewPeriods, questionSets, assignments, assessments, workflow] =
+      await Promise.all([
+        this.listEmployees(),
+        this.listReviewPeriods(),
+        this.listQuestionSets(),
+        this.listAssignments(),
+        session
+          ? this.listAssessments(session)
+          : this.loadAssessmentRecords(this.pool).then((items) =>
+              items.map((item) => item.assessment),
+            ),
+        this.getWorkflowSettings(),
+      ]);
 
     return {
       employees,

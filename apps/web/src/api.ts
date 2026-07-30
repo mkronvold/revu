@@ -152,11 +152,7 @@ function isFormDataBody(body: RequestInit['body']) {
   return typeof FormData !== 'undefined' && body instanceof FormData;
 }
 
-async function request<T>(
-  path: string,
-  schema: z.ZodType<T>,
-  init: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
@@ -177,7 +173,10 @@ async function request<T>(
       notifyApiUnavailable();
     }
     const parsedError = errorResponseSchema.safeParse(payload);
-    throw new ApiClientError(parsedError.success ? parsedError.data.message : 'Request failed', response.status);
+    throw new ApiClientError(
+      parsedError.success ? parsedError.data.message : 'Request failed',
+      response.status,
+    );
   }
 
   return schema.parse(payload);
@@ -213,7 +212,10 @@ async function requestText(path: string, init: RequestInit = {}) {
         })()
       : null;
     const parsedError = errorResponseSchema.safeParse(payload);
-    throw new ApiClientError(parsedError.success ? parsedError.data.message : 'Request failed', response.status);
+    throw new ApiClientError(
+      parsedError.success ? parsedError.data.message : 'Request failed',
+      response.status,
+    );
   }
 
   const filenameMatch = response.headers.get('content-disposition')?.match(/filename="([^"]+)"/i);
@@ -264,14 +266,10 @@ function withSearchParams(path: string, params: Record<string, string | undefine
 }
 
 export function login(payload: AuthLoginRequest) {
-  return request(
-    '/auth/login',
-    authLoginResponseSchema,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  );
+  return request('/auth/login', authLoginResponseSchema, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getApiIndex() {
@@ -315,7 +313,11 @@ export function updateOwnProfile(token: string, payload: AuthUpdateProfileReques
 }
 
 export function getFoundation(token: string) {
-  return request('/foundation', foundationSnapshotSchema, withAuthorization(token, { cache: 'no-store' }));
+  return request(
+    '/foundation',
+    foundationSnapshotSchema,
+    withAuthorization(token, { cache: 'no-store' }),
+  );
 }
 
 export function updateWorkflowSettings(token: string, payload: UpdateWorkflowSettingsRequest) {
@@ -337,7 +339,11 @@ export function getEmployee(token: string, employeeId: string) {
   return request(`/employees/${employeeId}`, employeeResponseSchema, withAuthorization(token));
 }
 
-export function exportLocalUsers(token: string, format: ExportFormat, mode: LocalUsersExportMode = 'rotate-passcodes') {
+export function exportLocalUsers(
+  token: string,
+  format: ExportFormat,
+  mode: LocalUsersExportMode = 'rotate-passcodes',
+) {
   return request(
     withSearchParams('/employees/export', { format, mode }),
     localUsersExportResponseSchema,
@@ -395,14 +401,22 @@ export function uploadStoredBackup(token: string, file: File) {
   );
 }
 
-export function downloadStoredBackup(token: string, fileName: string, mode: LocalUsersExportMode = 'preserve-passwords') {
+export function downloadStoredBackup(
+  token: string,
+  fileName: string,
+  mode: LocalUsersExportMode = 'preserve-passwords',
+) {
   return requestText(
     withSearchParams(`/admin/backups/files/${encodeURIComponent(fileName)}/download`, { mode }),
     withAuthorization(token),
   );
 }
 
-export function restoreStoredBackup(token: string, fileName: string, payload: BackupStoredFileRestoreRequest) {
+export function restoreStoredBackup(
+  token: string,
+  fileName: string,
+  payload: BackupStoredFileRestoreRequest,
+) {
   return request(
     `/admin/backups/files/${encodeURIComponent(fileName)}/restore`,
     backupRestoreResponseSchema,
@@ -489,7 +503,11 @@ export function deleteEmployee(token: string, employeeId: string) {
   );
 }
 
-export function setEmployeePassword(token: string, employeeId: string, payload: SetEmployeePasswordRequest) {
+export function setEmployeePassword(
+  token: string,
+  employeeId: string,
+  payload: SetEmployeePasswordRequest,
+) {
   return request(
     `/employees/${employeeId}/password/set`,
     setEmployeePasswordResponseSchema,
@@ -500,14 +518,18 @@ export function setEmployeePassword(token: string, employeeId: string, payload: 
   );
 }
 
-export function resetEmployeePassword(token: string, employeeId: string, payload: ResetEmployeePasswordRequest = {}) {
+export function resetEmployeePassword(
+  token: string,
+  employeeId: string,
+  payload: ResetEmployeePasswordRequest = {},
+) {
   return request(
     `/employees/${employeeId}/password/reset`,
     resetEmployeePasswordResponseSchema,
     withAuthorization(token, {
       method: 'POST',
       body: JSON.stringify(resetEmployeePasswordRequestSchema.parse(payload)),
-      }),
+    }),
   );
 }
 
@@ -522,7 +544,11 @@ export function createReviewPeriod(token: string, payload: CreateReviewPeriodReq
   );
 }
 
-export function updateReviewPeriod(token: string, reviewPeriodId: string, payload: UpdateReviewPeriodRequest) {
+export function updateReviewPeriod(
+  token: string,
+  reviewPeriodId: string,
+  payload: UpdateReviewPeriodRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}`,
     reviewPeriodResponseSchema,
@@ -583,7 +609,11 @@ export function clearReadyToStartAssessments(token: string, reviewPeriodId: stri
   );
 }
 
-export function createQuestionSet(token: string, reviewPeriodId: string, payload: CreateQuestionSetRequest) {
+export function createQuestionSet(
+  token: string,
+  reviewPeriodId: string,
+  payload: CreateQuestionSetRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}/question-sets`,
     questionSetResponseSchema,
@@ -594,7 +624,11 @@ export function createQuestionSet(token: string, reviewPeriodId: string, payload
   );
 }
 
-export function updateQuestionSet(token: string, questionSetId: string, payload: UpdateQuestionSetRequest) {
+export function updateQuestionSet(
+  token: string,
+  questionSetId: string,
+  payload: UpdateQuestionSetRequest,
+) {
   return request(
     `/question-sets/${questionSetId}`,
     questionSetResponseSchema,
@@ -623,7 +657,11 @@ export function exportQuestionSets(token: string, reviewPeriodId: string, format
   );
 }
 
-export function importQuestionSets(token: string, reviewPeriodId: string, payload: QuestionSetsImportRequest) {
+export function importQuestionSets(
+  token: string,
+  reviewPeriodId: string,
+  payload: QuestionSetsImportRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}/question-sets/import`,
     questionSetsImportResponseSchema,
@@ -635,7 +673,11 @@ export function importQuestionSets(token: string, reviewPeriodId: string, payloa
 }
 
 export function listQuestionCategories(token: string) {
-  return request('/question-categories', questionCategoriesListResponseSchema, withAuthorization(token));
+  return request(
+    '/question-categories',
+    questionCategoriesListResponseSchema,
+    withAuthorization(token),
+  );
 }
 
 export function updateQuestionCategories(token: string, payload: UpdateQuestionCategoriesRequest) {
@@ -649,7 +691,11 @@ export function updateQuestionCategories(token: string, payload: UpdateQuestionC
   );
 }
 
-export function createAssignment(token: string, reviewPeriodId: string, payload: CreateAssignmentRequest) {
+export function createAssignment(
+  token: string,
+  reviewPeriodId: string,
+  payload: CreateAssignmentRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}/assignments`,
     assignmentResponseSchema,
@@ -660,7 +706,11 @@ export function createAssignment(token: string, reviewPeriodId: string, payload:
   );
 }
 
-export function updateAssignment(token: string, assignmentId: string, payload: UpdateAssignmentRequest) {
+export function updateAssignment(
+  token: string,
+  assignmentId: string,
+  payload: UpdateAssignmentRequest,
+) {
   return request(
     `/assignments/${assignmentId}`,
     assignmentResponseSchema,
@@ -689,7 +739,11 @@ export function exportAssignments(token: string, reviewPeriodId: string, format:
   );
 }
 
-export function importAssignments(token: string, reviewPeriodId: string, payload: AssignmentsImportRequest) {
+export function importAssignments(
+  token: string,
+  reviewPeriodId: string,
+  payload: AssignmentsImportRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}/assignments/import`,
     assignmentsImportResponseSchema,
@@ -717,7 +771,11 @@ export function listAssessments(token: string, query: AssessmentsListQuery = {})
   );
 }
 
-export function createAssessment(token: string, reviewPeriodId: string, payload: CreateAssessmentRequest) {
+export function createAssessment(
+  token: string,
+  reviewPeriodId: string,
+  payload: CreateAssessmentRequest,
+) {
   return request(
     `/review-periods/${reviewPeriodId}/assessments`,
     assessmentItemResponseSchema,
@@ -728,7 +786,11 @@ export function createAssessment(token: string, reviewPeriodId: string, payload:
   );
 }
 
-export function saveAssessmentDraft(token: string, assessmentId: string, payload: SaveAssessmentDraftRequest) {
+export function saveAssessmentDraft(
+  token: string,
+  assessmentId: string,
+  payload: SaveAssessmentDraftRequest,
+) {
   return request(
     `/assessments/${assessmentId}/save`,
     assessmentItemResponseSchema,
@@ -739,7 +801,11 @@ export function saveAssessmentDraft(token: string, assessmentId: string, payload
   );
 }
 
-export function submitAssessment(token: string, assessmentId: string, payload: SubmitAssessmentRequest) {
+export function submitAssessment(
+  token: string,
+  assessmentId: string,
+  payload: SubmitAssessmentRequest,
+) {
   return request(
     `/assessments/${assessmentId}/submit`,
     assessmentItemResponseSchema,
@@ -750,7 +816,11 @@ export function submitAssessment(token: string, assessmentId: string, payload: S
   );
 }
 
-export function acceptAssessment(token: string, assessmentId: string, payload: AcceptAssessmentRequest = {}) {
+export function acceptAssessment(
+  token: string,
+  assessmentId: string,
+  payload: AcceptAssessmentRequest = {},
+) {
   return request(
     `/assessments/${assessmentId}/accept`,
     assessmentItemResponseSchema,
@@ -761,7 +831,11 @@ export function acceptAssessment(token: string, assessmentId: string, payload: A
   );
 }
 
-export function updateAssessmentByAdmin(token: string, assessmentId: string, payload: AdminUpdateAssessmentRequest) {
+export function updateAssessmentByAdmin(
+  token: string,
+  assessmentId: string,
+  payload: AdminUpdateAssessmentRequest,
+) {
   return request(
     `/assessments/${assessmentId}/admin`,
     assessmentItemResponseSchema,
@@ -838,7 +912,11 @@ export function concludeAssessmentSet(
   );
 }
 
-export function reassignAssessment(token: string, assessmentId: string, payload: ReassignAssessmentRequest) {
+export function reassignAssessment(
+  token: string,
+  assessmentId: string,
+  payload: ReassignAssessmentRequest,
+) {
   return request(
     `/assessments/${assessmentId}/reassign`,
     assessmentReassignmentResponseSchema,

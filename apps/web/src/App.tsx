@@ -14,7 +14,17 @@ import type {
   ReviewPeriod,
 } from '@revu/contracts';
 import { backupSnapshotSchema, defaultWorkflowVisibility } from '@revu/contracts';
-import { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChangeEvent,
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   ApiClientError,
@@ -94,10 +104,7 @@ import {
   type ReviewAdminSnapshot,
   type ReviewPeriodDraft,
 } from './reviewAdmin';
-import {
-  buildQuestionCategorySuggestions,
-  MarkdownContent,
-} from './questionPresentation';
+import { buildQuestionCategorySuggestions, MarkdownContent } from './questionPresentation';
 import {
   buildAssignmentsExportFilename,
   buildAssignmentsExportNotice,
@@ -131,7 +138,12 @@ import {
   toggleReviewPeriodArchiveInApi,
   type TransferFormat,
 } from './reviewAdminApi';
-import { autoRefreshIntervalMs, getRuntimeCompanyName, getRuntimeRevision, questionSetStatusEnabled } from './runtimeConfig';
+import {
+  autoRefreshIntervalMs,
+  getRuntimeCompanyName,
+  getRuntimeRevision,
+  questionSetStatusEnabled,
+} from './runtimeConfig';
 import {
   getNextThemePreference,
   getThemeColorScheme,
@@ -141,7 +153,8 @@ import {
   type ThemePreference,
 } from './theme';
 
-const configuredCompanyName = getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
+const configuredCompanyName =
+  getRuntimeCompanyName() ?? import.meta.env.VITE_COMPANY_NAME?.trim() ?? null;
 const companyName = configuredCompanyName ? configuredCompanyName : null;
 const revuRepositoryUrl = 'https://github.com/mkronvold/revu';
 const revuChangelogUrl = `${revuRepositoryUrl}/blob/main/docs/CHANGELOG.md`;
@@ -187,9 +200,24 @@ function createEmptyReviewerNotesDraft(): ReviewerNotesDraft {
 }
 
 const questionTypeHelperOptions = {
-  subjective: ['Strongly agree', 'Somewhat agree', 'Neutral', 'Somewhat disagree', 'Strongly disagree'],
-  ranking: ['Strongly agree', 'Somewhat agree', "Don't know", 'Somewhat disagree', 'Strongly disagree'],
-} as const satisfies Record<Exclude<QuestionSetQuestionDraft['type'], 'narrative'>, readonly string[]>;
+  subjective: [
+    'Strongly agree',
+    'Somewhat agree',
+    'Neutral',
+    'Somewhat disagree',
+    'Strongly disagree',
+  ],
+  ranking: [
+    'Strongly agree',
+    'Somewhat agree',
+    "Don't know",
+    'Somewhat disagree',
+    'Strongly disagree',
+  ],
+} as const satisfies Record<
+  Exclude<QuestionSetQuestionDraft['type'], 'narrative'>,
+  readonly string[]
+>;
 
 const assessmentResponseOptions = {
   subjective: [
@@ -219,7 +247,10 @@ const adminAssessmentStateOptions = [
   { value: 'ready_for_meeting', label: 'Ready for meeting' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'concluded', label: 'Concluded' },
-] as const satisfies readonly { value: Exclude<AssessmentReviewState, 'reviewed'>; label: string }[];
+] as const satisfies readonly {
+  value: Exclude<AssessmentReviewState, 'reviewed'>;
+  label: string;
+}[];
 
 function normalizeAdminAssessmentState(
   reviewState: AssessmentReviewState,
@@ -272,7 +303,10 @@ function renderQuestionTypeHelper(type: QuestionSetQuestionDraft['type']) {
   }
 
   return (
-    <div className="toolbar-note question-response-helper question-response-helper-options" role="presentation">
+    <div
+      className="toolbar-note question-response-helper question-response-helper-options"
+      role="presentation"
+    >
       {questionTypeHelperOptions[type].map((option) => (
         <label className="question-response-helper-option" key={option}>
           <input type="radio" disabled />
@@ -295,7 +329,10 @@ function renderQuestionTypePreview(question: Pick<QuestionSetQuestionDraft, 'pro
   );
 }
 
-function normalizeAssessmentResponseValue(type: AssessmentEditorQuestion['type'], response: string) {
+function normalizeAssessmentResponseValue(
+  type: AssessmentEditorQuestion['type'],
+  response: string,
+) {
   const normalized = response.trim().toLowerCase();
 
   if (type === 'narrative' || !normalized) {
@@ -353,13 +390,19 @@ function normalizeAssessmentResponseValue(type: AssessmentEditorQuestion['type']
   }
 }
 
-function getAssessmentResponseLabel(type: Exclude<AssessmentEditorQuestion['type'], 'narrative'>, response: string) {
+function getAssessmentResponseLabel(
+  type: Exclude<AssessmentEditorQuestion['type'], 'narrative'>,
+  response: string,
+) {
   if (!response.trim()) {
     return '';
   }
 
   const normalizedResponse = normalizeAssessmentResponseValue(type, response);
-  return assessmentResponseOptions[type].find((option) => option.value === normalizedResponse)?.label ?? response;
+  return (
+    assessmentResponseOptions[type].find((option) => option.value === normalizedResponse)?.label ??
+    response
+  );
 }
 
 function getBackupScheduleLabel(schedule: BackupSchedule) {
@@ -439,12 +482,14 @@ const localUserExportModeOptions: Array<{
   {
     value: 'rotate-passcodes',
     label: 'Generate new passcodes and sign everyone out',
-    description: 'Exports one-time passcodes, rotates every exported credential, and signs exported users out immediately.',
+    description:
+      'Exports one-time passcodes, rotates every exported credential, and signs exported users out immediately.',
   },
   {
     value: 'preserve-passwords',
     label: 'Leave passwords and session status untouched',
-    description: 'Exports credential-safe data without rotating passwords or ending active sessions.',
+    description:
+      'Exports credential-safe data without rotating passwords or ending active sessions.',
   },
 ];
 
@@ -467,7 +512,9 @@ function getStoredDashboardQueueExpandedState(): Record<string, boolean> {
   try {
     const parsedValue = JSON.parse(storedValue) as Record<string, unknown>;
     return Object.fromEntries(
-      Object.entries(parsedValue).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
+      Object.entries(parsedValue).filter(
+        (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+      ),
     );
   } catch {
     return {};
@@ -514,7 +561,10 @@ function getStoredAssessmentListState(): {
         parsedValue.lifecycleFilter === 'concluded'
           ? parsedValue.lifecycleFilter
           : 'all',
-      targetFilter: parsedValue.targetFilter === 'self' || parsedValue.targetFilter === 'peer' ? parsedValue.targetFilter : 'all',
+      targetFilter:
+        parsedValue.targetFilter === 'self' || parsedValue.targetFilter === 'peer'
+          ? parsedValue.targetFilter
+          : 'all',
     };
   } catch {
     return {
@@ -550,14 +600,16 @@ const backupRestoreActions: BackupRestoreAction[] = [
   {
     target: 'questions',
     title: 'Restore questions',
-    description: 'Replace workflow settings, review periods, and question sets from the uploaded backup.',
+    description:
+      'Replace workflow settings, review periods, and question sets from the uploaded backup.',
     warning:
       'Restore questions uses replace semantics. It replaces workflow settings, review periods, and question sets only, and it will fail unless assignments and assessments are already cleared.',
   },
   {
     target: 'reviews',
     title: 'Restore reviews',
-    description: 'Replace workflow settings, review periods, question sets, assignments, and assessments from the uploaded backup.',
+    description:
+      'Replace workflow settings, review periods, question sets, assignments, and assessments from the uploaded backup.',
     warning:
       'Restore reviews uses replace semantics. It overwrites current workflow settings, review periods, question sets, assignments, assessments, and review events with the uploaded backup.',
   },
@@ -635,7 +687,9 @@ function upsertEmployee(currentEmployees: Employee[], nextEmployee: Employee) {
     return [...currentEmployees, nextEmployee];
   }
 
-  return currentEmployees.map((employee) => (employee.id === nextEmployee.id ? nextEmployee : employee));
+  return currentEmployees.map((employee) =>
+    employee.id === nextEmployee.id ? nextEmployee : employee,
+  );
 }
 
 function getErrorMessage(error: unknown) {
@@ -676,7 +730,9 @@ function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [foundation, setFoundation] = useState<FoundationSnapshot | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeSearchQuery, setEmployeeSearchQuery] = useState(() => getStoredEmployeeSearchQuery());
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState(() =>
+    getStoredEmployeeSearchQuery(),
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedEmployeeDetail, setSelectedEmployeeDetail] = useState<EmployeeAdmin | null>(null);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -708,8 +764,10 @@ function App() {
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
   const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [isSyncingLocalUsers, setIsSyncingLocalUsers] = useState(false);
-  const [localUserExportMode, setLocalUserExportMode] = useState<LocalUsersExportMode>('rotate-passcodes');
-  const [backupExportMode, setBackupExportMode] = useState<LocalUsersExportMode>('preserve-passwords');
+  const [localUserExportMode, setLocalUserExportMode] =
+    useState<LocalUsersExportMode>('rotate-passcodes');
+  const [backupExportMode, setBackupExportMode] =
+    useState<LocalUsersExportMode>('preserve-passwords');
   const [isSyncingBackups, setIsSyncingBackups] = useState(false);
   const [isLoadingStoredBackups, setIsLoadingStoredBackups] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
@@ -722,15 +780,22 @@ function App() {
   const [backupSettingsDraft, setBackupSettingsDraft] = useState<BackupSettingsDraft | null>(null);
   const [storedBackups, setStoredBackups] = useState<BackupStoredFile[]>([]);
   const [isStoredBackupsDialogOpen, setIsStoredBackupsDialogOpen] = useState(false);
-  const [backupDownloadDialog, setBackupDownloadDialog] = useState<BackupDownloadDialogState | null>(null);
-  const [backupRestoreDialog, setBackupRestoreDialog] = useState<BackupRestoreDialogState | null>(null);
+  const [backupDownloadDialog, setBackupDownloadDialog] =
+    useState<BackupDownloadDialogState | null>(null);
+  const [backupRestoreDialog, setBackupRestoreDialog] = useState<BackupRestoreDialogState | null>(
+    null,
+  );
   const [selectedReviewPeriodId, setSelectedReviewPeriodId] = useState<string | null>(null);
-  const [selectedReviewPeriodManagementId, setSelectedReviewPeriodManagementId] = useState<string | null>(null);
+  const [selectedReviewPeriodManagementId, setSelectedReviewPeriodManagementId] = useState<
+    string | null
+  >(null);
   const [reviewPeriodDraft, setReviewPeriodDraft] = useState<ReviewPeriodDraft | null>(null);
   const [questionSetDraft, setQuestionSetDraft] = useState<QuestionSetDraft | null>(null);
   const [questionSetInitialDraft, setQuestionSetInitialDraft] = useState<string | null>(null);
   const [editingQuestionDraftId, setEditingQuestionDraftId] = useState<string | null>(null);
-  const [questionEditorDraft, setQuestionEditorDraft] = useState<QuestionSetQuestionDraft | null>(null);
+  const [questionEditorDraft, setQuestionEditorDraft] = useState<QuestionSetQuestionDraft | null>(
+    null,
+  );
   const [questionEditorInitialDraft, setQuestionEditorInitialDraft] = useState<string | null>(null);
   const [isNewQuestionCategoryDialogOpen, setIsNewQuestionCategoryDialogOpen] = useState(false);
   const [newQuestionCategoryDraft, setNewQuestionCategoryDraft] = useState('');
@@ -740,35 +805,44 @@ function App() {
   const [questionCategoriesDraft, setQuestionCategoriesDraft] = useState<string[]>([]);
   const [questionCategoriesDialogError, setQuestionCategoriesDialogError] = useState('');
   const [workflowContent, setWorkflowContent] = useState<string>(workflowMarkdown);
-  const [workflowVisibility, setWorkflowVisibility] = useState<WorkflowVisibility>(defaultWorkflowVisibility);
+  const [workflowVisibility, setWorkflowVisibility] =
+    useState<WorkflowVisibility>(defaultWorkflowVisibility);
   const [workflowDraft, setWorkflowDraft] = useState<string | null>(null);
-  const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(null);
+  const [workflowVisibilityDraft, setWorkflowVisibilityDraft] = useState<WorkflowVisibility | null>(
+    null,
+  );
   const [workflowInitialDraft, setWorkflowInitialDraft] = useState<string | null>(null);
   const [adminNotice, setAdminNotice] = useState('');
-  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState(() => getStoredAssessmentListState().searchQuery);
-  const [assessmentLifecycleFilter, setAssessmentLifecycleFilter] = useState<'all' | AdminAssessmentRow['summaryBucket']>(
-    () => getStoredAssessmentListState().lifecycleFilter,
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState(
+    () => getStoredAssessmentListState().searchQuery,
   );
-  const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<'all' | AdminAssessmentRow['target']>(
-    () => getStoredAssessmentListState().targetFilter,
-  );
+  const [assessmentLifecycleFilter, setAssessmentLifecycleFilter] = useState<
+    'all' | AdminAssessmentRow['summaryBucket']
+  >(() => getStoredAssessmentListState().lifecycleFilter);
+  const [assessmentTargetFilter, setAssessmentTargetFilter] = useState<
+    'all' | AdminAssessmentRow['target']
+  >(() => getStoredAssessmentListState().targetFilter);
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
-  const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>({});
-  const [assessmentManagerNotesDraft, setAssessmentManagerNotesDraft] = useState('');
-  const [assessmentAdminStateDraft, setAssessmentAdminStateDraft] = useState<Exclude<AssessmentReviewState, 'reviewed'>>(
-    'new',
+  const [assessmentResponsesDraft, setAssessmentResponsesDraft] = useState<Record<string, string>>(
+    {},
   );
+  const [assessmentManagerNotesDraft, setAssessmentManagerNotesDraft] = useState('');
+  const [assessmentAdminStateDraft, setAssessmentAdminStateDraft] =
+    useState<Exclude<AssessmentReviewState, 'reviewed'>>('new');
   const [workflowNotice, setWorkflowNotice] = useState('');
   const [lastResponseSource, setLastResponseSource] = useState<'admin' | 'workflow' | null>(null);
   const [selectedReviewAssessmentId, setSelectedReviewAssessmentId] = useState<string | null>(null);
   const [reviewNotesDraft, setReviewNotesDraft] = useState('');
-  const [selectedAssessmentSetDialog, setSelectedAssessmentSetDialog] = useState<AssessmentSetDialogState | null>(null);
-  const [reviewerNotesDraft, setReviewerNotesDraft] = useState<ReviewerNotesDraft>(() => createEmptyReviewerNotesDraft());
+  const [selectedAssessmentSetDialog, setSelectedAssessmentSetDialog] =
+    useState<AssessmentSetDialogState | null>(null);
+  const [reviewerNotesDraft, setReviewerNotesDraft] = useState<ReviewerNotesDraft>(() =>
+    createEmptyReviewerNotesDraft(),
+  );
   const [isReturnToIncompleteDialogOpen, setIsReturnToIncompleteDialogOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getStoredSidebarCollapsed());
-  const [dashboardQueueExpandedState, setDashboardQueueExpandedState] = useState<Record<string, boolean>>(
-    () => getStoredDashboardQueueExpandedState(),
-  );
+  const [dashboardQueueExpandedState, setDashboardQueueExpandedState] = useState<
+    Record<string, boolean>
+  >(() => getStoredDashboardQueueExpandedState());
   const [areDashboardQueuesExpanded, setAreDashboardQueuesExpanded] = useState(true);
   const [areReviewQueuesExpanded, setAreReviewQueuesExpanded] = useState(true);
   const [passwordDialogEmployeeId, setPasswordDialogEmployeeId] = useState<string | null>(null);
@@ -823,7 +897,10 @@ function App() {
       return;
     }
 
-    window.localStorage.setItem(dashboardQueueExpandedStateStorageKey, JSON.stringify(dashboardQueueExpandedState));
+    window.localStorage.setItem(
+      dashboardQueueExpandedStateStorageKey,
+      JSON.stringify(dashboardQueueExpandedState),
+    );
   }, [dashboardQueueExpandedState]);
 
   useEffect(() => {
@@ -955,12 +1032,20 @@ function App() {
   const isAdmin = sessionUser?.role === 'admin';
   const canEditWorkflow = session?.permissions.includes('workflow:update') ?? false;
   const availableBackupExportModes = useMemo(() => {
-    const supportedModes = new Set(backupStatus?.supportedUserExportModes ?? localUserExportModeOptions.map((option) => option.value));
+    const supportedModes = new Set(
+      backupStatus?.supportedUserExportModes ??
+        localUserExportModeOptions.map((option) => option.value),
+    );
     return localUserExportModeOptions.filter((option) => supportedModes.has(option.value));
   }, [backupStatus]);
-  const availableBackupSchedules = useMemo(() => backupStatus?.supportedSchedules ?? backupScheduleOptions, [backupStatus]);
+  const availableBackupSchedules = useMemo(
+    () => backupStatus?.supportedSchedules ?? backupScheduleOptions,
+    [backupStatus],
+  );
   const availableBackupRestoreActions = useMemo(() => {
-    const supportedScopes = new Set(backupStatus?.supportedRestoreScopes ?? backupRestoreActions.map((action) => action.target));
+    const supportedScopes = new Set(
+      backupStatus?.supportedRestoreScopes ?? backupRestoreActions.map((action) => action.target),
+    );
     return backupRestoreActions.filter((action) => supportedScopes.has(action.target));
   }, [backupStatus]);
   const visibleAdminNotice = isAdmin ? adminNotice : '';
@@ -984,49 +1069,60 @@ function App() {
     () => employees.filter((employee) => employee.status === 'inactive'),
     [employees],
   );
-  const directoryEmployees = useMemo(
-    () => {
-      const normalizedQuery = employeeSearchQuery.trim().toLowerCase();
-      const employeeNamesById = new Map(
-        [...employees, ...(sessionUser ? [sessionUser] : [])].map((employee) => [employee.id, employee.fullName] as const),
-      );
+  const directoryEmployees = useMemo(() => {
+    const normalizedQuery = employeeSearchQuery.trim().toLowerCase();
+    const employeeNamesById = new Map(
+      [...employees, ...(sessionUser ? [sessionUser] : [])].map(
+        (employee) => [employee.id, employee.fullName] as const,
+      ),
+    );
 
-      return [...employees]
-        .filter((employee) => {
-          if (!normalizedQuery) {
-            return true;
-          }
+    return [...employees]
+      .filter((employee) => {
+        if (!normalizedQuery) {
+          return true;
+        }
 
-          const searchFields = [
-            employee.fullName,
-            employee.username,
-            employee.email,
-            employee.role,
-            employee.status,
-            employee.managerId ? employeeNamesById.get(employee.managerId) ?? deletedUserLabel : '',
-            employee.assessor1Id ? employeeNamesById.get(employee.assessor1Id) ?? deletedUserLabel : '',
-            employee.assessor2Id ? employeeNamesById.get(employee.assessor2Id) ?? deletedUserLabel : '',
-            employee.reviewer1Id ? employeeNamesById.get(employee.reviewer1Id) ?? deletedUserLabel : '',
-            employee.reviewer2Id ? employeeNamesById.get(employee.reviewer2Id) ?? deletedUserLabel : '',
-          ];
+        const searchFields = [
+          employee.fullName,
+          employee.username,
+          employee.email,
+          employee.role,
+          employee.status,
+          employee.managerId ? (employeeNamesById.get(employee.managerId) ?? deletedUserLabel) : '',
+          employee.assessor1Id
+            ? (employeeNamesById.get(employee.assessor1Id) ?? deletedUserLabel)
+            : '',
+          employee.assessor2Id
+            ? (employeeNamesById.get(employee.assessor2Id) ?? deletedUserLabel)
+            : '',
+          employee.reviewer1Id
+            ? (employeeNamesById.get(employee.reviewer1Id) ?? deletedUserLabel)
+            : '',
+          employee.reviewer2Id
+            ? (employeeNamesById.get(employee.reviewer2Id) ?? deletedUserLabel)
+            : '',
+        ];
 
-          return searchFields.some((value) => value.toLowerCase().includes(normalizedQuery));
-        })
-        .sort((left, right) => {
-          if (left.status !== right.status) {
-            return left.status === 'active' ? -1 : 1;
-          }
+        return searchFields.some((value) => value.toLowerCase().includes(normalizedQuery));
+      })
+      .sort((left, right) => {
+        if (left.status !== right.status) {
+          return left.status === 'active' ? -1 : 1;
+        }
 
-          return left.fullName.localeCompare(right.fullName);
-        });
-    },
-    [employeeSearchQuery, employees, sessionUser],
-  );
+        return left.fullName.localeCompare(right.fullName);
+      });
+  }, [employeeSearchQuery, employees, sessionUser]);
   const managerOptions = useMemo(
-    () => activeEmployees.filter((employee) => employee.role === 'admin' || employee.role === 'manager'),
+    () =>
+      activeEmployees.filter(
+        (employee) => employee.role === 'admin' || employee.role === 'manager',
+      ),
     [activeEmployees],
   );
-  const canEditSelectedEmployee = Boolean(selectedEmployee) && (isAdmin || selectedEmployee?.role !== 'admin');
+  const canEditSelectedEmployee =
+    Boolean(selectedEmployee) && (isAdmin || selectedEmployee?.role !== 'admin');
   const workflowEmployees = useMemo(() => {
     const employeesById = new Map<string, Employee>();
 
@@ -1053,7 +1149,10 @@ function App() {
     [foundation],
   );
   const dashboardSnapshot = useMemo(
-    () => (sessionUser && foundation ? buildDashboardSnapshot(sessionUser, foundation, workflowEmployees) : null),
+    () =>
+      sessionUser && foundation
+        ? buildDashboardSnapshot(sessionUser, foundation, workflowEmployees)
+        : null,
     [foundation, sessionUser, workflowEmployees],
   );
   const authoredAssessmentIds = useMemo(
@@ -1078,13 +1177,19 @@ function App() {
     [assessmentWorkflow, sessionUser, workflowEmployees],
   );
   const activeAssessmentReviewPeriod = useMemo(
-    () => assessmentWorkflow?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
+    () =>
+      assessmentWorkflow?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ??
+      null,
     [assessmentWorkflow],
   );
   const adminAssessmentRows = useMemo(
     () =>
       assessmentWorkflow && activeAssessmentReviewPeriod
-        ? buildAdminAssessmentRows(assessmentWorkflow, workflowEmployees, activeAssessmentReviewPeriod.id)
+        ? buildAdminAssessmentRows(
+            assessmentWorkflow,
+            workflowEmployees,
+            activeAssessmentReviewPeriod.id,
+          )
         : [],
     [activeAssessmentReviewPeriod, assessmentWorkflow, workflowEmployees],
   );
@@ -1094,21 +1199,27 @@ function App() {
   );
   const filteredAdminAssessmentRows = useMemo(() => {
     const normalizedQuery = assessmentSearchQuery.trim().toLowerCase();
-    return adminAssessmentRows.filter((item) =>
-      (assessmentLifecycleFilter === 'all' || item.summaryBucket === assessmentLifecycleFilter) &&
-      (assessmentTargetFilter === 'all' || item.target === assessmentTargetFilter) &&
-      [
-        item.subjectName,
-        item.title,
-        item.targetLabel,
-        item.assessorLabel,
-        item.detail,
-        item.assessmentStatusLabel,
-        item.lifecycleLabel,
-        item.nextStepLabel,
-      ].some((value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery)),
+    return adminAssessmentRows.filter(
+      (item) =>
+        (assessmentLifecycleFilter === 'all' || item.summaryBucket === assessmentLifecycleFilter) &&
+        (assessmentTargetFilter === 'all' || item.target === assessmentTargetFilter) &&
+        [
+          item.subjectName,
+          item.title,
+          item.targetLabel,
+          item.assessorLabel,
+          item.detail,
+          item.assessmentStatusLabel,
+          item.lifecycleLabel,
+          item.nextStepLabel,
+        ].some((value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery)),
     );
-  }, [adminAssessmentRows, assessmentLifecycleFilter, assessmentSearchQuery, assessmentTargetFilter]);
+  }, [
+    adminAssessmentRows,
+    assessmentLifecycleFilter,
+    assessmentSearchQuery,
+    assessmentTargetFilter,
+  ]);
   const adminAssessmentSummary = useMemo(
     () => buildAdminAssessmentSummary(filteredAdminAssessmentRows),
     [filteredAdminAssessmentRows],
@@ -1138,7 +1249,9 @@ function App() {
     [adminAssessmentSummary],
   );
   const areAssessmentFiltersActive =
-    assessmentSearchQuery.trim().length > 0 || assessmentLifecycleFilter !== 'all' || assessmentTargetFilter !== 'all';
+    assessmentSearchQuery.trim().length > 0 ||
+    assessmentLifecycleFilter !== 'all' ||
+    assessmentTargetFilter !== 'all';
   const viewableAssessmentIds = useMemo(() => {
     const assessmentIds = new Set<string>(authoredAssessmentIds);
 
@@ -1157,12 +1270,20 @@ function App() {
   const selectedAssessmentEditor = useMemo(
     () =>
       assessmentWorkflow && selectedAssessmentId
-        ? getAssessmentEditor(assessmentWorkflow, workflowEmployees, selectedAssessmentId, sessionUser)
+        ? getAssessmentEditor(
+            assessmentWorkflow,
+            workflowEmployees,
+            selectedAssessmentId,
+            sessionUser,
+          )
         : null,
     [assessmentWorkflow, selectedAssessmentId, sessionUser, workflowEmployees],
   );
   const selectedAssessmentQuestionGroups = useMemo(
-    () => (selectedAssessmentEditor ? groupAssessmentEditorQuestions(selectedAssessmentEditor.questions) : []),
+    () =>
+      selectedAssessmentEditor
+        ? groupAssessmentEditorQuestions(selectedAssessmentEditor.questions)
+        : [],
     [selectedAssessmentEditor],
   );
   const selectedAssessmentPrintScaleRows = useMemo(
@@ -1175,7 +1296,10 @@ function App() {
                 {
                   category: group.category,
                   question,
-                  responseLabel: getAssessmentResponseLabel(question.type, assessmentResponsesDraft[question.questionId] ?? ''),
+                  responseLabel: getAssessmentResponseLabel(
+                    question.type,
+                    assessmentResponsesDraft[question.questionId] ?? '',
+                  ),
                 },
               ],
         ),
@@ -1200,7 +1324,12 @@ function App() {
   const selectedReviewPanel = useMemo(
     () =>
       sessionUser && assessmentWorkflow && selectedReviewAssessmentId
-        ? getReviewPanel(sessionUser, assessmentWorkflow, workflowEmployees, selectedReviewAssessmentId)
+        ? getReviewPanel(
+            sessionUser,
+            assessmentWorkflow,
+            workflowEmployees,
+            selectedReviewAssessmentId,
+          )
         : null,
     [assessmentWorkflow, selectedReviewAssessmentId, sessionUser, workflowEmployees],
   );
@@ -1222,7 +1351,9 @@ function App() {
     [reviewAdmin, selectedReviewPeriodId],
   );
   const selectedReviewPeriodManagement = useMemo(
-    () => reviewAdmin?.reviewPeriods.find((period) => period.id === selectedReviewPeriodManagementId) ?? null,
+    () =>
+      reviewAdmin?.reviewPeriods.find((period) => period.id === selectedReviewPeriodManagementId) ??
+      null,
     [reviewAdmin, selectedReviewPeriodManagementId],
   );
   const selectedReviewPeriodSummary = useMemo(
@@ -1243,8 +1374,12 @@ function App() {
     () =>
       selectedReviewPeriod
         ? {
-            self: reviewAdmin ? getReviewPeriodQuestionSet(reviewAdmin, selectedReviewPeriod.id, 'self') : null,
-            peer: reviewAdmin ? getReviewPeriodQuestionSet(reviewAdmin, selectedReviewPeriod.id, 'peer') : null,
+            self: reviewAdmin
+              ? getReviewPeriodQuestionSet(reviewAdmin, selectedReviewPeriod.id, 'self')
+              : null,
+            peer: reviewAdmin
+              ? getReviewPeriodQuestionSet(reviewAdmin, selectedReviewPeriod.id, 'peer')
+              : null,
           }
         : { self: null, peer: null },
     [reviewAdmin, selectedReviewPeriod],
@@ -1261,7 +1396,9 @@ function App() {
     [questionCategories, questionSetDraft],
   );
   const editingQuestionSource = useMemo(
-    () => questionSetDraft?.questions.find((question) => question.id === editingQuestionDraftId) ?? null,
+    () =>
+      questionSetDraft?.questions.find((question) => question.id === editingQuestionDraftId) ??
+      null,
     [editingQuestionDraftId, questionSetDraft],
   );
   const editingQuestionDraft = questionEditorDraft;
@@ -1280,13 +1417,14 @@ function App() {
     () =>
       Boolean(
         questionEditorDraft &&
-          questionEditorInitialDraft &&
-          serializeQuestionDraft(questionEditorDraft) !== questionEditorInitialDraft,
+        questionEditorInitialDraft &&
+        serializeQuestionDraft(questionEditorDraft) !== questionEditorInitialDraft,
       ),
     [questionEditorDraft, questionEditorInitialDraft],
   );
   const activeReviewAdminPeriod = useMemo(
-    () => reviewAdmin?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
+    () =>
+      reviewAdmin?.reviewPeriods.find((reviewPeriod) => reviewPeriod.status === 'active') ?? null,
     [reviewAdmin],
   );
   useEffect(() => {
@@ -1306,7 +1444,8 @@ function App() {
     }
 
     return selectedAssessmentEditor.questions.some(
-      (question) => (assessmentResponsesDraft[question.questionId] ?? question.response) !== question.response,
+      (question) =>
+        (assessmentResponsesDraft[question.questionId] ?? question.response) !== question.response,
     );
   }, [assessmentResponsesDraft, selectedAssessmentEditor]);
   const hasAssessmentDraftResponses = useMemo(() => {
@@ -1315,7 +1454,8 @@ function App() {
     }
 
     return selectedAssessmentEditor.questions.some(
-      (question) => (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
+      (question) =>
+        (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
     );
   }, [assessmentResponsesDraft, selectedAssessmentEditor]);
   const isAssessmentDraftComplete = useMemo(() => {
@@ -1326,7 +1466,8 @@ function App() {
     return (
       selectedAssessmentEditor.questions.length > 0 &&
       selectedAssessmentEditor.questions.every(
-        (question) => (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
+        (question) =>
+          (assessmentResponsesDraft[question.questionId] ?? question.response).trim().length > 0,
       )
     );
   }, [assessmentResponsesDraft, selectedAssessmentEditor]);
@@ -1346,38 +1487,45 @@ function App() {
       return false;
     }
 
-    return assessmentAdminStateDraft !== normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState);
+    return (
+      assessmentAdminStateDraft !==
+      normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState)
+    );
   }, [assessmentAdminStateDraft, selectedAssessmentEditor]);
   const isAutoRefreshPaused = Boolean(
     draftEmployee ||
-      questionSetDraft ||
-      reviewPeriodDraft ||
-      editingQuestionDraftId ||
-      workflowDraft !== null ||
-      selectedAssessmentId ||
-      selectedReviewAssessmentId ||
-      selectedAssessmentSetDialog ||
-      isQuestionCategoriesDialogOpen ||
-      isNewQuestionCategoryDialogOpen ||
-      isSavingEmployee ||
-      isDeletingEmployee ||
-      isSavingReviewAdmin ||
-      isSavingAssessmentWorkflow ||
-      isSavingWorkflowSettings,
+    questionSetDraft ||
+    reviewPeriodDraft ||
+    editingQuestionDraftId ||
+    workflowDraft !== null ||
+    selectedAssessmentId ||
+    selectedReviewAssessmentId ||
+    selectedAssessmentSetDialog ||
+    isQuestionCategoriesDialogOpen ||
+    isNewQuestionCategoryDialogOpen ||
+    isSavingEmployee ||
+    isDeletingEmployee ||
+    isSavingReviewAdmin ||
+    isSavingAssessmentWorkflow ||
+    isSavingWorkflowSettings,
   );
   const passwordDialogEmployee = useMemo(() => {
     if (!passwordDialogEmployeeId) {
       return null;
     }
 
-    return employees.find((employee) => employee.id === passwordDialogEmployeeId) ??
-      (passwordDialogEmployeeId === sessionUser?.id ? sessionUser : null);
+    return (
+      employees.find((employee) => employee.id === passwordDialogEmployeeId) ??
+      (passwordDialogEmployeeId === sessionUser?.id ? sessionUser : null)
+    );
   }, [employees, passwordDialogEmployeeId, sessionUser]);
   const passwordDialogDetail = useMemo(
-    () => (passwordDialogEmployeeId && selectedEmployeeDetail?.id === passwordDialogEmployeeId ? selectedEmployeeDetail : null),
+    () =>
+      passwordDialogEmployeeId && selectedEmployeeDetail?.id === passwordDialogEmployeeId
+        ? selectedEmployeeDetail
+        : null,
     [passwordDialogEmployeeId, selectedEmployeeDetail],
   );
-
 
   useEffect(() => {
     if (!sessionUser) {
@@ -1647,8 +1795,12 @@ function App() {
       return;
     }
 
-    setSelectedReviewPeriodId((currentId) => getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId));
-    setSelectedReviewPeriodManagementId((currentId) => getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId));
+    setSelectedReviewPeriodId((currentId) =>
+      getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId),
+    );
+    setSelectedReviewPeriodManagementId((currentId) =>
+      getPreferredReviewPeriodId(reviewAdmin.reviewPeriods, currentId),
+    );
   }, [reviewAdmin]);
 
   useEffect(() => {
@@ -1696,10 +1848,16 @@ function App() {
     }
 
     setAssessmentResponsesDraft(
-      Object.fromEntries(selectedAssessmentEditor.questions.map((question) => [question.questionId, question.response] as const)),
+      Object.fromEntries(
+        selectedAssessmentEditor.questions.map(
+          (question) => [question.questionId, question.response] as const,
+        ),
+      ),
     );
     setAssessmentManagerNotesDraft(selectedAssessmentEditor.managerNotes ?? '');
-    setAssessmentAdminStateDraft(normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState));
+    setAssessmentAdminStateDraft(
+      normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState),
+    );
   }, [selectedAssessmentEditor]);
 
   useEffect(() => {
@@ -1730,9 +1888,13 @@ function App() {
     }
 
     const reviewer1Notes =
-      selectedAssessmentSetWorkflowPanel.reviewerActions.find((action) => action.role === 'reviewer1')?.notes ?? '';
+      selectedAssessmentSetWorkflowPanel.reviewerActions.find(
+        (action) => action.role === 'reviewer1',
+      )?.notes ?? '';
     const reviewer2Notes =
-      selectedAssessmentSetWorkflowPanel.reviewerActions.find((action) => action.role === 'reviewer2')?.notes ?? '';
+      selectedAssessmentSetWorkflowPanel.reviewerActions.find(
+        (action) => action.role === 'reviewer2',
+      )?.notes ?? '';
 
     setReviewerNotesDraft({
       reviewer1: reviewer1Notes,
@@ -1925,7 +2087,8 @@ function App() {
       return;
     }
 
-    previewBody.scrollTop = (textarea.scrollTop / textareaScrollableHeight) * previewScrollableHeight;
+    previewBody.scrollTop =
+      (textarea.scrollTop / textareaScrollableHeight) * previewScrollableHeight;
   }, []);
 
   useEffect(() => {
@@ -1957,7 +2120,9 @@ function App() {
   }, [passwordResetRequired, pathname, refreshFoundationSnapshot, sessionToken, sessionUser]);
 
   const removeEmployeeFromState = (employeeId: string) => {
-    setEmployees((currentEmployees) => currentEmployees.filter((employee) => employee.id !== employeeId));
+    setEmployees((currentEmployees) =>
+      currentEmployees.filter((employee) => employee.id !== employeeId),
+    );
     setFoundation((currentFoundation) =>
       currentFoundation
         ? {
@@ -1966,8 +2131,12 @@ function App() {
           }
         : currentFoundation,
     );
-    setSelectedEmployeeId((currentEmployeeId) => (currentEmployeeId === employeeId ? null : currentEmployeeId));
-    setSelectedEmployeeDetail((currentDetail) => (currentDetail?.id === employeeId ? null : currentDetail));
+    setSelectedEmployeeId((currentEmployeeId) =>
+      currentEmployeeId === employeeId ? null : currentEmployeeId,
+    );
+    setSelectedEmployeeDetail((currentDetail) =>
+      currentDetail?.id === employeeId ? null : currentDetail,
+    );
   };
 
   const refreshQuestionCategorySuggestions = useCallback(async () => {
@@ -2012,7 +2181,9 @@ function App() {
   };
 
   const removeQuestionCategoryDraft = (index: number) => {
-    setQuestionCategoriesDraft((currentDraft) => currentDraft.filter((_, categoryIndex) => categoryIndex !== index));
+    setQuestionCategoriesDraft((currentDraft) =>
+      currentDraft.filter((_, categoryIndex) => categoryIndex !== index),
+    );
     if (questionCategoriesDialogError) {
       setQuestionCategoriesDialogError('');
     }
@@ -2161,7 +2332,10 @@ function App() {
     setSelectedAssessmentId(assessmentId);
   };
 
-  const handleAssessmentRowKeyDown = (event: KeyboardEvent<HTMLDivElement>, assessmentId: string) => {
+  const handleAssessmentRowKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    assessmentId: string,
+  ) => {
     if (event.key !== 'Enter' && event.key !== ' ') {
       return;
     }
@@ -2245,7 +2419,9 @@ function App() {
 
   const openPasswordDialog = (employeeId: string) => {
     resetEditingState();
-    setSelectedEmployeeDetail((currentDetail) => (currentDetail?.id === employeeId ? currentDetail : null));
+    setSelectedEmployeeDetail((currentDetail) =>
+      currentDetail?.id === employeeId ? currentDetail : null,
+    );
     setSelectedEmployeeId(employeeId);
     setPasswordDialogEmployeeId(employeeId);
   };
@@ -2254,7 +2430,10 @@ function App() {
     setSelectedReviewAssessmentId(assessmentId);
   };
 
-  const handleOpenAssessmentSetAssessment = (assessmentId: string, target: 'assessment' | 'review') => {
+  const handleOpenAssessmentSetAssessment = (
+    assessmentId: string,
+    target: 'assessment' | 'review',
+  ) => {
     closeAssessmentSetDialog();
 
     if (target === 'review') {
@@ -2283,9 +2462,7 @@ function App() {
     openAssessmentSetWorkflowDialog(item.reviewPeriodId, item.employeeId);
   };
 
-  const clearSession = (options?: {
-    authNotice?: string;
-  }) => {
+  const clearSession = (options?: { authNotice?: string }) => {
     window.sessionStorage.removeItem(sessionStorageKey);
     window.sessionStorage.removeItem(employeeSearchStorageKey);
     window.sessionStorage.removeItem(assessmentListStateStorageKey);
@@ -2458,7 +2635,9 @@ function App() {
       setNextPasswordDraft('');
       setConfirmPasswordDraft('');
       setChangePasswordError('');
-      setSelectedEmployeeId(response.session.user.role === 'employee' ? response.session.user.id : null);
+      setSelectedEmployeeId(
+        response.session.user.role === 'employee' ? response.session.user.id : null,
+      );
       setLoginError('');
       window.history.replaceState(null, '', '/dashboard');
       setPathname('/dashboard');
@@ -2698,7 +2877,8 @@ function App() {
         return;
       }
 
-      const selectedImportedEmployee = response.items.find((item) => item.id === selectedEmployeeId) ?? null;
+      const selectedImportedEmployee =
+        response.items.find((item) => item.id === selectedEmployeeId) ?? null;
       if (selectedImportedEmployee) {
         setSelectedEmployeeDetail(selectedImportedEmployee);
       }
@@ -2739,7 +2919,10 @@ function App() {
       refreshInFlight = true;
 
       try {
-        const refreshes: Array<Promise<unknown>> = [refreshFoundationSnapshot(), refreshEmployeeDirectory()];
+        const refreshes: Array<Promise<unknown>> = [
+          refreshFoundationSnapshot(),
+          refreshEmployeeDirectory(),
+        ];
 
         if (selectedEmployeeId && hasEmployeeReadAccess && !draftEmployee) {
           refreshes.push(
@@ -2880,7 +3063,11 @@ function App() {
     setAppError('');
 
     try {
-      const response = await downloadStoredBackup(sessionToken, backupDownloadDialog.fileName, backupExportMode);
+      const response = await downloadStoredBackup(
+        sessionToken,
+        backupDownloadDialog.fileName,
+        backupExportMode,
+      );
       const downloadName = response.filename ?? backupDownloadDialog.fileName;
       triggerDownload(downloadName, response.content, 'application/json');
       setBackupDownloadDialog(null);
@@ -2938,7 +3125,9 @@ function App() {
       return;
     }
 
-    const confirmed = window.confirm(buildBackupRestoreConfirmation(action, backupRestoreDialog.file.name));
+    const confirmed = window.confirm(
+      buildBackupRestoreConfirmation(action, backupRestoreDialog.file.name),
+    );
     if (!confirmed) {
       return;
     }
@@ -2962,7 +3151,11 @@ function App() {
           : currentStatus,
       );
 
-      const notice = buildBackupRestoreNotice(response.target, backupRestoreDialog.file.name, response.counts);
+      const notice = buildBackupRestoreNotice(
+        response.target,
+        backupRestoreDialog.file.name,
+        response.counts,
+      );
       if (response.target === 'all' || response.target === 'users') {
         setLoginUsername(sessionUser.username);
         clearSession({
@@ -3221,17 +3414,26 @@ function App() {
 
     try {
       const { notice } = selectedAssessmentEditor.isAdminOverride
-        ? await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-            reviewState:
-              normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'new'
-              || normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'draft'
-                ? hasAssessmentDraftResponses
-                  ? 'draft'
-                  : 'new'
-                : normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState),
-            managerNotes: assessmentManagerNotesDraft,
-          })
-        : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
+        ? await updateAssessmentByAdminInApi(
+            sessionToken,
+            selectedAssessmentEditor,
+            assessmentResponsesDraft,
+            {
+              reviewState:
+                normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'new' ||
+                normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState) === 'draft'
+                  ? hasAssessmentDraftResponses
+                    ? 'draft'
+                    : 'new'
+                  : normalizeAdminAssessmentState(selectedAssessmentEditor.reviewState),
+              managerNotes: assessmentManagerNotesDraft,
+            },
+          )
+        : await saveAssessmentDraftToApi(
+            sessionToken,
+            selectedAssessmentEditor,
+            assessmentResponsesDraft,
+          );
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -3254,23 +3456,43 @@ function App() {
       const shouldSubmit = isAssessmentDraftComplete;
       const { notice } = selectedAssessmentEditor.isAdminOverride
         ? shouldSubmit
-          ? await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-              reviewState: 'submitted',
-              managerNotes: assessmentManagerNotesDraft,
-            })
-          : await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-              reviewState: hasAssessmentDraftResponses ? 'draft' : 'new',
-              managerNotes: assessmentManagerNotesDraft,
-            })
+          ? await updateAssessmentByAdminInApi(
+              sessionToken,
+              selectedAssessmentEditor,
+              assessmentResponsesDraft,
+              {
+                reviewState: 'submitted',
+                managerNotes: assessmentManagerNotesDraft,
+              },
+            )
+          : await updateAssessmentByAdminInApi(
+              sessionToken,
+              selectedAssessmentEditor,
+              assessmentResponsesDraft,
+              {
+                reviewState: hasAssessmentDraftResponses ? 'draft' : 'new',
+                managerNotes: assessmentManagerNotesDraft,
+              },
+            )
         : shouldSubmit
-          ? await submitAssessmentToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft)
-          : await saveAssessmentDraftToApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft);
+          ? await submitAssessmentToApi(
+              sessionToken,
+              selectedAssessmentEditor,
+              assessmentResponsesDraft,
+            )
+          : await saveAssessmentDraftToApi(
+              sessionToken,
+              selectedAssessmentEditor,
+              assessmentResponsesDraft,
+            );
       await refreshFoundationSnapshot();
       if (shouldSubmit) {
         closeAssessmentDialog();
       }
       setWorkflowNotice(
-        shouldSubmit ? notice : 'Assessment saved for later. Complete every response before submitting.',
+        shouldSubmit
+          ? notice
+          : 'Assessment saved for later. Complete every response before submitting.',
       );
     } catch (error) {
       setAppError(getErrorMessage(error));
@@ -3281,10 +3503,10 @@ function App() {
 
   const handleAssessmentAdminQuickAction = async () => {
     if (
-      !selectedAssessmentEditor
-      || !selectedAssessmentEditor.isAdminOverride
-      || !selectedAssessmentEditor.adminQuickActionState
-      || !sessionToken
+      !selectedAssessmentEditor ||
+      !selectedAssessmentEditor.isAdminOverride ||
+      !selectedAssessmentEditor.adminQuickActionState ||
+      !sessionToken
     ) {
       return;
     }
@@ -3294,10 +3516,15 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-        reviewState: selectedAssessmentEditor.adminQuickActionState,
-        managerNotes: assessmentManagerNotesDraft,
-      });
+      const { notice } = await updateAssessmentByAdminInApi(
+        sessionToken,
+        selectedAssessmentEditor,
+        assessmentResponsesDraft,
+        {
+          reviewState: selectedAssessmentEditor.adminQuickActionState,
+          managerNotes: assessmentManagerNotesDraft,
+        },
+      );
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -3317,10 +3544,15 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await updateAssessmentByAdminInApi(sessionToken, selectedAssessmentEditor, assessmentResponsesDraft, {
-        reviewState: assessmentAdminStateDraft,
-        managerNotes: assessmentManagerNotesDraft,
-      });
+      const { notice } = await updateAssessmentByAdminInApi(
+        sessionToken,
+        selectedAssessmentEditor,
+        assessmentResponsesDraft,
+        {
+          reviewState: assessmentAdminStateDraft,
+          managerNotes: assessmentManagerNotesDraft,
+        },
+      );
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -3366,7 +3598,11 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await acceptReviewToApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
+      const { notice } = await acceptReviewToApi(
+        sessionToken,
+        selectedReviewPanel,
+        reviewNotesDraft,
+      );
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
     } catch (error) {
@@ -3386,7 +3622,11 @@ function App() {
     setWorkflowNotice('');
 
     try {
-      const { notice } = await rejectReviewToApi(sessionToken, selectedReviewPanel, reviewNotesDraft);
+      const { notice } = await rejectReviewToApi(
+        sessionToken,
+        selectedReviewPanel,
+        reviewNotesDraft,
+      );
       setIsReturnToIncompleteDialogOpen(false);
       await refreshFoundationSnapshot();
       setWorkflowNotice(notice);
@@ -3421,7 +3661,10 @@ function App() {
     }
   };
 
-  const handleReviewerConclusion = async (reviewerRole: 'reviewer1' | 'reviewer2', completed: boolean) => {
+  const handleReviewerConclusion = async (
+    reviewerRole: 'reviewer1' | 'reviewer2',
+    completed: boolean,
+  ) => {
     if (!selectedAssessmentSetWorkflowPanel || !sessionToken) {
       return;
     }
@@ -3454,8 +3697,11 @@ function App() {
   };
 
   const startAddingReviewPeriod = () => {
-    const hasActiveReviewPeriod = reviewAdmin?.reviewPeriods.some((reviewPeriod) => reviewPeriod.status === 'active') ?? false;
-    setReviewPeriodDraft(toReviewPeriodDraft(undefined, hasActiveReviewPeriod ? 'inactive' : 'active'));
+    const hasActiveReviewPeriod =
+      reviewAdmin?.reviewPeriods.some((reviewPeriod) => reviewPeriod.status === 'active') ?? false;
+    setReviewPeriodDraft(
+      toReviewPeriodDraft(undefined, hasActiveReviewPeriod ? 'inactive' : 'active'),
+    );
     setQuestionSetDraft(null);
     setEditingQuestionDraftId(null);
     setAdminNotice('');
@@ -3487,7 +3733,9 @@ function App() {
       !reviewPeriodDraft.assessmentDueDate ||
       !reviewPeriodDraft.reviewDueDate
     ) {
-      setAdminNotice('Choose the start date, end date, assessment due date, and review due date for the review period.');
+      setAdminNotice(
+        'Choose the start date, end date, assessment due date, and review due date for the review period.',
+      );
       return;
     }
 
@@ -3604,8 +3852,14 @@ function App() {
       return;
     }
 
-    const nextDraftBase = toQuestionSetDraft(selectedReviewPeriod.id, target, existingQuestionSet ?? undefined);
-    const nextDraft = questionSetStatusEnabled ? nextDraftBase : { ...nextDraftBase, status: 'active' as const };
+    const nextDraftBase = toQuestionSetDraft(
+      selectedReviewPeriod.id,
+      target,
+      existingQuestionSet ?? undefined,
+    );
+    const nextDraft = questionSetStatusEnabled
+      ? nextDraftBase
+      : { ...nextDraftBase, status: 'active' as const };
     setQuestionSetDraft(nextDraft);
     setQuestionSetInitialDraft(serializeQuestionSetDraft(nextDraft));
     setEditingQuestionDraftId(null);
@@ -3658,20 +3912,22 @@ function App() {
     return true;
   };
 
-  const updateQuestionSetDraftField = <Field extends keyof QuestionSetDraft,>(
+  const updateQuestionSetDraftField = <Field extends keyof QuestionSetDraft>(
     field: Field,
     value: QuestionSetDraft[Field],
   ) => {
-    setQuestionSetDraft((currentDraft) => (currentDraft ? { ...currentDraft, [field]: value } : currentDraft));
+    setQuestionSetDraft((currentDraft) =>
+      currentDraft ? { ...currentDraft, [field]: value } : currentDraft,
+    );
   };
 
-  const updateQuestionDraftField = <
-    Field extends keyof QuestionSetQuestionDraft,
-  >(
+  const updateQuestionDraftField = <Field extends keyof QuestionSetQuestionDraft>(
     field: Field,
     value: QuestionSetQuestionDraft[Field],
   ) => {
-    setQuestionEditorDraft((currentDraft) => (currentDraft ? { ...currentDraft, [field]: value } : currentDraft));
+    setQuestionEditorDraft((currentDraft) =>
+      currentDraft ? { ...currentDraft, [field]: value } : currentDraft,
+    );
   };
 
   const removeQuestionDraft = (questionId: string) => {
@@ -3759,7 +4015,9 @@ function App() {
     }
 
     const existingCategory =
-      questionCategoryOptions.find((category) => category.toLowerCase() === trimmedCategory.toLowerCase()) ?? trimmedCategory;
+      questionCategoryOptions.find(
+        (category) => category.toLowerCase() === trimmedCategory.toLowerCase(),
+      ) ?? trimmedCategory;
 
     setIsSavingReviewAdmin(true);
     setAppError('');
@@ -3811,7 +4069,10 @@ function App() {
       return;
     }
 
-    if (!questionSetDraft.questions.length || questionSetDraft.questions.some((question) => !question.prompt.trim())) {
+    if (
+      !questionSetDraft.questions.length ||
+      questionSetDraft.questions.some((question) => !question.prompt.trim())
+    ) {
       setAdminNotice('Each question needs a prompt before it can be saved.');
       return;
     }
@@ -3834,7 +4095,11 @@ function App() {
     }
   };
 
-  const handleAssignmentChange = async (employeeId: string, managerId: string | null, assessorId: string | null) => {
+  const handleAssignmentChange = async (
+    employeeId: string,
+    managerId: string | null,
+    assessorId: string | null,
+  ) => {
     if (!reviewAdmin || !selectedReviewPeriod || !sessionToken) {
       return;
     }
@@ -3872,7 +4137,11 @@ function App() {
     setAppError('');
 
     try {
-      const { notice } = await toggleReviewPeriodArchiveInApi(sessionToken, reviewPeriodId, archived);
+      const { notice } = await toggleReviewPeriodArchiveInApi(
+        sessionToken,
+        reviewPeriodId,
+        archived,
+      );
       await refreshFoundationSnapshot();
 
       if (questionSetDraft?.reviewPeriodId === reviewPeriodId) {
@@ -3924,7 +4193,11 @@ function App() {
     setAppError('');
 
     try {
-      const response = await exportQuestionSetsFromApi(sessionToken, selectedReviewPeriod.id, format);
+      const response = await exportQuestionSetsFromApi(
+        sessionToken,
+        selectedReviewPeriod.id,
+        format,
+      );
       const content = serializeQuestionSetsTransfer(response);
       const downloadName = buildQuestionSetExportFilename(selectedReviewPeriod, response);
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
@@ -3938,7 +4211,10 @@ function App() {
   };
 
   const handleCopyQuestionSetToCurrentReviewPeriod = async (
-    questionSet: Pick<QuestionSetDraft, 'target' | 'title' | 'headerMarkdown' | 'footerMarkdown' | 'questions'>,
+    questionSet: Pick<
+      QuestionSetDraft,
+      'target' | 'title' | 'headerMarkdown' | 'footerMarkdown' | 'questions'
+    >,
   ) => {
     if (!selectedReviewPeriod || !activeReviewAdminPeriod || !sessionToken) {
       return;
@@ -3956,7 +4232,11 @@ function App() {
       );
       await refreshFoundationSnapshot();
       setSelectedReviewPeriodId(activeReviewAdminPeriod.id);
-      const nextDraft = toQuestionSetDraft(activeReviewAdminPeriod.id, copiedQuestionSet.target, copiedQuestionSet);
+      const nextDraft = toQuestionSetDraft(
+        activeReviewAdminPeriod.id,
+        copiedQuestionSet.target,
+        copiedQuestionSet,
+      );
       setQuestionSetDraft(nextDraft);
       setQuestionSetInitialDraft(serializeQuestionSetDraft(nextDraft));
       setEditingQuestionDraftId(null);
@@ -3991,7 +4271,11 @@ function App() {
     try {
       const raw = await file.text();
       const payload = buildQuestionSetsImportPayload(questionSetImportFormatRef.current, raw);
-      const response = await importQuestionSetsFromApi(sessionToken, selectedReviewPeriod.id, payload);
+      const response = await importQuestionSetsFromApi(
+        sessionToken,
+        selectedReviewPeriod.id,
+        payload,
+      );
       closeQuestionSetDialog({ force: true });
       await refreshFoundationSnapshot();
       setAdminNotice(buildQuestionSetImportNotice(response));
@@ -4028,7 +4312,11 @@ function App() {
     setAppError('');
 
     try {
-      const response = await exportAssignmentsFromApi(sessionToken, selectedReviewPeriod.id, format);
+      const response = await exportAssignmentsFromApi(
+        sessionToken,
+        selectedReviewPeriod.id,
+        format,
+      );
       const content = serializeAssignmentsTransfer(response);
       const downloadName = buildAssignmentsExportFilename(selectedReviewPeriod, response);
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
@@ -4060,7 +4348,11 @@ function App() {
     try {
       const raw = await file.text();
       const payload = buildAssignmentsImportPayload(assignmentImportFormatRef.current, raw);
-      const response = await importAssignmentsFromApi(sessionToken, selectedReviewPeriod.id, payload);
+      const response = await importAssignmentsFromApi(
+        sessionToken,
+        selectedReviewPeriod.id,
+        payload,
+      );
       await Promise.all([refreshFoundationSnapshot(), refreshEmployeeDirectory()]);
       if (selectedEmployeeId) {
         const employeeResponse = await getEmployee(sessionToken, selectedEmployeeId);
@@ -4112,7 +4404,11 @@ function App() {
     </main>
   );
 
-  const handleDialogShortcut = (event: KeyboardEvent<HTMLElement>, action: () => void, disabled = false) => {
+  const handleDialogShortcut = (
+    event: KeyboardEvent<HTMLElement>,
+    action: () => void,
+    disabled = false,
+  ) => {
     if (disabled) {
       return;
     }
@@ -4139,44 +4435,54 @@ function App() {
             openQuestionSetEditor(target);
           }
         }}
-        onKeyDown={(event) => handleDialogShortcut(event, () => openQuestionSetEditor(target), !canOpenQuestionSet)}
+        onKeyDown={(event) =>
+          handleDialogShortcut(event, () => openQuestionSetEditor(target), !canOpenQuestionSet)
+        }
       >
-      <div className="question-set-heading">
-        <p className="section-label">{target === 'self' ? 'Self assessment' : 'Peer assessment'}</p>
-        <h3>{questionSet?.title ?? `Create ${target} questions`}</h3>
-      </div>
-      <dl className="detail-grid compact-detail-grid">
-        <div>
-          <dt>Questions</dt>
-          <dd>{questionSet?.questions.length ?? 0}</dd>
+        <div className="question-set-heading">
+          <p className="section-label">
+            {target === 'self' ? 'Self assessment' : 'Peer assessment'}
+          </p>
+          <h3>{questionSet?.title ?? `Create ${target} questions`}</h3>
         </div>
-        {questionSetStatusEnabled ? (
+        <dl className="detail-grid compact-detail-grid">
           <div>
-            <dt>Status</dt>
-            <dd>{questionSet?.status ?? 'draft'}</dd>
+            <dt>Questions</dt>
+            <dd>{questionSet?.questions.length ?? 0}</dd>
           </div>
-        ) : null}
-      </dl>
-      <MarkdownContent markdown={questionSet?.headerMarkdown || 'No header text yet.'} className="markdown-content" />
-      <div className="question-set-question-list">
-        {questionSet?.questions.map((question) => (
-          <article className="question-set-question" key={question.id}>
-            <div className="question-prompt-block">
-              <span className="question-order">#{question.order}</span>
-              <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+          {questionSetStatusEnabled ? (
+            <div>
+              <dt>Status</dt>
+              <dd>{questionSet?.status ?? 'draft'}</dd>
             </div>
-            {question.category ? <small className="muted-copy">{question.category}</small> : null}
-          </article>
-        )) ?? <p className="muted-copy">No questions configured yet.</p>}
-      </div>
-      <p className="muted-copy">
-        {isReadOnly
-          ? questionSet
-            ? 'Click anywhere to review this archived question set.'
-            : 'Archived review periods cannot create new question sets.'
-          : 'Click anywhere to edit this question set.'}
-      </p>
-    </section>
+          ) : null}
+        </dl>
+        <MarkdownContent
+          markdown={questionSet?.headerMarkdown || 'No header text yet.'}
+          className="markdown-content"
+        />
+        <div className="question-set-question-list">
+          {questionSet?.questions.map((question) => (
+            <article className="question-set-question" key={question.id}>
+              <div className="question-prompt-block">
+                <span className="question-order">#{question.order}</span>
+                <MarkdownContent
+                  markdown={question.prompt}
+                  className="markdown-content question-prompt-markdown"
+                />
+              </div>
+              {question.category ? <small className="muted-copy">{question.category}</small> : null}
+            </article>
+          )) ?? <p className="muted-copy">No questions configured yet.</p>}
+        </div>
+        <p className="muted-copy">
+          {isReadOnly
+            ? questionSet
+              ? 'Click anywhere to review this archived question set.'
+              : 'Archived review periods cannot create new question sets.'
+            : 'Click anywhere to edit this question set.'}
+        </p>
+      </section>
     );
   };
 
@@ -4187,7 +4493,9 @@ function App() {
           Review period key
           <input
             value={reviewPeriodDraft.key}
-            onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, key: event.target.value })}
+            onChange={(event) =>
+              setReviewPeriodDraft({ ...reviewPeriodDraft, key: event.target.value })
+            }
             placeholder="2026"
           />
         </label>
@@ -4195,7 +4503,9 @@ function App() {
           Label
           <input
             value={reviewPeriodDraft.label}
-            onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, label: event.target.value })}
+            onChange={(event) =>
+              setReviewPeriodDraft({ ...reviewPeriodDraft, label: event.target.value })
+            }
             placeholder="2026 Annual Review"
           />
         </label>
@@ -4205,7 +4515,9 @@ function App() {
             <input
               type="date"
               value={reviewPeriodDraft.startDate}
-              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })}
+              onChange={(event) =>
+                setReviewPeriodDraft({ ...reviewPeriodDraft, startDate: event.target.value })
+              }
             />
           </label>
           <label>
@@ -4213,7 +4525,9 @@ function App() {
             <input
               type="date"
               value={reviewPeriodDraft.dueDate}
-              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })}
+              onChange={(event) =>
+                setReviewPeriodDraft({ ...reviewPeriodDraft, dueDate: event.target.value })
+              }
             />
           </label>
           <label>
@@ -4221,7 +4535,12 @@ function App() {
             <input
               type="date"
               value={reviewPeriodDraft.assessmentDueDate}
-              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, assessmentDueDate: event.target.value })}
+              onChange={(event) =>
+                setReviewPeriodDraft({
+                  ...reviewPeriodDraft,
+                  assessmentDueDate: event.target.value,
+                })
+              }
             />
           </label>
           <label>
@@ -4229,7 +4548,9 @@ function App() {
             <input
               type="date"
               value={reviewPeriodDraft.reviewDueDate}
-              onChange={(event) => setReviewPeriodDraft({ ...reviewPeriodDraft, reviewDueDate: event.target.value })}
+              onChange={(event) =>
+                setReviewPeriodDraft({ ...reviewPeriodDraft, reviewDueDate: event.target.value })
+              }
             />
           </label>
           <label>
@@ -4252,7 +4573,11 @@ function App() {
           <button type="submit" disabled={isSavingReviewAdmin}>
             Save period
           </button>
-          <button type="button" className="secondary-button" onClick={() => setReviewPeriodDraft(null)}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setReviewPeriodDraft(null)}
+          >
             Cancel
           </button>
         </div>
@@ -4358,13 +4683,22 @@ function App() {
           </dl>
           {selectedReviewPeriod.status === 'archived' ? (
             <p className="toolbar-note">
-              Archived review periods stay visible here but question sets become read-only until an admin unarchives the cycle.
+              Archived review periods stay visible here but question sets become read-only until an
+              admin unarchives the cycle.
             </p>
           ) : selectedReviewPeriod.status === 'inactive' ? (
-            <p className="toolbar-note">Inactive review periods stay editable, but only the active period can sync assessments.</p>
+            <p className="toolbar-note">
+              Inactive review periods stay editable, but only the active period can sync
+              assessments.
+            </p>
           ) : null}
           <div className="action-row review-period-actions">
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={openQuestionCategoriesDialog}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSavingReviewAdmin}
+              onClick={openQuestionCategoriesDialog}
+            >
               Edit question categories
             </button>
           </div>
@@ -4372,7 +4706,6 @@ function App() {
 
         {renderQuestionSetCard('self', selectedQuestionSets.self)}
         {renderQuestionSetCard('peer', selectedQuestionSets.peer)}
-
       </main>
     );
   };
@@ -4396,12 +4729,19 @@ function App() {
               <div>
                 <p className="section-label">Review period management</p>
                 <h3>No review periods configured</h3>
-                <p className="muted-copy">Add a review period to resume review-period scheduling and question-set management.</p>
+                <p className="muted-copy">
+                  Add a review period to resume review-period scheduling and question-set
+                  management.
+                </p>
               </div>
             </div>
             <div className="action-row review-period-actions">
               <div className="review-period-primary-actions">
-                <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+                <button
+                  type="button"
+                  disabled={isSavingReviewAdmin}
+                  onClick={startAddingReviewPeriod}
+                >
                   Add period
                 </button>
               </div>
@@ -4413,7 +4753,9 @@ function App() {
       );
     }
 
-    const reviewPeriodButtonProps = getReviewPeriodStatusButtonProps(selectedReviewPeriodManagement);
+    const reviewPeriodButtonProps = getReviewPeriodStatusButtonProps(
+      selectedReviewPeriodManagement,
+    );
 
     return (
       <main className="admin-stack">
@@ -4451,7 +4793,8 @@ function App() {
             <div>
               <dt>Window</dt>
               <dd>
-                {selectedReviewPeriodManagement.startDate} → {selectedReviewPeriodManagement.dueDate}
+                {selectedReviewPeriodManagement.startDate} →{' '}
+                {selectedReviewPeriodManagement.dueDate}
               </dd>
             </div>
             <div>
@@ -4480,11 +4823,17 @@ function App() {
               Archived review periods stay visible here until an admin restores them.
             </p>
           ) : selectedReviewPeriodManagement.status === 'inactive' ? (
-            <p className="toolbar-note">Inactive review periods stay editable until an admin makes one active.</p>
+            <p className="toolbar-note">
+              Inactive review periods stay editable until an admin makes one active.
+            </p>
           ) : null}
           <div className="action-row review-period-actions">
             <div className="review-period-primary-actions">
-              <button type="button" disabled={isSavingReviewAdmin} onClick={startAddingReviewPeriod}>
+              <button
+                type="button"
+                disabled={isSavingReviewAdmin}
+                onClick={startAddingReviewPeriod}
+              >
                 Add period
               </button>
               <button
@@ -4514,34 +4863,47 @@ function App() {
 
   const renderQuestionSetDialog = () =>
     pathname === '/questions' && questionSetDraft && selectedReviewPeriod ? (
-      <div className="modal-backdrop" role="presentation" onClick={() => void closeQuestionSetDialog()}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onClick={() => void closeQuestionSetDialog()}
+      >
         <section
           aria-modal="true"
           className="card modal-card question-set-dialog"
           role="dialog"
           aria-labelledby="question-set-dialog-title"
           onClick={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <div>
-                <p className="section-label">
-                  {questionSetDraft.id ? 'Edit question set' : 'Create question set'} • {questionSetDraft.target}
-                </p>
-                <h3 id="question-set-dialog-title">
-                  {questionSetDraft.title || `New ${questionSetDraft.target} question set`}
-                </h3>
-                <p className="muted-copy">{selectedReviewPeriod.label}</p>
-              </div>
-              <div className="dialog-header-actions">
-                {selectedReviewPeriod.status === 'archived' ? <span className="pill">Read only</span> : null}
-                <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
-                  Close
-                </button>
-              </div>
+        >
+          <div className="section-heading">
+            <div>
+              <p className="section-label">
+                {questionSetDraft.id ? 'Edit question set' : 'Create question set'} •{' '}
+                {questionSetDraft.target}
+              </p>
+              <h3 id="question-set-dialog-title">
+                {questionSetDraft.title || `New ${questionSetDraft.target} question set`}
+              </h3>
+              <p className="muted-copy">{selectedReviewPeriod.label}</p>
             </div>
+            <div className="dialog-header-actions">
+              {selectedReviewPeriod.status === 'archived' ? (
+                <span className="pill">Read only</span>
+              ) : null}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void closeQuestionSetDialog()}
+              >
+                Close
+              </button>
+            </div>
+          </div>
 
           {selectedReviewPeriod.status === 'archived' ? (
-            <p className="toolbar-note">Archived review periods keep question sets visible, but editing stays disabled.</p>
+            <p className="toolbar-note">
+              Archived review periods keep question sets visible, but editing stays disabled.
+            </p>
           ) : null}
 
           <form className="stack-form" onSubmit={saveQuestionDraft}>
@@ -4560,7 +4922,12 @@ function App() {
                   <select
                     value={questionSetDraft.status}
                     disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                    onChange={(event) => updateQuestionSetDraftField('status', event.target.value as QuestionSetDraft['status'])}
+                    onChange={(event) =>
+                      updateQuestionSetDraftField(
+                        'status',
+                        event.target.value as QuestionSetDraft['status'],
+                      )
+                    }
                   >
                     <option value="draft">draft</option>
                     <option value="active">active</option>
@@ -4573,7 +4940,9 @@ function App() {
                   rows={3}
                   value={questionSetDraft.headerMarkdown}
                   disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                  onChange={(event) => updateQuestionSetDraftField('headerMarkdown', event.target.value)}
+                  onChange={(event) =>
+                    updateQuestionSetDraftField('headerMarkdown', event.target.value)
+                  }
                 />
               </label>
               <label>
@@ -4582,7 +4951,9 @@ function App() {
                   rows={3}
                   value={questionSetDraft.footerMarkdown}
                   disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-                  onChange={(event) => updateQuestionSetDraftField('footerMarkdown', event.target.value)}
+                  onChange={(event) =>
+                    updateQuestionSetDraftField('footerMarkdown', event.target.value)
+                  }
                 />
               </label>
             </div>
@@ -4602,7 +4973,9 @@ function App() {
                       tabIndex={0}
                       aria-label={`Edit question ${question.order}`}
                       onClick={() => setEditingQuestionDraftId(question.id)}
-                      onKeyDown={(event) => handleDialogShortcut(event, () => setEditingQuestionDraftId(question.id))}
+                      onKeyDown={(event) =>
+                        handleDialogShortcut(event, () => setEditingQuestionDraftId(question.id))
+                      }
                     >
                       <span className="question-set-dialog-order">#{question.order}</span>
                       <MarkdownContent
@@ -4631,13 +5004,12 @@ function App() {
               </div>
             </section>
 
-            {(
-              ((selectedReviewPeriod.status === 'inactive' || selectedReviewPeriod.status === 'archived') &&
-                questionSetDraft.id &&
-                activeReviewAdminPeriod &&
-                activeReviewAdminPeriod.id !== selectedReviewPeriod.id) ||
-              selectedReviewPeriod.status !== 'archived'
-            ) ? (
+            {((selectedReviewPeriod.status === 'inactive' ||
+              selectedReviewPeriod.status === 'archived') &&
+              questionSetDraft.id &&
+              activeReviewAdminPeriod &&
+              activeReviewAdminPeriod.id !== selectedReviewPeriod.id) ||
+            selectedReviewPeriod.status !== 'archived' ? (
               <div className="dialog-footer">
                 <div className="dialog-footer-start">
                   {selectedReviewPeriod.status === 'archived' ? null : (
@@ -4660,7 +5032,8 @@ function App() {
                       Delete set
                     </button>
                   )}
-                  {(selectedReviewPeriod.status === 'inactive' || selectedReviewPeriod.status === 'archived') &&
+                  {(selectedReviewPeriod.status === 'inactive' ||
+                    selectedReviewPeriod.status === 'archived') &&
                   questionSetDraft.id &&
                   activeReviewAdminPeriod &&
                   activeReviewAdminPeriod.id !== selectedReviewPeriod.id ? (
@@ -4668,7 +5041,9 @@ function App() {
                       type="button"
                       className="secondary-button"
                       disabled={isSavingReviewAdmin}
-                      onClick={() => void handleCopyQuestionSetToCurrentReviewPeriod(questionSetDraft)}
+                      onClick={() =>
+                        void handleCopyQuestionSetToCurrentReviewPeriod(questionSetDraft)
+                      }
                     >
                       {`Copy to ${activeReviewAdminPeriod.label}`}
                     </button>
@@ -4679,7 +5054,11 @@ function App() {
                     <button type="submit" disabled={isSavingReviewAdmin}>
                       Save question set
                     </button>
-                    <button type="button" className="secondary-button" onClick={() => void closeQuestionSetDialog()}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void closeQuestionSetDialog()}
+                    >
                       Cancel
                     </button>
                   </div>
@@ -4693,7 +5072,11 @@ function App() {
 
   const renderQuestionEditorDialog = () =>
     pathname === '/questions' && questionSetDraft && editingQuestionDraft ? (
-      <div className="modal-backdrop" role="presentation" onClick={() => void closeQuestionEditorDialog()}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onClick={() => void closeQuestionEditorDialog()}
+      >
         <section
           aria-modal="true"
           className="card modal-card question-edit-dialog"
@@ -4706,11 +5089,16 @@ function App() {
               <p className="section-label">Question editor</p>
               <h3 id="question-edit-dialog-title">Question {editingQuestionDraft.order}</h3>
               <p className="muted-copy">
-                {questionSetDraft.target === 'self' ? 'Self assessment' : 'Peer assessment'} • {questionSetDraft.title}
+                {questionSetDraft.target === 'self' ? 'Self assessment' : 'Peer assessment'} •{' '}
+                {questionSetDraft.title}
               </p>
             </div>
             <div className="dialog-header-actions">
-              <button type="button" className="secondary-button" onClick={() => void closeQuestionEditorDialog()}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void closeQuestionEditorDialog()}
+              >
                 Close
               </button>
             </div>
@@ -4750,7 +5138,12 @@ function App() {
                   aria-label="Response type"
                   value={editingQuestionDraft.type}
                   disabled={selectedReviewPeriod?.status === 'archived' || isSavingReviewAdmin}
-                  onChange={(event) => updateQuestionDraftField('type', event.target.value as QuestionSetQuestionDraft['type'])}
+                  onChange={(event) =>
+                    updateQuestionDraftField(
+                      'type',
+                      event.target.value as QuestionSetQuestionDraft['type'],
+                    )
+                  }
                 >
                   <option value="subjective">subjective</option>
                   <option value="ranking">ranking</option>
@@ -4782,7 +5175,10 @@ function App() {
     ) : null;
 
   const renderNewQuestionCategoryDialog = () =>
-    pathname === '/questions' && questionSetDraft && editingQuestionDraft && isNewQuestionCategoryDialogOpen ? (
+    pathname === '/questions' &&
+    questionSetDraft &&
+    editingQuestionDraft &&
+    isNewQuestionCategoryDialogOpen ? (
       <div className="modal-backdrop" role="presentation" onClick={closeNewQuestionCategoryDialog}>
         <section
           aria-modal="true"
@@ -4796,7 +5192,11 @@ function App() {
               <p className="section-label">Category</p>
               <h3 id="question-category-dialog-title">New category</h3>
             </div>
-            <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={closeNewQuestionCategoryDialog}
+            >
               Close
             </button>
           </div>
@@ -4814,11 +5214,17 @@ function App() {
                 }}
               />
             </label>
-            {newQuestionCategoryError ? <p className="form-error">{newQuestionCategoryError}</p> : null}
+            {newQuestionCategoryError ? (
+              <p className="form-error">{newQuestionCategoryError}</p>
+            ) : null}
             <div className="dialog-footer">
               <div className="dialog-footer-end">
                 <button type="submit">Save category</button>
-                <button type="button" className="secondary-button" onClick={closeNewQuestionCategoryDialog}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeNewQuestionCategoryDialog}
+                >
                   Cancel
                 </button>
               </div>
@@ -4843,7 +5249,11 @@ function App() {
               <p className="section-label">Questions</p>
               <h3 id="question-categories-dialog-title">Edit question categories</h3>
             </div>
-            <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={closeQuestionCategoriesDialog}
+            >
               Close
             </button>
           </div>
@@ -4851,7 +5261,10 @@ function App() {
             <div className="question-categories-editor">
               {questionCategoriesDraft.length > 0 ? (
                 questionCategoriesDraft.map((category, index) => (
-                  <div className="question-categories-editor-row" key={`question-category-${index}`}>
+                  <div
+                    className="question-categories-editor-row"
+                    key={`question-category-${index}`}
+                  >
                     <label className="sr-only" htmlFor={`question-category-${index}`}>
                       Question category {index + 1}
                     </label>
@@ -4874,10 +5287,16 @@ function App() {
                 <p className="muted-copy">No persistent categories yet. Add one below.</p>
               )}
             </div>
-            {questionCategoriesDialogError ? <p className="form-error">{questionCategoriesDialogError}</p> : null}
+            {questionCategoriesDialogError ? (
+              <p className="form-error">{questionCategoriesDialogError}</p>
+            ) : null}
             <div className="dialog-footer">
               <div className="dialog-footer-start">
-                <button type="button" className="secondary-button" onClick={addQuestionCategoryDraft}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={addQuestionCategoryDraft}
+                >
                   Add category
                 </button>
               </div>
@@ -4885,7 +5304,11 @@ function App() {
                 <button type="submit" disabled={isSavingReviewAdmin}>
                   Save categories
                 </button>
-                <button type="button" className="secondary-button" onClick={closeQuestionCategoriesDialog}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeQuestionCategoriesDialog}
+                >
                   Cancel
                 </button>
               </div>
@@ -4895,7 +5318,8 @@ function App() {
       </div>
     ) : null;
 
-  const renderAssignments = () => {
+  // Legacy section renderer retained for reference; dashboard/admin surfaces replaced it.
+  const _renderAssignments = () => {
     if (!reviewAdmin || !selectedReviewPeriod || !selectedReviewPeriodSummary) {
       return (
         <main className="content-grid">
@@ -4939,10 +5363,20 @@ function App() {
             </div>
           </dl>
           <div className="action-row">
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleAssignmentExport('json')}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSavingReviewAdmin}
+              onClick={() => void handleAssignmentExport('json')}
+            >
               Export JSON
             </button>
-            <button type="button" className="secondary-button" disabled={isSavingReviewAdmin} onClick={() => void handleAssignmentExport('csv')}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isSavingReviewAdmin}
+              onClick={() => void handleAssignmentExport('csv')}
+            >
               Export CSV
             </button>
             <button
@@ -4953,23 +5387,23 @@ function App() {
             >
               Import JSON
             </button>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
-            onClick={() => void handleAssignmentImport('csv')}
-          >
-            Import CSV
-          </button>
-        </div>
-        <input
-          ref={assignmentImportInputRef}
-          type="file"
-          accept=".json,.csv,application/json,text/csv,text/plain"
-          style={{ display: 'none' }}
-          onChange={(event) => void handleAssignmentImportFileChange(event)}
-        />
-      </section>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedReviewPeriod.status === 'archived' || isSavingReviewAdmin}
+              onClick={() => void handleAssignmentImport('csv')}
+            >
+              Import CSV
+            </button>
+          </div>
+          <input
+            ref={assignmentImportInputRef}
+            type="file"
+            accept=".json,.csv,application/json,text/csv,text/plain"
+            style={{ display: 'none' }}
+            onChange={(event) => void handleAssignmentImportFileChange(event)}
+          />
+        </section>
 
         <section className="card">
           <p className="section-label">Assignment matrix</p>
@@ -5045,9 +5479,15 @@ function App() {
       );
     }
 
-    const activeReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'active');
-    const inactiveReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'inactive');
-    const archivedReviewPeriods = reviewAdmin.reviewPeriods.filter((period) => period.status === 'archived');
+    const activeReviewPeriods = reviewAdmin.reviewPeriods.filter(
+      (period) => period.status === 'active',
+    );
+    const inactiveReviewPeriods = reviewAdmin.reviewPeriods.filter(
+      (period) => period.status === 'inactive',
+    );
+    const archivedReviewPeriods = reviewAdmin.reviewPeriods.filter(
+      (period) => period.status === 'archived',
+    );
 
     return (
       <section className="card admin-section-card file-management-review-period-card">
@@ -5073,12 +5513,17 @@ function App() {
                     <div>
                       <strong>{reviewPeriod.label}</strong>
                       <p className="muted-copy">
-                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} • review by{' '}
-                        {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
+                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by{' '}
+                        {reviewPeriod.assessmentDueDate} • review by {reviewPeriod.reviewDueDate} •{' '}
+                        {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
                         assignments • {summary.assessmentCount} assessments
                       </p>
                     </div>
-                    <button type="button" disabled={isSavingReviewAdmin} onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}>
+                    <button
+                      type="button"
+                      disabled={isSavingReviewAdmin}
+                      onClick={() => void handleArchiveToggle(reviewPeriod.id, true)}
+                    >
                       Archive
                     </button>
                   </article>
@@ -5105,8 +5550,9 @@ function App() {
                     <div>
                       <strong>{reviewPeriod.label}</strong>
                       <p className="muted-copy">
-                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by {reviewPeriod.assessmentDueDate} • review by{' '}
-                        {reviewPeriod.reviewDueDate} • {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
+                        {reviewPeriod.startDate} → {reviewPeriod.dueDate} • assess by{' '}
+                        {reviewPeriod.assessmentDueDate} • review by {reviewPeriod.reviewDueDate} •{' '}
+                        {summary.questionSetCount} question sets • {summary.assignmentCount}{' '}
                         assignments • {summary.assessmentCount} assessments
                       </p>
                     </div>
@@ -5151,8 +5597,10 @@ function App() {
                     <div>
                       <strong>{reviewPeriod.label}</strong>
                       <p className="muted-copy">
-                        Archived at {reviewPeriod.archivedAt ?? 'unknown'} by {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
-                        {summary.archivedAssessmentCount} archived assessments • {summary.completedAssessmentCount} completed
+                        Archived at {reviewPeriod.archivedAt ?? 'unknown'} by{' '}
+                        {getEmployeeName(reviewPeriod.archivedByEmployeeId)} •{' '}
+                        {summary.archivedAssessmentCount} archived assessments •{' '}
+                        {summary.completedAssessmentCount} completed
                       </p>
                     </div>
                     <button
@@ -5188,10 +5636,14 @@ function App() {
           </div>
         </div>
         <p className="muted-copy">
-          Export or import employee accounts here, including manager, assessor, and reviewer assignments. The employee
-          directory stays focused on editing people, roles, and passwords.
+          Export or import employee accounts here, including manager, assessor, and reviewer
+          assignments. The employee directory stays focused on editing people, roles, and passwords.
         </p>
-        <div className="local-user-export-mode-grid" role="radiogroup" aria-label="User export mode">
+        <div
+          className="local-user-export-mode-grid"
+          role="radiogroup"
+          aria-label="User export mode"
+        >
           {localUserExportModeOptions.map((option) => (
             <label
               key={option.value}
@@ -5202,7 +5654,9 @@ function App() {
                 name="local-user-export-mode"
                 value={option.value}
                 checked={localUserExportMode === option.value}
-                onChange={(event) => setLocalUserExportMode(event.target.value as LocalUsersExportMode)}
+                onChange={(event) =>
+                  setLocalUserExportMode(event.target.value as LocalUsersExportMode)
+                }
               />
               <span className="local-user-export-mode-copy">
                 <strong>{option.label}</strong>
@@ -5212,7 +5666,11 @@ function App() {
           ))}
         </div>
         <div className="action-row">
-          <button type="button" disabled={isSyncingLocalUsers} onClick={() => void handleLocalUserExport('json')}>
+          <button
+            type="button"
+            disabled={isSyncingLocalUsers}
+            onClick={() => void handleLocalUserExport('json')}
+          >
             {isSyncingLocalUsers ? 'Working…' : 'Export JSON'}
           </button>
           <button
@@ -5245,21 +5703,21 @@ function App() {
 
   const renderQuestionTransferCard = () => {
     if (!reviewAdmin || !selectedReviewPeriod || !selectedReviewPeriodSummary) {
-        return (
-          <section className="card admin-section-card file-management-transfer-card">
-            <p className="section-label">Question set import/export</p>
-            <p className="muted-copy">Loading review period transfer tools...</p>
-          </section>
-        );
-    }
-
       return (
         <section className="card admin-section-card file-management-transfer-card">
-          <div className="section-heading">
-            <div>
-              <p className="section-label">Question set import/export</p>
-            </div>
-            <label className="inline-field review-period-picker">
+          <p className="section-label">Question set import/export</p>
+          <p className="muted-copy">Loading review period transfer tools...</p>
+        </section>
+      );
+    }
+
+    return (
+      <section className="card admin-section-card file-management-transfer-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-label">Question set import/export</p>
+          </div>
+          <label className="inline-field review-period-picker">
             <span className="sr-only">Review period</span>
             <select
               value={selectedReviewPeriod.id}
@@ -5277,8 +5735,8 @@ function App() {
           </label>
         </div>
         <p className="muted-copy">
-          Run question-set import and export actions for the selected review period here. Question editing stays on the
-          Questions page.
+          Run question-set import and export actions for the selected review period here. Question
+          editing stays on the Questions page.
         </p>
         <dl className="detail-grid compact-detail-grid">
           <div>
@@ -5309,7 +5767,9 @@ function App() {
           </div>
         </dl>
         {selectedReviewPeriod.status === 'archived' ? (
-          <p className="toolbar-note">Question-set imports stay disabled while this review period is archived.</p>
+          <p className="toolbar-note">
+            Question-set imports stay disabled while this review period is archived.
+          </p>
         ) : null}
         <div className="action-row">
           <button
@@ -5381,7 +5841,9 @@ function App() {
           </div>
           <div className="dashboard-identity-field">
             <span className="dashboard-identity-label">Manager</span>
-            <span className="dashboard-identity-value">{getEmployeeName(sessionUser?.managerId ?? null)}</span>
+            <span className="dashboard-identity-value">
+              {getEmployeeName(sessionUser?.managerId ?? null)}
+            </span>
           </div>
           <div className="dashboard-identity-field">
             <span className="dashboard-identity-label">Assessors</span>
@@ -5401,7 +5863,9 @@ function App() {
           </div>
           <div className="dashboard-identity-field">
             <span className="dashboard-identity-label">Workflow summary</span>
-            <span className="dashboard-identity-value">{dashboardSnapshot?.reviewSummary ?? '—'}</span>
+            <span className="dashboard-identity-value">
+              {dashboardSnapshot?.reviewSummary ?? '—'}
+            </span>
           </div>
           {dashboardSnapshot?.adminSummary ? (
             <div className="dashboard-identity-field">
@@ -5416,7 +5880,9 @@ function App() {
         <div className="section-toggle-row">
           <div className="section-title-row">
             <span>Assessment Queue</span>
-            {renderRefreshIconButton('Refresh assessment queue', () => refreshPrimaryList('dashboard'))}
+            {renderRefreshIconButton('Refresh assessment queue', () =>
+              refreshPrimaryList('dashboard'),
+            )}
           </div>
           <button
             type="button"
@@ -5438,16 +5904,17 @@ function App() {
                     className="dashboard-queue-group-heading section-toggle"
                     aria-expanded={isQueueExpanded}
                     aria-label={`${isQueueExpanded ? 'Collapse' : 'Expand'} ${queue.title} queue`}
-onClick={() =>
-  setDashboardQueueExpandedState((currentState) => ({
-    ...currentState,
-    [queueStateKey]: !(currentState[queueStateKey] ?? true),
-  }))
-}
+                    onClick={() =>
+                      setDashboardQueueExpandedState((currentState) => ({
+                        ...currentState,
+                        [queueStateKey]: !(currentState[queueStateKey] ?? true),
+                      }))
+                    }
                   >
                     <strong>{queue.title}</strong>
                     <span className="muted-copy">
-                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} • {isQueueExpanded ? 'Collapse' : 'Expand'}
+                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} •{' '}
+                      {isQueueExpanded ? 'Collapse' : 'Expand'}
                     </span>
                   </button>
                   {isQueueExpanded ? (
@@ -5457,7 +5924,10 @@ onClick={() =>
                         role="region"
                         aria-label={`${queue.title} assessments`}
                       >
-                        <div className="review-queue-table dashboard-queue-table" aria-label={`${queue.title} assessments`}>
+                        <div
+                          className="review-queue-table dashboard-queue-table"
+                          aria-label={`${queue.title} assessments`}
+                        >
                           <div className="review-queue-header">
                             <span>Name</span>
                             <span>Work</span>
@@ -5475,10 +5945,14 @@ onClick={() =>
                               >
                                 <span className="employee-row-cell review-queue-primary">
                                   <strong>{item.subjectName}</strong>
-                                  <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                                  <span className="muted-copy review-queue-subcopy">
+                                    {item.title}
+                                  </span>
                                 </span>
                                 <span className="employee-row-cell">{item.workLabel}</span>
-                                <span className="employee-row-cell">{item.responsibilityLabel}</span>
+                                <span className="employee-row-cell">
+                                  {item.responsibilityLabel}
+                                </span>
                                 <span className="employee-row-cell">{item.dueDate}</span>
                                 <span className="employee-row-cell review-queue-step-cell">
                                   <span className="pill">{item.statusLabel}</span>
@@ -5519,22 +5993,30 @@ onClick={() =>
                     className="dashboard-queue-group-heading section-toggle"
                     aria-expanded={isQueueExpanded}
                     aria-label={`${isQueueExpanded ? 'Collapse' : 'Expand'} ${queue.title} queue`}
-onClick={() =>
-  setDashboardQueueExpandedState((currentState) => ({
-    ...currentState,
-    [queueStateKey]: !(currentState[queueStateKey] ?? true),
-  }))
-}
+                    onClick={() =>
+                      setDashboardQueueExpandedState((currentState) => ({
+                        ...currentState,
+                        [queueStateKey]: !(currentState[queueStateKey] ?? true),
+                      }))
+                    }
                   >
                     <strong>{queue.title}</strong>
                     <span className="muted-copy">
-                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} • {isQueueExpanded ? 'Collapse' : 'Expand'}
+                      {queue.items.length} {queue.items.length === 1 ? 'item' : 'items'} •{' '}
+                      {isQueueExpanded ? 'Collapse' : 'Expand'}
                     </span>
                   </button>
                   {isQueueExpanded ? (
                     queue.items.length ? (
-                      <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label={queue.title}>
-                        <div className="review-queue-table dashboard-queue-table" aria-label={queue.title}>
+                      <div
+                        className="employee-roster-table-scroll review-queue-table-scroll"
+                        role="region"
+                        aria-label={queue.title}
+                      >
+                        <div
+                          className="review-queue-table dashboard-queue-table"
+                          aria-label={queue.title}
+                        >
                           <div className="review-queue-header">
                             <span>Name</span>
                             <span>Work</span>
@@ -5543,25 +6025,30 @@ onClick={() =>
                             <span>Status</span>
                             <span>Action</span>
                           </div>
-                            {queue.items.map((item) => (
-                              <div className="review-queue-row-card" key={item.id}>
-                                <button
-                                  type="button"
-                                  className={`review-queue-item${
-                                    selectedAssessmentSetDialog?.reviewPeriodId === item.reviewPeriodId &&
-                                    selectedAssessmentSetDialog.employeeId === item.employeeId
-                                      ? ' admin-list-item-active'
-                                      : ''
-                                  }`}
-                                  disabled={isSavingAssessmentWorkflow}
-                                  onClick={() => void handleDashboardWorkflowAction(item)}
-                                >
+                          {queue.items.map((item) => (
+                            <div className="review-queue-row-card" key={item.id}>
+                              <button
+                                type="button"
+                                className={`review-queue-item${
+                                  selectedAssessmentSetDialog?.reviewPeriodId ===
+                                    item.reviewPeriodId &&
+                                  selectedAssessmentSetDialog.employeeId === item.employeeId
+                                    ? ' admin-list-item-active'
+                                    : ''
+                                }`}
+                                disabled={isSavingAssessmentWorkflow}
+                                onClick={() => void handleDashboardWorkflowAction(item)}
+                              >
                                 <span className="employee-row-cell review-queue-primary">
                                   <strong>{item.subjectName}</strong>
-                                  <span className="muted-copy review-queue-subcopy">{item.title}</span>
+                                  <span className="muted-copy review-queue-subcopy">
+                                    {item.title}
+                                  </span>
                                 </span>
                                 <span className="employee-row-cell">{item.workLabel}</span>
-                                <span className="employee-row-cell">{item.responsibilityLabel}</span>
+                                <span className="employee-row-cell">
+                                  {item.responsibilityLabel}
+                                </span>
                                 <span className="employee-row-cell">{item.dueDate}</span>
                                 <span className="employee-row-cell review-queue-step-cell">
                                   <span className="pill">{item.statusLabel}</span>
@@ -5594,52 +6081,60 @@ onClick={() =>
           role="dialog"
           aria-labelledby="assessment-dialog-title"
         >
-            <div className="section-heading">
-              <div>
-                <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
-                <h3 id="assessment-dialog-title">{selectedAssessmentEditor.title}</h3>
-                <p className="muted-copy">{selectedAssessmentEditor.reviewPeriodLabel}</p>
-              </div>
-              <div className="dialog-header-actions">
-                <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
-                {!selectedAssessmentEditor.isReadOnly ? (
-                  <>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">{selectedAssessmentEditor.targetLabel} form</p>
+              <h3 id="assessment-dialog-title">{selectedAssessmentEditor.title}</h3>
+              <p className="muted-copy">{selectedAssessmentEditor.reviewPeriodLabel}</p>
+            </div>
+            <div className="dialog-header-actions">
+              <span className="pill">{selectedAssessmentEditor.statusLabel}</span>
+              {!selectedAssessmentEditor.isReadOnly ? (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
+                    onClick={() => void handleSaveAssessmentForLater()}
+                  >
+                    {selectedAssessmentEditor.saveLabel}
+                  </button>
+                  {selectedAssessmentEditor.submitLabel ? (
                     <button
                       type="button"
-                      className="secondary-button"
-                      disabled={!selectedAssessmentEditor.canSave || isSavingAssessmentWorkflow}
-                      onClick={() => void handleSaveAssessmentForLater()}
+                      disabled={
+                        !selectedAssessmentEditor.canSubmit ||
+                        (!isAssessmentDraftDirty && !isAssessmentDraftComplete) ||
+                        isSavingAssessmentWorkflow
+                      }
+                      onClick={() => void handleSubmitAssessment()}
                     >
-                      {selectedAssessmentEditor.saveLabel}
+                      {selectedAssessmentEditor.submitLabel}
                     </button>
-                    {selectedAssessmentEditor.submitLabel ? (
-                      <button
-                        type="button"
-                        disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
-                        onClick={() => void handleSubmitAssessment()}
-                      >
-                        {selectedAssessmentEditor.submitLabel}
-                      </button>
-                    ) : null}
-                    {selectedAssessmentEditor.adminQuickActionLabel ? (
-                      <button
-                        type="button"
-                        disabled={isSavingAssessmentWorkflow || !isAssessmentDraftComplete}
-                        onClick={() => void handleAssessmentAdminQuickAction()}
-                      >
-                        {selectedAssessmentEditor.adminQuickActionLabel}
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
-                <button type="button" className="secondary-button" onClick={printAssessmentDialog}>
-                  Print
-                </button>
-                <button type="button" className="secondary-button" onClick={handleCloseAssessmentDialog}>
-                  Close
-                </button>
-              </div>
+                  ) : null}
+                  {selectedAssessmentEditor.adminQuickActionLabel ? (
+                    <button
+                      type="button"
+                      disabled={isSavingAssessmentWorkflow || !isAssessmentDraftComplete}
+                      onClick={() => void handleAssessmentAdminQuickAction()}
+                    >
+                      {selectedAssessmentEditor.adminQuickActionLabel}
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+              <button type="button" className="secondary-button" onClick={printAssessmentDialog}>
+                Print
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleCloseAssessmentDialog}
+              >
+                Close
+              </button>
             </div>
+          </div>
           <section className="assessment-editor-intro">
             <p className="review-dialog-copy">{selectedAssessmentEditor.detail}</p>
             <dl className="detail-grid compact-detail-grid assessment-editor-meta">
@@ -5674,7 +6169,10 @@ onClick={() =>
             </dl>
           </section>
           {selectedAssessmentEditor.headerMarkdown ? (
-            <MarkdownContent markdown={selectedAssessmentEditor.headerMarkdown} className="markdown-content assessment-editor-copy" />
+            <MarkdownContent
+              markdown={selectedAssessmentEditor.headerMarkdown}
+              className="markdown-content assessment-editor-copy"
+            />
           ) : null}
           <div className="assessment-print-layout assessment-print-only">
             {selectedAssessmentPrintScaleRows.length > 0 ? (
@@ -5688,20 +6186,29 @@ onClick={() =>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedAssessmentPrintScaleRows.map(({ category, question, responseLabel }) => (
-                      <tr key={question.questionId}>
-                        <td>
-                          <div className="assessment-print-question-cell">
-                            {category ? <p className="section-label assessment-print-question-category">{category}</p> : null}
-                            <div className="assessment-print-question-prompt">
-                              <span className="question-order">#{question.order}</span>
-                              <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                    {selectedAssessmentPrintScaleRows.map(
+                      ({ category, question, responseLabel }) => (
+                        <tr key={question.questionId}>
+                          <td>
+                            <div className="assessment-print-question-cell">
+                              {category ? (
+                                <p className="section-label assessment-print-question-category">
+                                  {category}
+                                </p>
+                              ) : null}
+                              <div className="assessment-print-question-prompt">
+                                <span className="question-order">#{question.order}</span>
+                                <MarkdownContent
+                                  markdown={question.prompt}
+                                  className="markdown-content question-prompt-markdown"
+                                />
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td>{responseLabel || 'No response provided.'}</td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td>{responseLabel || 'No response provided.'}</td>
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </section>
@@ -5716,16 +6223,24 @@ onClick={() =>
                 ) : null}
                 <div className="assessment-print-narrative-list">
                   {group.questions.map((question) => (
-                    <article className="assessment-print-narrative-question" key={question.questionId}>
+                    <article
+                      className="assessment-print-narrative-question"
+                      key={question.questionId}
+                    >
                       <div className="question-prompt-block">
                         <span className="question-order">#{question.order}</span>
-                        <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                        <MarkdownContent
+                          markdown={question.prompt}
+                          className="markdown-content question-prompt-markdown"
+                        />
                       </div>
                       <div className="assessment-print-narrative-response">
                         {question.response.trim() ? (
                           question.response
                         ) : (
-                          <span className="assessment-print-empty-response">No response provided.</span>
+                          <span className="assessment-print-empty-response">
+                            No response provided.
+                          </span>
                         )}
                       </div>
                     </article>
@@ -5746,19 +6261,27 @@ onClick={() =>
                 <div className="assessment-editor-question-list">
                   {group.questions.map((question) => {
                     const currentResponse = assessmentResponsesDraft[question.questionId] ?? '';
-                    const normalizedResponse = normalizeAssessmentResponseValue(question.type, currentResponse);
+                    const normalizedResponse = normalizeAssessmentResponseValue(
+                      question.type,
+                      currentResponse,
+                    );
 
                     return (
                       <article className="assessment-editor-question" key={question.questionId}>
                         <div className="question-prompt-block">
                           <span className="question-order">#{question.order}</span>
-                          <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                          <MarkdownContent
+                            markdown={question.prompt}
+                            className="markdown-content question-prompt-markdown"
+                          />
                         </div>
                         <div className="assessment-question-response">
                           {question.type === 'narrative' ? (
                             <textarea
                               rows={5}
-                              disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
+                              disabled={
+                                selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow
+                              }
                               value={currentResponse}
                               onChange={(event) =>
                                 setAssessmentResponsesDraft((currentDraft) => ({
@@ -5770,7 +6293,9 @@ onClick={() =>
                           ) : (
                             <fieldset
                               className="assessment-question-scale"
-                              disabled={selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow}
+                              disabled={
+                                selectedAssessmentEditor.isReadOnly || isSavingAssessmentWorkflow
+                              }
                             >
                               <legend className="sr-only">{`Response for question ${question.order}`}</legend>
                               <div className="assessment-question-options">
@@ -5791,7 +6316,9 @@ onClick={() =>
                                         }))
                                       }
                                     />
-                                    <span className="assessment-question-option-label">{option.label}</span>
+                                    <span className="assessment-question-option-label">
+                                      {option.label}
+                                    </span>
                                   </label>
                                 ))}
                               </div>
@@ -5839,8 +6366,10 @@ onClick={() =>
                   type="button"
                   className="secondary-button"
                   disabled={
-                    isSavingAssessmentWorkflow
-                    || (!isAssessmentAdminStateDirty && !isAssessmentDraftDirty && !isAssessmentManagerNotesDirty)
+                    isSavingAssessmentWorkflow ||
+                    (!isAssessmentAdminStateDirty &&
+                      !isAssessmentDraftDirty &&
+                      !isAssessmentManagerNotesDirty)
                   }
                   onClick={() => void handleUpdateAssessmentStatusAsAdmin()}
                 >
@@ -5885,7 +6414,11 @@ onClick={() =>
               {selectedAssessmentEditor.submitLabel ? (
                 <button
                   type="button"
-                  disabled={(!selectedAssessmentEditor.canSubmit || (!isAssessmentDraftDirty && !isAssessmentDraftComplete)) || isSavingAssessmentWorkflow}
+                  disabled={
+                    !selectedAssessmentEditor.canSubmit ||
+                    (!isAssessmentDraftDirty && !isAssessmentDraftComplete) ||
+                    isSavingAssessmentWorkflow
+                  }
                   onClick={() => void handleSubmitAssessment()}
                 >
                   {selectedAssessmentEditor.submitLabel}
@@ -5906,7 +6439,8 @@ onClick={() =>
       </div>
     ) : null;
 
-  const renderReviews = () => (
+  // Legacy section renderer retained for reference; dashboard workflow surfaces replaced it.
+  const _renderReviews = () => (
     <main className="admin-stack">
       <section className="card review-sidebar">
         <button
@@ -5920,11 +6454,17 @@ onClick={() =>
             {areReviewQueuesExpanded ? 'Collapse' : 'Expand'}
           </span>
         </button>
-        <p className="muted-copy">Open an assessment to review responses, notes, and workflow actions.</p>
+        <p className="muted-copy">
+          Open an assessment to review responses, notes, and workflow actions.
+        </p>
 
         {areReviewQueuesExpanded ? (
           reviewQueues.length ? (
-            <div className="employee-roster-table-scroll review-queue-table-scroll" role="region" aria-label="Review queue">
+            <div
+              className="employee-roster-table-scroll review-queue-table-scroll"
+              role="region"
+              aria-label="Review queue"
+            >
               <div className="review-queue-table" aria-label="Review queue">
                 <div className="review-queue-header">
                   <span>Name</span>
@@ -5970,7 +6510,9 @@ onClick={() =>
           <div className="section-title-stack">
             <div className="section-title-row">
               <p className="section-label">Assessment List</p>
-              {renderRefreshIconButton('Refresh assessment list', () => refreshPrimaryList('assessments'))}
+              {renderRefreshIconButton('Refresh assessment list', () =>
+                refreshPrimaryList('assessments'),
+              )}
             </div>
             <p className="muted-copy">
               {activeAssessmentReviewPeriod
@@ -6043,7 +6585,9 @@ onClick={() =>
               <select
                 value={assessmentLifecycleFilter}
                 onChange={(event) =>
-                  setAssessmentLifecycleFilter(event.target.value as 'all' | AdminAssessmentRow['summaryBucket'])
+                  setAssessmentLifecycleFilter(
+                    event.target.value as 'all' | AdminAssessmentRow['summaryBucket'],
+                  )
                 }
               >
                 <option value="all">All stages</option>
@@ -6059,7 +6603,11 @@ onClick={() =>
               <span>Assessment type</span>
               <select
                 value={assessmentTargetFilter}
-                onChange={(event) => setAssessmentTargetFilter(event.target.value as 'all' | AdminAssessmentRow['target'])}
+                onChange={(event) =>
+                  setAssessmentTargetFilter(
+                    event.target.value as 'all' | AdminAssessmentRow['target'],
+                  )
+                }
               >
                 <option value="all">All assessments</option>
                 <option value="self">Self assessments</option>
@@ -6074,15 +6622,22 @@ onClick={() =>
             <p className="muted-copy">
               Showing {overallAdminAssessmentSummary.total}{' '}
               {overallAdminAssessmentSummary.total === 1 ? 'assessment' : 'assessments'} •{' '}
-              {overallAdminAssessmentSummary.drafting} not started / incomplete • {overallAdminAssessmentSummary.submitted} submitted •{' '}
-              {overallAdminAssessmentSummary.accepted} accepted • {overallAdminAssessmentSummary.readyForMeeting} ready for meeting •{' '}
-              {overallAdminAssessmentSummary.scheduled} scheduled • {overallAdminAssessmentSummary.concluded} concluded
+              {overallAdminAssessmentSummary.drafting} not started / incomplete •{' '}
+              {overallAdminAssessmentSummary.submitted} submitted •{' '}
+              {overallAdminAssessmentSummary.accepted} accepted •{' '}
+              {overallAdminAssessmentSummary.readyForMeeting} ready for meeting •{' '}
+              {overallAdminAssessmentSummary.scheduled} scheduled •{' '}
+              {overallAdminAssessmentSummary.concluded} concluded
             </p>
             {adminAssessmentSummary.map((summary) => (
               <p className="muted-copy" key={summary.target}>
-                {summary.total} {summary.total === 1 ? `${summary.target}-assessment` : `${summary.target}-assessments`} •{' '}
-                {summary.drafting} not started / incomplete • {summary.submitted} submitted • {summary.accepted} accepted •{' '}
-                {summary.readyForMeeting} ready for meeting • {summary.scheduled} scheduled • {summary.concluded} concluded
+                {summary.total}{' '}
+                {summary.total === 1
+                  ? `${summary.target}-assessment`
+                  : `${summary.target}-assessments`}{' '}
+                • {summary.drafting} not started / incomplete • {summary.submitted} submitted •{' '}
+                {summary.accepted} accepted • {summary.readyForMeeting} ready for meeting •{' '}
+                {summary.scheduled} scheduled • {summary.concluded} concluded
               </p>
             ))}
           </div>
@@ -6090,7 +6645,11 @@ onClick={() =>
 
         {activeAssessmentReviewPeriod ? (
           filteredAdminAssessmentRows.length ? (
-            <div className="employee-roster-table-scroll" role="region" aria-label="Assessment List assessments">
+            <div
+              className="employee-roster-table-scroll"
+              role="region"
+              aria-label="Assessment List assessments"
+            >
               <div className="assessments-table" aria-label="Assessment List assessments">
                 <div className="assessments-header">
                   <span>Employee</span>
@@ -6120,7 +6679,9 @@ onClick={() =>
                         <span className="muted-copy employee-row-subcopy">{item.detail}</span>
                       </span>
                       <span className="employee-row-cell">
-                        <span className="muted-copy employee-row-subcopy">{item.nextStepLabel}</span>
+                        <span className="muted-copy employee-row-subcopy">
+                          {item.nextStepLabel}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -6133,7 +6694,9 @@ onClick={() =>
             <p className="muted-copy">No assessments exist for the active review period yet.</p>
           )
         ) : (
-          <p className="muted-copy">Create or activate a review period first to see assessments here.</p>
+          <p className="muted-copy">
+            Create or activate a review period first to see assessments here.
+          </p>
         )}
       </section>
     </main>
@@ -6141,45 +6704,50 @@ onClick={() =>
 
   const renderReviewDialog = () =>
     selectedReviewPanel ? (
-      <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeReviewDialog}>
+      <div
+        className="modal-backdrop assessment-review-dialog-backdrop"
+        role="presentation"
+        onClick={closeReviewDialog}
+      >
         <section
           aria-modal="true"
-            className="card modal-card review-dialog-card assessment-review-dialog-card"
-            role="dialog"
-            aria-labelledby="review-dialog-title"
-            onClick={(event) => event.stopPropagation()}
+          className="card modal-card review-dialog-card assessment-review-dialog-card"
+          role="dialog"
+          aria-labelledby="review-dialog-title"
+          onClick={(event) => event.stopPropagation()}
         >
-            <div className="section-heading">
-              <div>
-                <p className="section-label">Assessment submission</p>
-                <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
-              </div>
-              <div className="dialog-header-actions">
-                <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
-                {!selectedReviewPanel.isArchived && (selectedReviewPanel.canAccept || selectedReviewPanel.canRejectToDraft) ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={!selectedReviewPanel.canAccept || isSavingAssessmentWorkflow}
-                      onClick={() => void handleAcceptReview()}
-                    >
-                      Accept assessment
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={!selectedReviewPanel.canRejectToDraft || isSavingAssessmentWorkflow}
-                      onClick={() => setIsReturnToIncompleteDialogOpen(true)}
-                    >
-                      Return to incomplete
-                    </button>
-                  </>
-                ) : null}
-                <button type="button" className="secondary-button" onClick={closeReviewDialog}>
-                  Close
-                </button>
-              </div>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Assessment submission</p>
+              <h3 id="review-dialog-title">{selectedReviewPanel.title}</h3>
             </div>
+            <div className="dialog-header-actions">
+              <span className="pill">{selectedReviewPanel.reviewStatusLabel}</span>
+              {!selectedReviewPanel.isArchived &&
+              (selectedReviewPanel.canAccept || selectedReviewPanel.canRejectToDraft) ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!selectedReviewPanel.canAccept || isSavingAssessmentWorkflow}
+                    onClick={() => void handleAcceptReview()}
+                  >
+                    Accept assessment
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!selectedReviewPanel.canRejectToDraft || isSavingAssessmentWorkflow}
+                    onClick={() => setIsReturnToIncompleteDialogOpen(true)}
+                  >
+                    Return to incomplete
+                  </button>
+                </>
+              ) : null}
+              <button type="button" className="secondary-button" onClick={closeReviewDialog}>
+                Close
+              </button>
+            </div>
+          </div>
 
           <section className="review-dialog-section">
             <p className="review-dialog-copy">{selectedReviewPanel.detail}</p>
@@ -6231,7 +6799,10 @@ onClick={() =>
                 <div className="review-response-row" key={question.questionId}>
                   <div className="review-response-question">
                     <span className="question-order">#{question.order}</span>
-                    <MarkdownContent markdown={question.prompt} className="markdown-content question-prompt-markdown" />
+                    <MarkdownContent
+                      markdown={question.prompt}
+                      className="markdown-content question-prompt-markdown"
+                    />
                   </div>
                   <div className="review-response-answer">
                     {question.response
@@ -6255,7 +6826,10 @@ onClick={() =>
                 <textarea
                   aria-label="Manager notes"
                   rows={5}
-                  readOnly={selectedReviewPanel.isArchived || (!selectedReviewPanel.canAccept && !selectedReviewPanel.canRejectToDraft)}
+                  readOnly={
+                    selectedReviewPanel.isArchived ||
+                    (!selectedReviewPanel.canAccept && !selectedReviewPanel.canRejectToDraft)
+                  }
                   value={reviewNotesDraft}
                   onChange={(event) => setReviewNotesDraft(event.target.value)}
                 />
@@ -6264,7 +6838,11 @@ onClick={() =>
                 <div className="dialog-footer-end review-notes-actions">
                   <button
                     type="button"
-                    disabled={!selectedReviewPanel.canAccept || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                    disabled={
+                      !selectedReviewPanel.canAccept ||
+                      selectedReviewPanel.isArchived ||
+                      isSavingAssessmentWorkflow
+                    }
                     onClick={() => void handleAcceptReview()}
                   >
                     Accept assessment
@@ -6272,7 +6850,11 @@ onClick={() =>
                   <button
                     type="button"
                     className="secondary-button"
-                    disabled={!selectedReviewPanel.canRejectToDraft || selectedReviewPanel.isArchived || isSavingAssessmentWorkflow}
+                    disabled={
+                      !selectedReviewPanel.canRejectToDraft ||
+                      selectedReviewPanel.isArchived ||
+                      isSavingAssessmentWorkflow
+                    }
                     onClick={() => setIsReturnToIncompleteDialogOpen(true)}
                   >
                     Return to incomplete
@@ -6287,7 +6869,11 @@ onClick={() =>
 
   const renderAssessmentSetDialog = () =>
     selectedAssessmentSetWorkflowPanel ? (
-      <div className="modal-backdrop assessment-review-dialog-backdrop" role="presentation" onClick={closeAssessmentSetDialog}>
+      <div
+        className="modal-backdrop assessment-review-dialog-backdrop"
+        role="presentation"
+        onClick={closeAssessmentSetDialog}
+      >
         <section
           aria-modal="true"
           className="card modal-card review-dialog-card assessment-review-dialog-card"
@@ -6299,8 +6885,8 @@ onClick={() =>
             <div>
               <p className="section-label">
                 {selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting'
-                    ? 'Schedule review meeting'
-                    : 'Conclude review'}
+                  ? 'Schedule review meeting'
+                  : 'Conclude review'}
               </p>
               <h3 id="assessment-set-dialog-title">{selectedAssessmentSetWorkflowPanel.title}</h3>
             </div>
@@ -6342,7 +6928,10 @@ onClick={() =>
                 const canOpenReview = reviewAssessmentIds.includes(assessment.assessmentId);
 
                 return (
-                  <article className="subcard workflow-set-assessment-card" key={assessment.assessmentId}>
+                  <article
+                    className="subcard workflow-set-assessment-card"
+                    key={assessment.assessmentId}
+                  >
                     <div className="workflow-reviewer-card-header">
                       <div>
                         <h4>{assessment.targetLabel}</h4>
@@ -6358,7 +6947,12 @@ onClick={() =>
                             <button
                               type="button"
                               className="secondary-button"
-                              onClick={() => handleOpenAssessmentSetAssessment(assessment.assessmentId, 'assessment')}
+                              onClick={() =>
+                                handleOpenAssessmentSetAssessment(
+                                  assessment.assessmentId,
+                                  'assessment',
+                                )
+                              }
                             >
                               Open assessment
                             </button>
@@ -6367,7 +6961,9 @@ onClick={() =>
                             <button
                               type="button"
                               className="secondary-button"
-                              onClick={() => handleOpenAssessmentSetAssessment(assessment.assessmentId, 'review')}
+                              onClick={() =>
+                                handleOpenAssessmentSetAssessment(assessment.assessmentId, 'review')
+                              }
                             >
                               Open review
                             </button>
@@ -6405,7 +7001,9 @@ onClick={() =>
                   </div>
                   <p className="muted-copy">{action.responsibilityLabel}</p>
                   {action.completedAt ? (
-                    <p className="muted-copy">Last updated {formatLocalizedDateTime(action.completedAt)}</p>
+                    <p className="muted-copy">
+                      Last updated {formatLocalizedDateTime(action.completedAt)}
+                    </p>
                   ) : null}
 
                   {selectedAssessmentSetWorkflowPanel.dialogKind === 'conclude-review' ? (
@@ -6434,7 +7032,8 @@ onClick={() =>
                         <p className="muted-copy">No reviewer is assigned yet.</p>
                       ) : !action.isCurrentUserResponsible ? (
                         <p className="muted-copy">
-                          Assigned to {action.assignedReviewerName}. Only that reviewer or an admin can update this step.
+                          Assigned to {action.assignedReviewerName}. Only that reviewer or an admin
+                          can update this step.
                         </p>
                       ) : action.canConclude || action.canReopen ? (
                         <div className="dialog-footer">
@@ -6471,7 +7070,9 @@ onClick={() =>
                     </div>
                   ) : (
                     <p className="muted-copy">
-                      {action.assignedReviewerId ? 'No reviewer notes recorded yet.' : 'No reviewer is assigned yet.'}
+                      {action.assignedReviewerId
+                        ? 'No reviewer notes recorded yet.'
+                        : 'No reviewer is assigned yet.'}
                     </p>
                   )}
                 </article>
@@ -6485,7 +7086,9 @@ onClick={() =>
                 {selectedAssessmentSetWorkflowPanel.dialogKind === 'schedule-meeting' ? (
                   <button
                     type="button"
-                    disabled={!selectedAssessmentSetWorkflowPanel.canSchedule || isSavingAssessmentWorkflow}
+                    disabled={
+                      !selectedAssessmentSetWorkflowPanel.canSchedule || isSavingAssessmentWorkflow
+                    }
                     onClick={() => void handleScheduleAssessmentSet()}
                   >
                     Mark meeting scheduled
@@ -6530,7 +7133,8 @@ onClick={() =>
 
           <section className="review-dialog-section">
             <p className="review-dialog-copy">
-              Send this assessment back so the employee can revise the response set and submit it again.
+              Send this assessment back so the employee can revise the response set and submit it
+              again.
             </p>
             <p className="muted-copy">
               {reviewNotesDraft.trim()
@@ -6549,7 +7153,11 @@ onClick={() =>
               >
                 Cancel
               </button>
-              <button type="button" disabled={isSavingAssessmentWorkflow} onClick={() => void handleRejectReview()}>
+              <button
+                type="button"
+                disabled={isSavingAssessmentWorkflow}
+                onClick={() => void handleRejectReview()}
+              >
                 Return to incomplete
               </button>
             </div>
@@ -6569,7 +7177,12 @@ onClick={() =>
             <button
               type="button"
               className="secondary-button"
-              disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups || isLoadingStoredBackups}
+              disabled={
+                isLoadingBackupStatus ||
+                isSavingBackupSettings ||
+                isSyncingBackups ||
+                isLoadingStoredBackups
+              }
               onClick={() => void openStoredBackupsDialog()}
             >
               Show backups
@@ -6658,11 +7271,14 @@ onClick={() =>
                 </label>
               </div>
               <p className="muted-copy">
-                Automatic backups are written to the dedicated Docker backup volume and keep the latest configured number
-                of snapshots.
+                Automatic backups are written to the dedicated Docker backup volume and keep the
+                latest configured number of snapshots.
               </p>
               <div className="action-row">
-                <button type="submit" disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}>
+                <button
+                  type="submit"
+                  disabled={isLoadingBackupStatus || isSavingBackupSettings || isSyncingBackups}
+                >
                   {isSavingBackupSettings ? 'Saving…' : 'Save automatic backups'}
                 </button>
               </div>
@@ -6699,13 +7315,17 @@ onClick={() =>
             </dl>
             <div className="toolbar-note">
               <p>
-                <strong>Restore rule:</strong> Stored backup restores always use {backupStatus.replaceStrategy} semantics.
+                <strong>Restore rule:</strong> Stored backup restores always use{' '}
+                {backupStatus.replaceStrategy} semantics.
               </p>
               <p>
-                Supported restore scopes: {backupStatus.supportedRestoreScopes.join(', ')}. Supported restore modes:{' '}
-                {backupStatus.supportedRestoreModes.join(', ')}.
+                Supported restore scopes: {backupStatus.supportedRestoreScopes.join(', ')}.
+                Supported restore modes: {backupStatus.supportedRestoreModes.join(', ')}.
               </p>
-              <p>Open Show backups to create, upload, download, restore, or delete stored snapshot files.</p>
+              <p>
+                Open Show backups to create, upload, download, restore, or delete stored snapshot
+                files.
+              </p>
             </div>
           </>
         ) : (
@@ -6772,7 +7392,11 @@ onClick={() =>
                     >
                       Restore
                     </button>
-                    <button type="button" disabled={isSyncingBackups} onClick={() => void handleStoredBackupDelete(file)}>
+                    <button
+                      type="button"
+                      disabled={isSyncingBackups}
+                      onClick={() => void handleStoredBackupDelete(file)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -6784,10 +7408,19 @@ onClick={() =>
           )}
           <div className="dialog-footer">
             <div className="dialog-footer-start">
-              <button type="button" className="secondary-button" disabled={isSyncingBackups} onClick={handleStoredBackupUploadClick}>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSyncingBackups}
+                onClick={handleStoredBackupUploadClick}
+              >
                 Upload backup
               </button>
-              <button type="button" disabled={isSyncingBackups} onClick={() => void handleCreateStoredBackup()}>
+              <button
+                type="button"
+                disabled={isSyncingBackups}
+                onClick={() => void handleCreateStoredBackup()}
+              >
                 {isSyncingBackups ? 'Creating…' : 'Backup now'}
               </button>
             </div>
@@ -6798,7 +7431,11 @@ onClick={() =>
 
   const renderBackupDownloadDialog = () =>
     backupDownloadDialog ? (
-      <div className="modal-backdrop" role="presentation" onClick={() => setBackupDownloadDialog(null)}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onClick={() => setBackupDownloadDialog(null)}
+      >
         <section
           aria-modal="true"
           className="card modal-card backup-download-dialog"
@@ -6812,15 +7449,24 @@ onClick={() =>
               <h3 id="backup-download-dialog-title">{backupDownloadDialog.fileName}</h3>
             </div>
             <div className="dialog-header-actions">
-              <button type="button" className="secondary-button" onClick={() => setBackupDownloadDialog(null)}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setBackupDownloadDialog(null)}
+              >
                 Close
               </button>
             </div>
           </div>
           <p className="muted-copy">
-            Choose whether to download the stored file as-is or generate a fresh backup with rotated one-time passcodes.
+            Choose whether to download the stored file as-is or generate a fresh backup with rotated
+            one-time passcodes.
           </p>
-          <div className="local-user-export-mode-grid" role="radiogroup" aria-label="Backup user export mode">
+          <div
+            className="local-user-export-mode-grid"
+            role="radiogroup"
+            aria-label="Backup user export mode"
+          >
             {availableBackupExportModes.map((option) => (
               <label
                 key={option.value}
@@ -6831,7 +7477,9 @@ onClick={() =>
                   name="stored-backup-export-mode"
                   value={option.value}
                   checked={backupExportMode === option.value}
-                  onChange={(event) => setBackupExportMode(event.target.value as LocalUsersExportMode)}
+                  onChange={(event) =>
+                    setBackupExportMode(event.target.value as LocalUsersExportMode)
+                  }
                 />
                 <span className="local-user-export-mode-copy">
                   <strong>{option.label}</strong>
@@ -6843,17 +7491,28 @@ onClick={() =>
           {backupExportMode === 'rotate-passcodes' ? (
             <div className="warning-banner">
               <strong>Warning</strong>
-              <p>Rotate-passcodes backup downloads sign every user out, including the current admin session.</p>
+              <p>
+                Rotate-passcodes backup downloads sign every user out, including the current admin
+                session.
+              </p>
             </div>
           ) : null}
           <div className="dialog-footer dialog-footer-split">
             <div className="dialog-footer-start">
-              <button type="button" disabled={isSyncingBackups} onClick={() => void handleStoredBackupDownload()}>
+              <button
+                type="button"
+                disabled={isSyncingBackups}
+                onClick={() => void handleStoredBackupDownload()}
+              >
                 {isSyncingBackups ? 'Downloading…' : 'Download'}
               </button>
             </div>
             <div className="dialog-footer-end">
-              <button type="button" className="secondary-button" onClick={() => setBackupDownloadDialog(null)}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setBackupDownloadDialog(null)}
+              >
                 Cancel
               </button>
             </div>
@@ -6864,7 +7523,11 @@ onClick={() =>
 
   const renderBackupRestoreDialog = () =>
     backupRestoreDialog ? (
-      <div className="modal-backdrop" role="presentation" onClick={() => setBackupRestoreDialog(null)}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onClick={() => setBackupRestoreDialog(null)}
+      >
         <section
           aria-modal="true"
           className="card modal-card backup-restore-dialog"
@@ -6878,20 +7541,29 @@ onClick={() =>
               <h3 id="backup-restore-dialog-title">{backupRestoreDialog.file.name}</h3>
             </div>
             <div className="dialog-header-actions">
-              <button type="button" className="secondary-button" onClick={() => setBackupRestoreDialog(null)}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setBackupRestoreDialog(null)}
+              >
                 Close
               </button>
             </div>
           </div>
           <p className="muted-copy">
-            Choose exactly which replace-mode restore to run for this stored backup. Nothing restores silently.
+            Choose exactly which replace-mode restore to run for this stored backup. Nothing
+            restores silently.
           </p>
           <p className="muted-copy">
-            Stored {formatLocalizedDateTime(backupRestoreDialog.file.storedAt)} • {formatBackupSize(backupRestoreDialog.file.sizeBytes)}
+            Stored {formatLocalizedDateTime(backupRestoreDialog.file.storedAt)} •{' '}
+            {formatBackupSize(backupRestoreDialog.file.sizeBytes)}
           </p>
           <div className="warning-banner">
             <strong>Restore warning</strong>
-            <p>Every restore action is destructive for its target. Review the selected file and the target button before continuing.</p>
+            <p>
+              Every restore action is destructive for its target. Review the selected file and the
+              target button before continuing.
+            </p>
           </div>
           <div className="backup-action-grid">
             {availableBackupRestoreActions.map((action) => (
@@ -6936,8 +7608,13 @@ onClick={() =>
             </button>
           ) : null}
         </div>
-        {canEditWorkflow ? <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p> : null}
-        <MarkdownContent markdown={workflowContent} className="markdown-content workflow-page-markdown workflow-management-preview" />
+        {canEditWorkflow ? (
+          <p className="muted-copy">Sidebar visibility: {workflowVisibility}</p>
+        ) : null}
+        <MarkdownContent
+          markdown={workflowContent}
+          className="markdown-content workflow-page-markdown workflow-management-preview"
+        />
       </section>
     </main>
   );
@@ -6952,20 +7629,32 @@ onClick={() =>
     }
 
     if (draftEmployee && editingEmployeeId) {
-      const employeeRelationshipOptions = activeEmployees.filter((employee) => employee.id !== draftEmployee.id);
-      const selectedManagerId = managerOptions.some((employee) => employee.id === draftEmployee.managerId)
+      const employeeRelationshipOptions = activeEmployees.filter(
+        (employee) => employee.id !== draftEmployee.id,
+      );
+      const selectedManagerId = managerOptions.some(
+        (employee) => employee.id === draftEmployee.managerId,
+      )
         ? draftEmployee.managerId
         : '';
-      const selectedAssessor1Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.assessor1Id)
+      const selectedAssessor1Id = employeeRelationshipOptions.some(
+        (employee) => employee.id === draftEmployee.assessor1Id,
+      )
         ? draftEmployee.assessor1Id
         : '';
-      const selectedAssessor2Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.assessor2Id)
+      const selectedAssessor2Id = employeeRelationshipOptions.some(
+        (employee) => employee.id === draftEmployee.assessor2Id,
+      )
         ? draftEmployee.assessor2Id
         : '';
-      const selectedReviewer1Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.reviewer1Id)
+      const selectedReviewer1Id = employeeRelationshipOptions.some(
+        (employee) => employee.id === draftEmployee.reviewer1Id,
+      )
         ? draftEmployee.reviewer1Id
         : '';
-      const selectedReviewer2Id = employeeRelationshipOptions.some((employee) => employee.id === draftEmployee.reviewer2Id)
+      const selectedReviewer2Id = employeeRelationshipOptions.some(
+        (employee) => employee.id === draftEmployee.reviewer2Id,
+      )
         ? draftEmployee.reviewer2Id
         : '';
 
@@ -6980,7 +7669,9 @@ onClick={() =>
           >
             <div className="section-heading">
               <div>
-                <p className="section-label">{draftEmployee.id ? 'Edit employee' : 'Add employee'}</p>
+                <p className="section-label">
+                  {draftEmployee.id ? 'Edit employee' : 'Add employee'}
+                </p>
                 <h3 id="employee-dialog-title">{draftEmployee.fullName || 'Employee record'}</h3>
               </div>
               <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
@@ -6992,14 +7683,18 @@ onClick={() =>
                 Username
                 <input
                   value={draftEmployee.username}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, username: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, username: event.target.value })
+                  }
                 />
               </label>
               <label>
                 Full name
                 <input
                   value={draftEmployee.fullName}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, fullName: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, fullName: event.target.value })
+                  }
                 />
               </label>
               <label>
@@ -7007,14 +7702,18 @@ onClick={() =>
                 <input
                   type="email"
                   value={draftEmployee.email}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, email: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, email: event.target.value })
+                  }
                 />
               </label>
               <label>
                 Manager
                 <select
                   value={selectedManagerId}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, managerId: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, managerId: event.target.value })
+                  }
                 >
                   <option value="">Not assigned</option>
                   {managerOptions.map((employee) => (
@@ -7028,7 +7727,9 @@ onClick={() =>
                 Assessor 1
                 <select
                   value={selectedAssessor1Id}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor1Id: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, assessor1Id: event.target.value })
+                  }
                 >
                   <option value="">Not assigned</option>
                   {employeeRelationshipOptions.map((employee) => (
@@ -7042,7 +7743,9 @@ onClick={() =>
                 Assessor 2
                 <select
                   value={selectedAssessor2Id}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, assessor2Id: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, assessor2Id: event.target.value })
+                  }
                 >
                   <option value="">Not assigned</option>
                   {employeeRelationshipOptions.map((employee) => (
@@ -7056,7 +7759,9 @@ onClick={() =>
                 Reviewer 1
                 <select
                   value={selectedReviewer1Id}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, reviewer1Id: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, reviewer1Id: event.target.value })
+                  }
                 >
                   <option value="">Not assigned</option>
                   {employeeRelationshipOptions.map((employee) => (
@@ -7070,7 +7775,9 @@ onClick={() =>
                 Reviewer 2
                 <select
                   value={selectedReviewer2Id}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, reviewer2Id: event.target.value })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, reviewer2Id: event.target.value })
+                  }
                 >
                   <option value="">Not assigned</option>
                   {employeeRelationshipOptions.map((employee) => (
@@ -7081,15 +7788,17 @@ onClick={() =>
                 </select>
               </label>
               <p className="muted-copy">
-                Reviewer 1 and reviewer 2 must be different people and cannot be the employee. Reviewers may also be the
-                manager or an assessor.
+                Reviewer 1 and reviewer 2 must be different people and cannot be the employee.
+                Reviewers may also be the manager or an assessor.
               </p>
               <label>
                 App role
                 <select
                   disabled={!isAdmin}
                   value={draftEmployee.role}
-                  onChange={(event) => setDraftEmployee({ ...draftEmployee, role: event.target.value as AppRole })}
+                  onChange={(event) =>
+                    setDraftEmployee({ ...draftEmployee, role: event.target.value as AppRole })
+                  }
                 >
                   <option value="employee">employee</option>
                   <option value="manager">manager</option>
@@ -7117,7 +7826,9 @@ onClick={() =>
                   <input
                     type="password"
                     value={draftEmployee.initialPassword}
-                    onChange={(event) => setDraftEmployee({ ...draftEmployee, initialPassword: event.target.value })}
+                    onChange={(event) =>
+                      setDraftEmployee({ ...draftEmployee, initialPassword: event.target.value })
+                    }
                     placeholder="Leave blank to set or reset later"
                   />
                 </label>
@@ -7167,17 +7878,19 @@ onClick={() =>
           aria-labelledby="employee-dialog-title"
           onClick={(event) => event.stopPropagation()}
         >
-            <div className="section-heading">
-              <div>
-                <p className="section-label">Employee detail</p>
-                <h3 id="employee-dialog-title">{detailEmployee?.fullName ?? 'Employee record'}</h3>
-              </div>
-              <div className="dialog-header-actions">
-                <span className={`pill employee-status-pill employee-status-pill-${detailEmployee?.status ?? 'active'}`}>
-                  {detailEmployee?.status ?? 'active'}
-                </span>
-                <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
-                  Close
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Employee detail</p>
+              <h3 id="employee-dialog-title">{detailEmployee?.fullName ?? 'Employee record'}</h3>
+            </div>
+            <div className="dialog-header-actions">
+              <span
+                className={`pill employee-status-pill employee-status-pill-${detailEmployee?.status ?? 'active'}`}
+              >
+                {detailEmployee?.status ?? 'active'}
+              </span>
+              <button type="button" className="secondary-button" onClick={closeEmployeeDialog}>
+                Close
               </button>
             </div>
           </div>
@@ -7215,17 +7928,31 @@ onClick={() =>
                 </div>
                 <div>
                   <dt>Password configured</dt>
-                  <dd>{selectedEmployeeDetail ? (selectedEmployeeDetail.auth.passwordConfigured ? 'Yes' : 'No') : 'Loading…'}</dd>
+                  <dd>
+                    {selectedEmployeeDetail
+                      ? selectedEmployeeDetail.auth.passwordConfigured
+                        ? 'Yes'
+                        : 'No'
+                      : 'Loading…'}
+                  </dd>
                 </div>
                 <div>
                   <dt>Password reset required</dt>
-                  <dd>{selectedEmployeeDetail ? (selectedEmployeeDetail.auth.passwordResetRequired ? 'Yes' : 'No') : 'Loading…'}</dd>
+                  <dd>
+                    {selectedEmployeeDetail
+                      ? selectedEmployeeDetail.auth.passwordResetRequired
+                        ? 'Yes'
+                        : 'No'
+                      : 'Loading…'}
+                  </dd>
                 </div>
                 <div>
                   <dt>Last password change</dt>
                   <dd>
                     {selectedEmployeeDetail
-                      ? formatLocalizedDateTime(selectedEmployeeDetail.auth.lastPasswordChangeAt ?? null)
+                      ? formatLocalizedDateTime(
+                          selectedEmployeeDetail.auth.lastPasswordChangeAt ?? null,
+                        )
                       : 'Loading…'}
                   </dd>
                 </div>
@@ -7245,12 +7972,20 @@ onClick={() =>
                     </button>
                   ) : null}
                   {isAdmin ? (
-                    <button type="button" className="secondary-button" onClick={() => openPasswordDialog(detailEmployee.id)}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => openPasswordDialog(detailEmployee.id)}
+                    >
                       Manage password
                     </button>
                   ) : null}
                   {isAdmin && detailEmployee.status === 'active' ? (
-                    <button type="button" className="secondary-button" onClick={() => void markEmployeeInactive()}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void markEmployeeInactive()}
+                    >
                       Make Inactive
                     </button>
                   ) : null}
@@ -7280,7 +8015,12 @@ onClick={() =>
               <p className="section-label">Profile editor</p>
               <h3 id="profile-dialog-title">{sessionUser.username}</h3>
             </div>
-            <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={closeProfileDialog}
+              disabled={isSavingProfile}
+            >
               Close
             </button>
           </div>
@@ -7290,7 +8030,9 @@ onClick={() =>
               <input
                 value={profileDraft.fullName}
                 disabled={isSavingProfile}
-                onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })}
+                onChange={(event) =>
+                  setProfileDraft({ ...profileDraft, fullName: event.target.value })
+                }
               />
             </label>
             <label>
@@ -7299,12 +8041,16 @@ onClick={() =>
                 type="email"
                 value={profileDraft.email}
                 disabled={isSavingProfile}
-                onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })}
+                onChange={(event) =>
+                  setProfileDraft({ ...profileDraft, email: event.target.value })
+                }
               />
             </label>
             <section className="subcard profile-password-section">
               <p className="section-label">Change password</p>
-              <p className="muted-copy">Leave the password fields blank to keep your current password.</p>
+              <p className="muted-copy">
+                Leave the password fields blank to keep your current password.
+              </p>
               <div className="profile-password-fields">
                 <label>
                   Current password
@@ -7312,7 +8058,9 @@ onClick={() =>
                     type="password"
                     value={profileDraft.currentPassword}
                     disabled={isSavingProfile}
-                    onChange={(event) => setProfileDraft({ ...profileDraft, currentPassword: event.target.value })}
+                    onChange={(event) =>
+                      setProfileDraft({ ...profileDraft, currentPassword: event.target.value })
+                    }
                   />
                 </label>
                 <label>
@@ -7321,7 +8069,9 @@ onClick={() =>
                     type="password"
                     value={profileDraft.newPassword}
                     disabled={isSavingProfile}
-                    onChange={(event) => setProfileDraft({ ...profileDraft, newPassword: event.target.value })}
+                    onChange={(event) =>
+                      setProfileDraft({ ...profileDraft, newPassword: event.target.value })
+                    }
                   />
                 </label>
                 <label>
@@ -7330,7 +8080,9 @@ onClick={() =>
                     type="password"
                     value={profileDraft.confirmNewPassword}
                     disabled={isSavingProfile}
-                    onChange={(event) => setProfileDraft({ ...profileDraft, confirmNewPassword: event.target.value })}
+                    onChange={(event) =>
+                      setProfileDraft({ ...profileDraft, confirmNewPassword: event.target.value })
+                    }
                   />
                 </label>
               </div>
@@ -7341,7 +8093,12 @@ onClick={() =>
                 <button type="submit" disabled={isSavingProfile}>
                   {isSavingProfile ? 'Saving…' : 'Save profile'}
                 </button>
-                <button type="button" className="secondary-button" onClick={closeProfileDialog} disabled={isSavingProfile}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeProfileDialog}
+                  disabled={isSavingProfile}
+                >
                   Cancel
                 </button>
               </div>
@@ -7355,7 +8112,11 @@ onClick={() =>
     const renderEmployeeRosterRow = (employee: Employee) => {
       return (
         <div className="employee-row-card" key={employee.id}>
-          <button type="button" className="employee-row-summary" onClick={() => openEmployeeDialog(employee.id)}>
+          <button
+            type="button"
+            className="employee-row-summary"
+            onClick={() => openEmployeeDialog(employee.id)}
+          >
             <span className="employee-row-cell employee-row-name">
               <strong>{employee.fullName}</strong>
               <span className="muted-copy employee-row-subcopy">{employee.username}</span>
@@ -7363,10 +8124,16 @@ onClick={() =>
             <span className="employee-row-cell">{employee.role}</span>
             <span className="employee-row-cell">{employee.email}</span>
             <span className="employee-row-cell">{getEmployeeName(employee.managerId)}</span>
-            <span className="employee-row-cell">{renderAssessorList(employee, { showLabels: false })}</span>
-            <span className="employee-row-cell">{renderReviewerList(employee, { showLabels: false })}</span>
             <span className="employee-row-cell">
-              <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>{employee.status}</span>
+              {renderAssessorList(employee, { showLabels: false })}
+            </span>
+            <span className="employee-row-cell">
+              {renderReviewerList(employee, { showLabels: false })}
+            </span>
+            <span className="employee-row-cell">
+              <span className={`pill employee-status-pill employee-status-pill-${employee.status}`}>
+                {employee.status}
+              </span>
             </span>
           </button>
         </div>
@@ -7380,7 +8147,9 @@ onClick={() =>
             <div className="section-title-stack">
               <div className="section-title-row">
                 <p className="section-label">Employee directory</p>
-                {renderRefreshIconButton('Refresh employee directory', () => refreshPrimaryList('employees'))}
+                {renderRefreshIconButton('Refresh employee directory', () =>
+                  refreshPrimaryList('employees'),
+                )}
               </div>
               <p className="muted-copy">
                 {activeEmployees.length} active • {inactiveEmployees.length} inactive
@@ -7408,7 +8177,11 @@ onClick={() =>
           {isLoadingEmployees ? <p className="muted-copy">Loading employee roster...</p> : null}
 
           {directoryEmployees.length ? (
-            <div className="employee-roster-table-scroll" role="region" aria-label="Employee directory">
+            <div
+              className="employee-roster-table-scroll"
+              role="region"
+              aria-label="Employee directory"
+            >
               <div className="employee-roster-table" aria-label="Employee directory">
                 <div className="employee-roster-header">
                   <span>Name</span>
@@ -7424,11 +8197,12 @@ onClick={() =>
             </div>
           ) : (
             <p className="muted-copy">
-              {employeeSearchQuery.trim() ? 'No employees match this search.' : 'No employees in the directory.'}
+              {employeeSearchQuery.trim()
+                ? 'No employees match this search.'
+                : 'No employees in the directory.'}
             </p>
           )}
         </section>
-
       </main>
     );
   };
@@ -7439,7 +8213,12 @@ onClick={() =>
         <style>{themeStyleOverrides}</style>
         <div className="login-shell" data-revu-theme={themePreference}>
           <section className="login-card">
-            <a className="eyebrow eyebrow-link" href={revuRepositoryUrl} target="_blank" rel="noreferrer">
+            <a
+              className="eyebrow eyebrow-link"
+              href={revuRepositoryUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               Revu
             </a>
             <h1>{companyName ? `Sign into ${companyName} Revu` : 'Sign into Revu'}</h1>
@@ -7448,7 +8227,10 @@ onClick={() =>
             <form className="stack-form" onSubmit={handleLogin}>
               <label>
                 Username
-                <input value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} />
+                <input
+                  value={loginUsername}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                />
               </label>
               <label>
                 Password
@@ -7502,8 +8284,8 @@ onClick={() =>
             <p className="eyebrow">Password change required</p>
             <h1>Set a new password to continue</h1>
             <p className="login-copy">
-              This account signed in with a generated one-time passcode. Choose a new password before opening the rest
-              of the workspace.
+              This account signed in with a generated one-time passcode. Choose a new password
+              before opening the rest of the workspace.
             </p>
             <div className="session-card">
               <p className="section-label">Signed in as</p>
@@ -7524,7 +8306,11 @@ onClick={() =>
               </label>
               <label>
                 New password
-                <input type="password" value={nextPasswordDraft} onChange={(event) => setNextPasswordDraft(event.target.value)} />
+                <input
+                  type="password"
+                  value={nextPasswordDraft}
+                  onChange={(event) => setNextPasswordDraft(event.target.value)}
+                />
               </label>
               <label>
                 Confirm new password
@@ -7561,7 +8347,11 @@ onClick={() =>
         <aside className="sidebar" data-collapsed={isSidebarCollapsed ? 'true' : 'false'}>
           <div className="sidebar-header">
             <div className="brand-block">
-              <a className="brand-title-link brand-row-link" href={defaultPath} onClick={(event) => navigate(event, defaultPath)}>
+              <a
+                className="brand-title-link brand-row-link"
+                href={defaultPath}
+                onClick={(event) => navigate(event, defaultPath)}
+              >
                 <div className="brand-row">
                   <h1>REVU</h1>
                   {companyName ? <span className="brand-company">{companyName}</span> : null}
@@ -7645,9 +8435,7 @@ onClick={() =>
               }}
             >
               <p className="section-label">Theme</p>
-              <span className="theme-card-value">
-                {getThemeLabel(themePreference)}
-              </span>
+              <span className="theme-card-value">{getThemeLabel(themePreference)}</span>
             </div>
 
             {buildRevision ? (
@@ -7664,235 +8452,250 @@ onClick={() =>
                 </a>
               </div>
             ) : null}
-
           </div>
         </aside>
 
         <div className="content">
-        {pathname === '/dashboard' ? null : (
-          <header className="hero card">
-            <div className="hero-copy">
-              <h2>{currentSection.title}</h2>
-              <p>{currentSection.summary}</p>
-              {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
-              {appError ? <p className="form-error">{appError}</p> : null}
-            </div>
-
-            <div className="hero-aside">
-              <p className="section-label">Audience</p>
-              <div className="pill-row">
-                {currentSection.audience.map((audience) => (
-                  <span className="pill" key={audience}>
-                    {audience}
-                  </span>
-                ))}
+          {pathname === '/dashboard' ? null : (
+            <header className="hero card">
+              <div className="hero-copy">
+                <h2>{currentSection.title}</h2>
+                <p>{currentSection.summary}</p>
+                {authNotice ? <p className="temporary-password">{authNotice}</p> : null}
+                {appError ? <p className="form-error">{appError}</p> : null}
               </div>
-            </div>
-          </header>
-        )}
 
-        {pathname === '/dashboard'
-          ? renderDashboard()
-          : pathname === '/assessments'
+              <div className="hero-aside">
+                <p className="section-label">Audience</p>
+                <div className="pill-row">
+                  {currentSection.audience.map((audience) => (
+                    <span className="pill" key={audience}>
+                      {audience}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </header>
+          )}
+
+          {pathname === '/dashboard'
+            ? renderDashboard()
+            : pathname === '/assessments'
               ? renderAssessments()
-          : pathname === '/employees'
-            ? renderEmployees()
-            : pathname === '/questions'
-              ? renderQuestions()
-              : pathname === '/review-period'
-                ? renderReviewPeriod()
-              : pathname === '/file-management'
-                ? renderFileManagement()
-                : pathname === '/workflow'
-                  ? renderWorkflow()
-                  : pathname === '/archive'
+              : pathname === '/employees'
+                ? renderEmployees()
+                : pathname === '/questions'
+                  ? renderQuestions()
+                  : pathname === '/review-period'
                     ? renderReviewPeriod()
-                    : pathname === '/backups'
-                      ? renderBackups()
-                      : renderPlaceholderSection()}
+                    : pathname === '/file-management'
+                      ? renderFileManagement()
+                      : pathname === '/workflow'
+                        ? renderWorkflow()
+                        : pathname === '/archive'
+                          ? renderReviewPeriod()
+                          : pathname === '/backups'
+                            ? renderBackups()
+                            : renderPlaceholderSection()}
 
-        {renderReviewDialog()}
+          {renderReviewDialog()}
 
-        {renderReturnToIncompleteDialog()}
+          {renderReturnToIncompleteDialog()}
 
-        {renderAssessmentSetDialog()}
+          {renderAssessmentSetDialog()}
 
-        {renderAssessmentDialog()}
+          {renderAssessmentDialog()}
 
-        {renderQuestionSetDialog()}
+          {renderQuestionSetDialog()}
 
-        {renderQuestionEditorDialog()}
+          {renderQuestionEditorDialog()}
 
-        {renderQuestionCategoriesDialog()}
+          {renderQuestionCategoriesDialog()}
 
-        {renderNewQuestionCategoryDialog()}
+          {renderNewQuestionCategoryDialog()}
 
-        {renderStoredBackupsDialog()}
+          {renderStoredBackupsDialog()}
 
-        {renderBackupDownloadDialog()}
+          {renderBackupDownloadDialog()}
 
-        {renderBackupRestoreDialog()}
+          {renderBackupRestoreDialog()}
 
-        {renderEmployeeDialog()}
+          {renderEmployeeDialog()}
 
-        {renderProfileDialog()}
+          {renderProfileDialog()}
 
-        {isAdmin && passwordDialogEmployeeId ? (
-          <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>
-            <section
-              aria-modal="true"
-              className="card modal-card"
-              role="dialog"
-              aria-labelledby="password-dialog-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="section-heading">
-                <div>
-                  <p className="section-label">Password management</p>
-                  <h3 id="password-dialog-title">{passwordDialogEmployee?.fullName ?? 'Employee account'}</h3>
-                </div>
-                <button type="button" className="secondary-button" onClick={closePasswordDialog}>
-                  Close
-                </button>
-              </div>
-
-              {passwordDialogDetail ? (
-                <>
-                  <p>
-                    {passwordDialogDetail.status === 'inactive'
-                      ? 'This account is inactive.'
-                      : passwordDialogDetail.auth.passwordConfigured
-                        ? passwordDialogDetail.auth.passwordResetRequired
-                          ? 'This account must use a one-time passcode and change it immediately after sign-in.'
-                          : 'This account can sign in.'
-                        : 'This account needs a password before first sign-in.'}
-                  </p>
-                  <p className="muted-copy">
-                    Last updated: {formatLocalizedDateTime(passwordDialogDetail.auth.lastPasswordChangeAt)}
-                  </p>
-                  {passwordStatus ? <p className="temporary-password">{passwordStatus}</p> : null}
-                  {temporaryPassword ? (
-                    <p className="temporary-password">One-time passcode: {temporaryPassword}</p>
-                  ) : null}
-                  <label className="stack-form">
-                    <span>Set password</span>
-                    <input
-                      type="password"
-                      value={passwordDraft}
-                      onChange={(event) => setPasswordDraft(event.target.value)}
-                      placeholder="Enter a new password"
-                    />
-                  </label>
-                  <div className="dialog-footer">
-                    <div className="dialog-footer-end">
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={handleResetPassword}
-                        disabled={isUpdatingPassword}
-                      >
-                        Generate one-time passcode
-                      </button>
-                      <button type="button" onClick={saveKnownPassword} disabled={!passwordDraft.trim() || isUpdatingPassword}>
-                        {isUpdatingPassword ? 'Updating…' : 'Set Password'}
-                      </button>
-                    </div>
+          {isAdmin && passwordDialogEmployeeId ? (
+            <div className="modal-backdrop" role="presentation" onClick={closePasswordDialog}>
+              <section
+                aria-modal="true"
+                className="card modal-card"
+                role="dialog"
+                aria-labelledby="password-dialog-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="section-heading">
+                  <div>
+                    <p className="section-label">Password management</p>
+                    <h3 id="password-dialog-title">
+                      {passwordDialogEmployee?.fullName ?? 'Employee account'}
+                    </h3>
                   </div>
-                </>
-              ) : (
-                <p className="muted-copy">Loading employee credentials…</p>
-              )}
-            </section>
-          </div>
-        ) : null}
-
-        {canEditWorkflow && workflowDraft !== null && workflowVisibilityDraft !== null ? (
-          <div
-            className="modal-backdrop"
-            role="presentation"
-            onClick={() => {
-              if (!isSavingWorkflowSettings) {
-                void closeWorkflowEditor();
-              }
-            }}
-          >
-            <section
-              aria-modal="true"
-              className="card modal-card workflow-editor-dialog"
-              role="dialog"
-              aria-labelledby="workflow-editor-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="section-heading">
-                <div>
-                  <p className="section-label">Edit workflow</p>
-                  <h3 id="workflow-editor-title" className="sr-only">
-                    Edit workflow
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void closeWorkflowEditor()}
-                  disabled={isSavingWorkflowSettings}
-                >
-                  Close
-                </button>
-              </div>
-              <div className="workflow-editor-grid">
-                <div className="workflow-editor-fields">
-                  <label className="inline-field">
-                    <span>Workflow visibility</span>
-                    <select
-                      aria-label="Workflow visibility"
-                      value={workflowVisibilityDraft}
-                      disabled={isSavingWorkflowSettings}
-                      onChange={(event) => setWorkflowVisibilityDraft(event.target.value as WorkflowVisibility)}
-                    >
-                      <option value="all">all</option>
-                      <option value="managers">managers</option>
-                      <option value="admin only">admin only</option>
-                    </select>
-                  </label>
-                  <label className="stack-form workflow-editor-markdown-field">
-                    <span>Workflow markdown</span>
-                    <textarea
-                      ref={workflowTextareaRef}
-                      aria-label="Workflow markdown"
-                      rows={24}
-                      value={workflowDraft}
-                      disabled={isSavingWorkflowSettings}
-                      onChange={(event) => setWorkflowDraft(event.target.value)}
-                      onScroll={syncWorkflowPreviewScroll}
-                    />
-                  </label>
-                </div>
-                <section className="subcard workflow-editor-preview">
-                  <p className="section-label">Preview</p>
-                  <div className="workflow-editor-preview-body" ref={workflowPreviewBodyRef}>
-                    <MarkdownContent markdown={workflowDraft} className="markdown-content workflow-page-markdown" />
-                  </div>
-                </section>
-              </div>
-              <div className="dialog-footer">
-                <div className="dialog-footer-end">
-                  <button type="button" onClick={() => void saveWorkflowContent()} disabled={isSavingWorkflowSettings}>
-                    {isSavingWorkflowSettings ? 'Saving workflow…' : 'Save workflow'}
+                  <button type="button" className="secondary-button" onClick={closePasswordDialog}>
+                    Close
                   </button>
+                </div>
+
+                {passwordDialogDetail ? (
+                  <>
+                    <p>
+                      {passwordDialogDetail.status === 'inactive'
+                        ? 'This account is inactive.'
+                        : passwordDialogDetail.auth.passwordConfigured
+                          ? passwordDialogDetail.auth.passwordResetRequired
+                            ? 'This account must use a one-time passcode and change it immediately after sign-in.'
+                            : 'This account can sign in.'
+                          : 'This account needs a password before first sign-in.'}
+                    </p>
+                    <p className="muted-copy">
+                      Last updated:{' '}
+                      {formatLocalizedDateTime(passwordDialogDetail.auth.lastPasswordChangeAt)}
+                    </p>
+                    {passwordStatus ? <p className="temporary-password">{passwordStatus}</p> : null}
+                    {temporaryPassword ? (
+                      <p className="temporary-password">One-time passcode: {temporaryPassword}</p>
+                    ) : null}
+                    <label className="stack-form">
+                      <span>Set password</span>
+                      <input
+                        type="password"
+                        value={passwordDraft}
+                        onChange={(event) => setPasswordDraft(event.target.value)}
+                        placeholder="Enter a new password"
+                      />
+                    </label>
+                    <div className="dialog-footer">
+                      <div className="dialog-footer-end">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={handleResetPassword}
+                          disabled={isUpdatingPassword}
+                        >
+                          Generate one-time passcode
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveKnownPassword}
+                          disabled={!passwordDraft.trim() || isUpdatingPassword}
+                        >
+                          {isUpdatingPassword ? 'Updating…' : 'Set Password'}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted-copy">Loading employee credentials…</p>
+                )}
+              </section>
+            </div>
+          ) : null}
+
+          {canEditWorkflow && workflowDraft !== null && workflowVisibilityDraft !== null ? (
+            <div
+              className="modal-backdrop"
+              role="presentation"
+              onClick={() => {
+                if (!isSavingWorkflowSettings) {
+                  void closeWorkflowEditor();
+                }
+              }}
+            >
+              <section
+                aria-modal="true"
+                className="card modal-card workflow-editor-dialog"
+                role="dialog"
+                aria-labelledby="workflow-editor-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="section-heading">
+                  <div>
+                    <p className="section-label">Edit workflow</p>
+                    <h3 id="workflow-editor-title" className="sr-only">
+                      Edit workflow
+                    </h3>
+                  </div>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={() => void closeWorkflowEditor()}
                     disabled={isSavingWorkflowSettings}
                   >
-                    Cancel
+                    Close
                   </button>
                 </div>
-              </div>
-            </section>
-          </div>
-        ) : null}
-      </div>
+                <div className="workflow-editor-grid">
+                  <div className="workflow-editor-fields">
+                    <label className="inline-field">
+                      <span>Workflow visibility</span>
+                      <select
+                        aria-label="Workflow visibility"
+                        value={workflowVisibilityDraft}
+                        disabled={isSavingWorkflowSettings}
+                        onChange={(event) =>
+                          setWorkflowVisibilityDraft(event.target.value as WorkflowVisibility)
+                        }
+                      >
+                        <option value="all">all</option>
+                        <option value="managers">managers</option>
+                        <option value="admin only">admin only</option>
+                      </select>
+                    </label>
+                    <label className="stack-form workflow-editor-markdown-field">
+                      <span>Workflow markdown</span>
+                      <textarea
+                        ref={workflowTextareaRef}
+                        aria-label="Workflow markdown"
+                        rows={24}
+                        value={workflowDraft}
+                        disabled={isSavingWorkflowSettings}
+                        onChange={(event) => setWorkflowDraft(event.target.value)}
+                        onScroll={syncWorkflowPreviewScroll}
+                      />
+                    </label>
+                  </div>
+                  <section className="subcard workflow-editor-preview">
+                    <p className="section-label">Preview</p>
+                    <div className="workflow-editor-preview-body" ref={workflowPreviewBodyRef}>
+                      <MarkdownContent
+                        markdown={workflowDraft}
+                        className="markdown-content workflow-page-markdown"
+                      />
+                    </div>
+                  </section>
+                </div>
+                <div className="dialog-footer">
+                  <div className="dialog-footer-end">
+                    <button
+                      type="button"
+                      onClick={() => void saveWorkflowContent()}
+                      disabled={isSavingWorkflowSettings}
+                    >
+                      {isSavingWorkflowSettings ? 'Saving workflow…' : 'Save workflow'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void closeWorkflowEditor()}
+                      disabled={isSavingWorkflowSettings}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </div>
       </div>
     </>
   );

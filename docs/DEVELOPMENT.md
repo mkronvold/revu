@@ -19,7 +19,9 @@ This document collects developer-facing status, source-development steps, local 
 - The deployment stack is designed for reverse-proxy use. The base deployment compose file keeps web, API, and database off host-published ports.
 - `VITE_COMPANY_NAME`, `VITE_ENABLE_QUESTION_SET_STATUS`, and `VITE_AUTO_REFRESH_INTERVAL_MS` are runtime-facing configuration values used in both development and deployment.
 - The default deployment backup path uses the internal API endpoints for the backup sidecar; see [`FILEMANAGEMENT.md`](./FILEMANAGEMENT.md) and [`LCM.md`](./LCM.md) for the operational side.
-- `npm run validate` is the main repo-wide validation command.
+- `npm run validate` is the main repo-wide validation command (`lint`, `format:check`, `test`, `typecheck`, `build`).
+- SQL schema migrations live in `prisma/migrations/` as plain `.sql` files applied by `scripts/db-migrate*.sh`. This is **not** the Prisma ORM; the API uses `pg` directly.
+- CI gates and scan policy: [`CI.md`](./CI.md). Deploy scripts: [`DOCKER.md`](./DOCKER.md).
 
 ## Requirements
 
@@ -88,43 +90,46 @@ The direct workspace commands are useful for frontend or API-only iteration afte
 
 ## Local scripts
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Starts `db`, `api`, and `web` from source with the dev compose override and a local-only proxy network. |
-| `npm run dev:api` | Runs the API workspace in watch mode on the host. |
-| `npm run dev:web` | Runs the Vite web workspace on the host. |
-| `npm run deploy:pull` | Pulls the configured GHCR deployment images. |
-| `npm run deploy:up` | Starts the deployment stack from published images. |
-| `./up.sh` | Fast-forwards from git, reconciles `.env` keys against `.env.example`, pulls images, applies migrations, seeds the example dataset only when the database is empty, and starts the deployment stack. |
-| `./down.sh` | Stops the deployment stack. |
-| `./autoupdate.sh [minutes]` | Ensures the deployment stack is already running or starts it through `up.sh`, then checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, applies migrations, seeds the example dataset if the database is empty, and sleeps 30 minutes between checks by default. |
-| `./autoupdate.sh --once` | Runs a single GHCR check-and-redeploy pass so cron or a `systemd` timer can reuse the same logic without running a long-lived watcher. |
-| `./scripts/backup-now.sh [name]` | Runs the backup sidecar on demand and stores a full backup in the retained archive volume. |
-| `./scripts/backup-download-handoff.sh [backup\|latest] [request-id]` | Copies an archived backup into the shared download handoff area. |
-| `./scripts/backup-upload-handoff.sh <file> [request-id]` | Copies an uploaded backup file into the shared upload handoff area. |
-| `./scripts/backup-restore.sh <file> [target] [request-id]` | Calls the API restore endpoint with replace semantics for the requested target slice. |
-| `./reset-to-example.sh` | Applies migrations and reloads Postgres with the exact example dataset used by development and tests. |
-| `./test.sh` | Runs the full workspace validation flow (`npm run validate`). |
-| `npm run db:up` | Starts only the Postgres service. |
-| `npm run db:migrate` | Applies SQL files from `prisma/migrations/` to the local Postgres container and backfills migration history when the schema already exists. |
-| `npm run db:down` | Stops Compose services. |
-| `npm test` | Runs all workspace tests. |
-| `npm run typecheck` | Runs TypeScript checks across workspaces. |
-| `npm run build` | Builds all workspaces. |
-| `npm run validate` | Runs tests, typecheck, and build in sequence. |
-| `npm run compose:config` | Verifies Docker Compose configuration renders cleanly. |
-| `npm run compose:config:dev` | Verifies the development compose override renders cleanly. |
+| Command                                                              | Purpose                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                                                        | Starts `db`, `api`, and `web` from source with the dev compose override and a local-only proxy network.                                                                                                                                                                                                                                         |
+| `npm run dev:api`                                                    | Runs the API workspace in watch mode on the host.                                                                                                                                                                                                                                                                                               |
+| `npm run dev:web`                                                    | Runs the Vite web workspace on the host.                                                                                                                                                                                                                                                                                                        |
+| `npm run deploy:pull`                                                | Pulls the configured GHCR deployment images.                                                                                                                                                                                                                                                                                                    |
+| `npm run deploy:up`                                                  | Starts the deployment stack from published images.                                                                                                                                                                                                                                                                                              |
+| `./up.sh`                                                            | Fast-forwards from git, reconciles `.env` keys against `.env.example`, pulls images, applies migrations, seeds the example dataset only when the database is empty, and starts the deployment stack.                                                                                                                                            |
+| `./down.sh`                                                          | Stops the deployment stack.                                                                                                                                                                                                                                                                                                                     |
+| `./autoupdate.sh [minutes]`                                          | Ensures the deployment stack is already running or starts it through `up.sh`, then checks the GHCR-backed `api` and `web` images via GHCR manifest digests, pulls and restarts Compose only when either image changes, applies migrations, seeds the example dataset if the database is empty, and sleeps 30 minutes between checks by default. |
+| `./autoupdate.sh --once`                                             | Runs a single GHCR check-and-redeploy pass so cron or a `systemd` timer can reuse the same logic without running a long-lived watcher.                                                                                                                                                                                                          |
+| `./scripts/backup-now.sh [name]`                                     | Runs the backup sidecar on demand and stores a full backup in the retained archive volume.                                                                                                                                                                                                                                                      |
+| `./scripts/backup-download-handoff.sh [backup\|latest] [request-id]` | Copies an archived backup into the shared download handoff area.                                                                                                                                                                                                                                                                                |
+| `./scripts/backup-upload-handoff.sh <file> [request-id]`             | Copies an uploaded backup file into the shared upload handoff area.                                                                                                                                                                                                                                                                             |
+| `./scripts/backup-restore.sh <file> [target] [request-id]`           | Calls the API restore endpoint with replace semantics for the requested target slice.                                                                                                                                                                                                                                                           |
+| `./reset-to-example.sh`                                              | Applies migrations and reloads Postgres with the exact example dataset used by development and tests.                                                                                                                                                                                                                                           |
+| `./test.sh`                                                          | Runs the full workspace validation flow (`npm run validate`).                                                                                                                                                                                                                                                                                   |
+| `npm run db:up`                                                      | Starts only the Postgres service.                                                                                                                                                                                                                                                                                                               |
+| `npm run db:migrate`                                                 | Applies plain SQL files from `prisma/migrations/` (not Prisma ORM) to the local Postgres container and backfills migration history when the schema already exists.                                                                                                                                                                              |
+| `npm run db:down`                                                    | Stops Compose services.                                                                                                                                                                                                                                                                                                                         |
+| `npm run lint`                                                       | ESLint across the repository.                                                                                                                                                                                                                                                                                                                   |
+| `npm run format`                                                     | Prettier write across the repository.                                                                                                                                                                                                                                                                                                           |
+| `npm run format:check`                                               | Prettier check (CI-friendly).                                                                                                                                                                                                                                                                                                                   |
+| `npm test`                                                           | Runs all workspace tests.                                                                                                                                                                                                                                                                                                                       |
+| `npm run typecheck`                                                  | Runs TypeScript checks across workspaces.                                                                                                                                                                                                                                                                                                       |
+| `npm run build`                                                      | Builds all workspaces.                                                                                                                                                                                                                                                                                                                          |
+| `npm run validate`                                                   | Runs lint, format check, tests, typecheck, and build in sequence.                                                                                                                                                                                                                                                                               |
+| `npm run compose:config`                                             | Verifies Docker Compose configuration renders cleanly.                                                                                                                                                                                                                                                                                          |
+| `npm run compose:config:dev`                                         | Verifies the development compose override renders cleanly.                                                                                                                                                                                                                                                                                      |
 
 ## Demo accounts
 
 The default example dataset includes seeded demo users for end-to-end workflow testing:
 
-| Role | Username | Password |
-| --- | --- | --- |
-| Admin | `ada.admin` | `AdminPass123!` |
-| Manager | `manny.manager` | `ManagerPass123!` |
-| Employee | `elliot.employee` | `EmployeePass123!` |
-| Peer reviewer | `pat.peer` | `PeerPass123!` |
+| Role          | Username          | Password           |
+| ------------- | ----------------- | ------------------ |
+| Admin         | `ada.admin`       | `AdminPass123!`    |
+| Manager       | `manny.manager`   | `ManagerPass123!`  |
+| Employee      | `elliot.employee` | `EmployeePass123!` |
+| Peer reviewer | `pat.peer`        | `PeerPass123!`     |
 
 These credentials are for local development only. They are stored in Postgres and restored by `./reset-to-example.sh`.
 
@@ -133,6 +138,7 @@ If a user signs in with a generated reset password or exported one-time passcode
 ## Database notes
 
 - `DATABASE_URL` is used by the API runtime, example seeding/reset helpers, and API tests.
+- Migrations under `prisma/migrations/` are ordered SQL files tracked in a `schema_migrations` table. There is no Prisma client or schema.prisma in this repo.
 - The running API persists employees, auth sessions, review periods, question sets, assignments, assessments, and responses in Postgres.
 - `.env.example` defaults `DATABASE_URL` to the Compose network host (`db`). If you run API tooling directly on the host instead of in Compose, switch that hostname to `localhost`.
 - Host-side API tests need a reachable Postgres instance that matches `DATABASE_URL`. The fallback is `postgresql://revu:revu@localhost:5432/revu`.

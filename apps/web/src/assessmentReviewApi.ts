@@ -128,7 +128,10 @@ export async function rejectReviewToApi(token: string, panel: ReviewPanel, notes
   };
 }
 
-export async function markAssessmentSetReadyForMeetingInApi(token: string, item: AssessmentSetEndpointTarget) {
+export async function markAssessmentSetReadyForMeetingInApi(
+  token: string,
+  item: AssessmentSetEndpointTarget,
+) {
   const response = await markAssessmentSetReadyForMeeting(token, {
     reviewPeriodId: item.reviewPeriodId,
     employeeId: item.employeeId,

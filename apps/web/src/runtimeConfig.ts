@@ -63,15 +63,23 @@ function parsePositiveIntegerFlag(value: number | string | null | undefined) {
 }
 
 export function getRuntimeQuestionSetStatusEnabled() {
-  return typeof window === 'undefined' ? null : parseBooleanFlag(window.__REVU_CONFIG__?.questionSetStatusEnabled);
+  return typeof window === 'undefined'
+    ? null
+    : parseBooleanFlag(window.__REVU_CONFIG__?.questionSetStatusEnabled);
 }
 
 export const questionSetStatusEnabled =
-  getRuntimeQuestionSetStatusEnabled() ?? parseBooleanFlag(import.meta.env.VITE_ENABLE_QUESTION_SET_STATUS) ?? false;
+  getRuntimeQuestionSetStatusEnabled() ??
+  parseBooleanFlag(import.meta.env.VITE_ENABLE_QUESTION_SET_STATUS) ??
+  false;
 
 export function getRuntimeAutoRefreshIntervalMs() {
-  return typeof window === 'undefined' ? null : parsePositiveIntegerFlag(window.__REVU_CONFIG__?.autoRefreshIntervalMs);
+  return typeof window === 'undefined'
+    ? null
+    : parsePositiveIntegerFlag(window.__REVU_CONFIG__?.autoRefreshIntervalMs);
 }
 
 export const autoRefreshIntervalMs =
-  getRuntimeAutoRefreshIntervalMs() ?? parsePositiveIntegerFlag(import.meta.env.VITE_AUTO_REFRESH_INTERVAL_MS) ?? 60000;
+  getRuntimeAutoRefreshIntervalMs() ??
+  parsePositiveIntegerFlag(import.meta.env.VITE_AUTO_REFRESH_INTERVAL_MS) ??
+  60000;

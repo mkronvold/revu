@@ -40,7 +40,9 @@ describe('question presentation helpers', () => {
   it('renders markdown tables with header and body cells', () => {
     const markup = renderToStaticMarkup(
       <MarkdownContent
-        markdown={'| Role | Action |\n| --- | --- |\n| Employee | Submit assessment |\n| Manager | Review submission |'}
+        markdown={
+          '| Role | Action |\n| --- | --- |\n| Employee | Submit assessment |\n| Manager | Review submission |'
+        }
         className="markdown-content"
       />,
     );

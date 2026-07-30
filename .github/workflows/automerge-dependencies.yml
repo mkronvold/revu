@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       pull-request-number:
-        description: "Existing Dependabot PR number to re-enroll in the automerge flow"
+        description: 'Existing Dependabot PR number to re-enroll in the automerge flow'
         required: true
         type: number
 

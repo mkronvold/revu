@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const idSchema = z.string().uuid();
 export const isoTimestampSchema = z.string().datetime({ offset: true });
@@ -7,30 +7,33 @@ export const usernameSchema = z
   .string()
   .min(3)
   .max(64)
-  .regex(/^[A-Za-z0-9._-]+$/, "Username must contain only letters, numbers, dots, underscores, or dashes");
+  .regex(
+    /^[A-Za-z0-9._-]+$/,
+    'Username must contain only letters, numbers, dots, underscores, or dashes',
+  );
 
-export const appRoleSchema = z.enum(["employee", "manager", "admin"]);
-export const employeeStatusSchema = z.enum(["active", "inactive"]);
-export const reviewPeriodStatusSchema = z.enum(["active", "inactive", "archived"]);
-export const questionTargetSchema = z.enum(["self", "peer"]);
-export const questionTypeSchema = z.enum(["subjective", "ranking", "narrative"]);
-export const questionSetStatusSchema = z.enum(["draft", "active"]);
-export const workflowVisibilitySchema = z.enum(["all", "managers", "admin only"]);
+export const appRoleSchema = z.enum(['employee', 'manager', 'admin']);
+export const employeeStatusSchema = z.enum(['active', 'inactive']);
+export const reviewPeriodStatusSchema = z.enum(['active', 'inactive', 'archived']);
+export const questionTargetSchema = z.enum(['self', 'peer']);
+export const questionTypeSchema = z.enum(['subjective', 'ranking', 'narrative']);
+export const questionSetStatusSchema = z.enum(['draft', 'active']);
+export const workflowVisibilitySchema = z.enum(['all', 'managers', 'admin only']);
 export const assessmentReviewStateSchema = z.enum([
-  "new",
-  "draft",
-  "submitted",
-  "accepted",
-  "ready_for_meeting",
-  "scheduled",
-  "concluded",
-  "reviewed",
+  'new',
+  'draft',
+  'submitted',
+  'accepted',
+  'ready_for_meeting',
+  'scheduled',
+  'concluded',
+  'reviewed',
 ]);
 export const assessmentStatusSchema = assessmentReviewStateSchema;
-export const assessmentArchiveStateSchema = z.enum(["active", "archived"]);
-export const assessmentReviewerRoleSchema = z.enum(["reviewer1", "reviewer2"]);
-export const localUsersExportModeSchema = z.enum(["rotate-passcodes", "preserve-passwords"]);
-export const localUserCredentialKindSchema = z.enum(["password", "password-hash", "unset"]);
+export const assessmentArchiveStateSchema = z.enum(['active', 'archived']);
+export const assessmentReviewerRoleSchema = z.enum(['reviewer1', 'reviewer2']);
+export const localUsersExportModeSchema = z.enum(['rotate-passcodes', 'preserve-passwords']);
+export const localUserCredentialKindSchema = z.enum(['password', 'password-hash', 'unset']);
 export const questionCategoryNameSchema = z.string().trim().min(1);
 export const defaultWorkflowMarkdown = `### Active assessment lifecycle
 - Admin creates the \`Review Period\` plus self and peer \`Question Sets\`
@@ -41,7 +44,7 @@ export const defaultWorkflowMarkdown = `### Active assessment lifecycle
 - Reviewer 1 and reviewer 2 each record their own conclusion; once both finish, the set becomes \`concluded\`
 - \`Dashboard\` stays the operational workflow surface, while admin \`Assessments\` remains the override and visibility route
 - When the cycle is complete, admins archive the \`Review Period\``;
-export const defaultWorkflowVisibility = "all" as const;
+export const defaultWorkflowVisibility = 'all' as const;
 const bcryptHashSchema = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 const scryptHashSchema = /^[0-9a-f]{32}:[0-9a-f]{128}$/i;
 
@@ -49,19 +52,27 @@ const validateDistinctReviewers = (
   value: { id?: string; reviewer1Id?: string | null; reviewer2Id?: string | null },
   context: z.RefinementCtx,
 ) => {
-  if (value.reviewer1Id !== undefined && value.reviewer1Id !== null && value.reviewer1Id === value.id) {
+  if (
+    value.reviewer1Id !== undefined &&
+    value.reviewer1Id !== null &&
+    value.reviewer1Id === value.id
+  ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["reviewer1Id"],
-      message: "Reviewer 1 cannot be the employee",
+      path: ['reviewer1Id'],
+      message: 'Reviewer 1 cannot be the employee',
     });
   }
 
-  if (value.reviewer2Id !== undefined && value.reviewer2Id !== null && value.reviewer2Id === value.id) {
+  if (
+    value.reviewer2Id !== undefined &&
+    value.reviewer2Id !== null &&
+    value.reviewer2Id === value.id
+  ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["reviewer2Id"],
-      message: "Reviewer 2 cannot be the employee",
+      path: ['reviewer2Id'],
+      message: 'Reviewer 2 cannot be the employee',
     });
   }
 
@@ -74,8 +85,8 @@ const validateDistinctReviewers = (
   ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["reviewer2Id"],
-      message: "Reviewer 1 and reviewer 2 must be different users",
+      path: ['reviewer2Id'],
+      message: 'Reviewer 1 and reviewer 2 must be different users',
     });
   }
 };
@@ -104,106 +115,114 @@ export const employeeAuthMetadataSchema = z.object({
   lastPasswordChangeAt: isoTimestampSchema.nullable(),
 });
 
-export const employeeAdminSchema = employeeBaseSchema.extend({
-  auth: employeeAuthMetadataSchema,
-}).superRefine(validateDistinctReviewers);
+export const employeeAdminSchema = employeeBaseSchema
+  .extend({
+    auth: employeeAuthMetadataSchema,
+  })
+  .superRefine(validateDistinctReviewers);
 
-export const localUserTransferItemSchema = z.object({
-  id: idSchema.optional(),
-  username: usernameSchema,
-  fullName: z.string().min(1),
-  email: z.string().email(),
-  role: appRoleSchema,
-  status: employeeStatusSchema,
-  managerUsername: usernameSchema.nullable(),
-  assessor1Username: usernameSchema.nullable(),
-  assessor2Username: usernameSchema.nullable(),
-  reviewer1Username: usernameSchema.nullable().default(null),
-  reviewer2Username: usernameSchema.nullable().default(null),
-  password: z.string(),
-  credentialKind: localUserCredentialKindSchema.optional(),
-  passwordResetRequired: z.boolean().default(false),
-}).superRefine((value, context) => {
-  const credentialKind = value.credentialKind ?? "password";
+export const localUserTransferItemSchema = z
+  .object({
+    id: idSchema.optional(),
+    username: usernameSchema,
+    fullName: z.string().min(1),
+    email: z.string().email(),
+    role: appRoleSchema,
+    status: employeeStatusSchema,
+    managerUsername: usernameSchema.nullable(),
+    assessor1Username: usernameSchema.nullable(),
+    assessor2Username: usernameSchema.nullable(),
+    reviewer1Username: usernameSchema.nullable().default(null),
+    reviewer2Username: usernameSchema.nullable().default(null),
+    password: z.string(),
+    credentialKind: localUserCredentialKindSchema.optional(),
+    passwordResetRequired: z.boolean().default(false),
+  })
+  .superRefine((value, context) => {
+    const credentialKind = value.credentialKind ?? 'password';
 
-  if (credentialKind === "unset") {
-    if (value.password.length !== 0) {
+    if (credentialKind === 'unset') {
+      if (value.password.length !== 0) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['password'],
+          message: 'Unset credentials must use an empty password value',
+        });
+      }
+      return;
+    }
+
+    if (credentialKind === 'password' && value.password.length < 8) {
+      context.addIssue({
+        code: z.ZodIssueCode.too_small,
+        minimum: 8,
+        inclusive: true,
+        origin: 'string',
+        type: 'string',
+        path: ['password'],
+        message: 'Password must be at least 8 characters',
+      });
+      return;
+    }
+
+    if (
+      credentialKind === 'password-hash' &&
+      !bcryptHashSchema.test(value.password) &&
+      !scryptHashSchema.test(value.password)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["password"],
-        message: "Unset credentials must use an empty password value",
+        path: ['password'],
+        message: 'Password hash must use a supported stored-password format',
       });
     }
-    return;
-  }
 
-  if (credentialKind === "password" && value.password.length < 8) {
-    context.addIssue({
-      code: z.ZodIssueCode.too_small,
-      minimum: 8,
-      inclusive: true,
-      origin: "string",
-      type: "string",
-      path: ["password"],
-      message: "Password must be at least 8 characters",
-    });
-    return;
-  }
+    if (
+      value.assessor1Username !== null &&
+      value.assessor2Username !== null &&
+      value.assessor1Username.toLowerCase() === value.assessor2Username.toLowerCase()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['assessor2Username'],
+        message: 'Assessor 1 and assessor 2 must be different users',
+      });
+    }
 
-  if (credentialKind === "password-hash" && !bcryptHashSchema.test(value.password) && !scryptHashSchema.test(value.password)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["password"],
-      message: "Password hash must use a supported stored-password format",
-    });
-  }
+    if (
+      value.reviewer1Username !== null &&
+      value.reviewer1Username.toLowerCase() === value.username.toLowerCase()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reviewer1Username'],
+        message: 'Reviewer 1 cannot be the employee',
+      });
+    }
 
-  if (
-    value.assessor1Username !== null &&
-    value.assessor2Username !== null &&
-    value.assessor1Username.toLowerCase() === value.assessor2Username.toLowerCase()
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["assessor2Username"],
-      message: "Assessor 1 and assessor 2 must be different users",
-    });
-  }
+    if (
+      value.reviewer2Username !== null &&
+      value.reviewer2Username.toLowerCase() === value.username.toLowerCase()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reviewer2Username'],
+        message: 'Reviewer 2 cannot be the employee',
+      });
+    }
 
-  if (
-    value.reviewer1Username !== null &&
-    value.reviewer1Username.toLowerCase() === value.username.toLowerCase()
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["reviewer1Username"],
-      message: "Reviewer 1 cannot be the employee",
-    });
-  }
-
-  if (
-    value.reviewer2Username !== null &&
-    value.reviewer2Username.toLowerCase() === value.username.toLowerCase()
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["reviewer2Username"],
-      message: "Reviewer 2 cannot be the employee",
-    });
-  }
-
-  if (
-    value.reviewer1Username !== null &&
-    value.reviewer2Username !== null &&
-    value.reviewer1Username.toLowerCase() === value.reviewer2Username.toLowerCase()
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["reviewer2Username"],
-      message: "Reviewer 1 and reviewer 2 must be different users",
-    });
-  }
-});
+    if (
+      value.reviewer1Username !== null &&
+      value.reviewer2Username !== null &&
+      value.reviewer1Username.toLowerCase() === value.reviewer2Username.toLowerCase()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reviewer2Username'],
+        message: 'Reviewer 1 and reviewer 2 must be different users',
+      });
+    }
+  });
 
 export const reviewPeriodSchema = z.object({
   id: idSchema,

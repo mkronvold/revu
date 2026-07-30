@@ -5,7 +5,9 @@ import { buildDashboardSnapshot } from './dashboard';
 
 describe('integrated dashboard snapshot', () => {
   it('keeps employee dashboards centered on current authored work that still needs action', () => {
-    const employee = employeesListExample.items.find((candidate) => candidate.username === 'elliot.employee')!;
+    const employee = employeesListExample.items.find(
+      (candidate) => candidate.username === 'elliot.employee',
+    )!;
     const snapshot = buildDashboardSnapshot(
       employee,
       {
@@ -63,20 +65,32 @@ describe('integrated dashboard snapshot', () => {
 
     expect(snapshot.dueLabel).toBe('Complete by 2/21/2026');
     expect(snapshot.reviewSummary).toMatch(/dashboard stays centered on authored assessments/i);
-    expect(snapshot.queues.map((queue) => queue.title)).toEqual(['Not Started', 'Incomplete', 'Complete but Not Submitted']);
+    expect(snapshot.queues.map((queue) => queue.title)).toEqual([
+      'Not Started',
+      'Incomplete',
+      'Complete but Not Submitted',
+    ]);
     expect(snapshot.queues[1]?.items[0]?.title).toContain('2026 Self Assessment - Elliot Employee');
     expect(snapshot.queues[1]?.items[0]?.dueDate).toBe('2/21/2026');
     expect(snapshot.queues[1]?.items[0]?.statusLabel).toBe('Incomplete');
-    expect(snapshot.queues.flatMap((queue) => queue.items.map((item) => item.assessmentId))).not.toContain(
-      '56565656-5656-4565-8565-565656565656',
-    );
+    expect(
+      snapshot.queues.flatMap((queue) => queue.items.map((item) => item.assessmentId)),
+    ).not.toContain('56565656-5656-4565-8565-565656565656');
   });
 
   it('shows review attention counts for managers and admin directory follow-up', () => {
-    const manager = employeesListExample.items.find((candidate) => candidate.username === 'manny.manager')!;
-    const admin = employeesListExample.items.find((candidate) => candidate.username === 'ada.admin')!;
+    const manager = employeesListExample.items.find(
+      (candidate) => candidate.username === 'manny.manager',
+    )!;
+    const admin = employeesListExample.items.find(
+      (candidate) => candidate.username === 'ada.admin',
+    )!;
 
-    const managerSnapshot = buildDashboardSnapshot(manager, foundationSnapshotExample, employeesListExample.items);
+    const managerSnapshot = buildDashboardSnapshot(
+      manager,
+      foundationSnapshotExample,
+      employeesListExample.items,
+    );
     const adminSnapshot = buildDashboardSnapshot(admin, foundationSnapshotExample, [
       ...employeesListExample.items,
       {
@@ -95,7 +109,9 @@ describe('integrated dashboard snapshot', () => {
   });
 
   it('keeps partially answered authored assessments visible in the in-progress queue', () => {
-    const employee = employeesListExample.items.find((candidate) => candidate.username === 'elliot.employee')!;
+    const employee = employeesListExample.items.find(
+      (candidate) => candidate.username === 'elliot.employee',
+    )!;
     const snapshot = buildDashboardSnapshot(
       employee,
       {
@@ -132,7 +148,9 @@ describe('integrated dashboard snapshot', () => {
   });
 
   it('surfaces complete authored assessments even when legacy data still marks them new', () => {
-    const employee = employeesListExample.items.find((candidate) => candidate.username === 'elliot.employee')!;
+    const employee = employeesListExample.items.find(
+      (candidate) => candidate.username === 'elliot.employee',
+    )!;
     const snapshot = buildDashboardSnapshot(
       employee,
       {

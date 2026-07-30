@@ -76,14 +76,20 @@ These two paths solve different problems and should not be merged into one opaqu
 
 ## Current image surfaces
 
+Base images are pinned as `tag@sha256:digest` so builds are reproducible. Dependabot opens weekly Docker PRs for Dockerfile digest/tag refreshes; Compose pins for `db` and `backup` are reviewed with those updates or when operators intentionally bump them.
+
 - `apps/api/Dockerfile`
-  - builder: `node:22-bookworm-slim`
-  - runner: `node:22-bookworm-slim`
+  - builder/runner: `node:26-bookworm-slim@sha256:…`
 - `apps/web/Dockerfile`
-  - builder: `node:22-bookworm-slim`
-  - runner: `nginx:1.27-alpine`
+  - builder: `node:26-bookworm-slim@sha256:…`
+  - runner: `nginx:1.31-alpine@sha256:…`
+- `docker-compose.yml`
+  - `db`: `postgres:16-alpine@sha256:…`
+  - `backup`: `node:26-bookworm-slim@sha256:…` (matches the app Node major)
 
 Current app dependencies are installed with `npm ci`, which means published images use the exact versions committed in `package-lock.json`.
+
+See [`CI.md`](./CI.md) for PR validation, SBOM generation, and container scan policy. See [`DOCKER.md`](./DOCKER.md) for `up.sh` / `down.sh` / `autoupdate.sh` operator details.
 
 ## What the scheduled image refresh does
 
@@ -94,11 +100,9 @@ It rebuilds `revu-api` and `revu-web` with:
 - `pull: true`
 - `no-cache: true`
 
-That means the refresh workflow picks up:
+Base images are digest-pinned, so a refresh rebuild alone does not float to a newer upstream base digest. Fresh bases land when Dependabot (or a manual PR) bumps the `tag@sha256:…` pins, then publish/refresh rebuilds consume them.
 
-- newly published layers for `node:22-bookworm-slim`
-- newly published layers for `nginx:1.27-alpine`
-- any future `apt`, `apk`, `curl`, `wget`, or similar install steps added to Dockerfiles
+The refresh workflow still rebuilds with `pull: true` and `no-cache: true` so it republishes `latest` / `refresh-*` from current pins and any future Dockerfile install steps (`apt`, `apk`, downloads) against those pins.
 
 It publishes moving deployment tags:
 
@@ -206,6 +210,8 @@ If Revu adds another package ecosystem later, extend `.github/dependabot.yml` so
 - `autoupdate.sh`
   - long-running mode watches GHCR and redeploys when published images change
   - `--once` runs a single check-and-redeploy pass for cron or systemd timers
+  - serializes cycles with `flock`, restarts only through `up.sh`, and verifies `api`/`web` health plus deployed digests after apply
+  - operator details: [`DOCKER.md`](./DOCKER.md)
 
 ## Recommended host automation
 

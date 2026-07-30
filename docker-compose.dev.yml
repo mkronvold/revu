@@ -1,7 +1,7 @@
 services:
   db:
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
 
   api:
     image: node:22-bookworm-slim
@@ -13,7 +13,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-revu}:${POSTGRES_PASSWORD:-revu}@db:5432/${POSTGRES_DB:-revu}
       VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
     ports:
-      - "127.0.0.1:${API_PORT:-4000}:4000"
+      - '127.0.0.1:${API_PORT:-4000}:4000'
     volumes:
       - .:/workspace
 
@@ -29,7 +29,7 @@ services:
       VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
       VITE_PROXY_TARGET: ${VITE_PROXY_TARGET:-http://api:4000}
     ports:
-      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
     healthcheck:
       test:
         - CMD-SHELL
