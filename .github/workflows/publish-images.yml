@@ -112,12 +112,13 @@ jobs:
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix.build_args }}
           pull: true
+          # PRs load a single-platform image for local Trivy. Push path keeps SBOM/provenance.
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          sbom: true
-          provenance: mode=max
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || false }}
 
       - name: Run Trivy vulnerability scan (report-only)
         uses: aquasecurity/trivy-action@v0.36.0
