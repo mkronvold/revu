@@ -13,18 +13,23 @@ See also: [GitHub setup for Revu automation](./GITHUB-SETUP.md)
    - This is required for Dependabot automerge, GHCR publishing, and automatic branch cleanup.
 2. **Automatic weekly dependency intake**
    - Dependabot checks weekly for npm, GitHub Actions, and Docker updates.
+   - Non-major npm updates share one grouped PR (`npm-non-major`); non-major Actions share `actions-non-major`. Majors stay ungrouped.
    - Safe patch and minor updates are auto-approved and set to auto-merge when repository settings allow it.
 3. **Automatic publish after merge**
-   - When a Dependabot PR merges into `main`, `publish-images.yml` validates the repo and publishes fresh `revu-api` and `revu-web` images to GHCR.
+   - When a Dependabot or digest-fix PR merges into `main`, `publish-images.yml` validates the repo and publishes fresh `revu-api` and `revu-web` images to GHCR.
    - On the host, `autoupdate.sh` or a timer/service can pull and redeploy those updated images automatically.
 4. **Automatic image refresh even without code changes**
-   - `refresh-images.yml` runs weekly and rebuilds the published deployment images so base-image CVE fixes can land without a source commit.
-5. **Manual path for major dependency updates**
+   - `refresh-images.yml` runs weekly and rebuilds the published deployment images from current pins.
+5. **Lane B base-image CVE digest PRs (event-driven)**
+   - After successful publish/refresh on `main` (and on a weekly schedule), `base-image-cve-fix` scans pinned bases with Trivy.
+   - If fixed CVEs exist and a newer same-tag digest is available, it opens/updates a digest-only PR.
+   - Crit/high labeled PRs auto-merge when checks are green; medium/low stay open for humans.
+6. **Manual path for major dependency updates**
    - Major Dependabot PRs are intentionally not auto-approved or auto-merged.
    - For each major PR, run the AI review prompt in this document, let the agent make any needed compatibility fixes, review the result, then approve and merge manually if it is still acceptable.
-6. **Manual re-enrollment for already-open safe PRs**
+7. **Manual re-enrollment for already-open safe PRs**
    - If a patch or minor Dependabot PR was opened before the automerge workflow changed, run the `automerge-dependencies` workflow manually with the PR number.
-   - That workflow replays the standard `reopened` path so the normal auto-approve and auto-merge logic can run against the existing PR without a new commit.
+   - For a missed crit/high base-image CVE PR, run `automerge-base-image-cve` with the PR number.
 
 ### Quick AI prompt for major Dependabot PRs
 
@@ -76,7 +81,7 @@ These two paths solve different problems and should not be merged into one opaqu
 
 ## Current image surfaces
 
-Base images are pinned as `tag@sha256:digest` so builds are reproducible. Dependabot opens weekly Docker PRs for Dockerfile digest/tag refreshes; Compose pins for `db` and `backup` are reviewed with those updates or when operators intentionally bump them.
+Base images are pinned as `tag@sha256:digest` so builds are reproducible. Dependabot opens weekly Docker PRs for Dockerfile digest/tag refreshes. Lane B (`base-image-cve-fix`) also bumps Dockerfile and Compose `db`/`backup` digests when scans find fixed CVEs and a newer same-tag digest exists. Security digest PRs supersede stale Dependabot docker pin PRs for the same bases.
 
 - `apps/api/Dockerfile`
   - builder/runner: `node:26-bookworm-slim@sha256:…`
@@ -100,7 +105,7 @@ It rebuilds `revu-api` and `revu-web` with:
 - `pull: true`
 - `no-cache: true`
 
-Base images are digest-pinned, so a refresh rebuild alone does not float to a newer upstream base digest. Fresh bases land when Dependabot (or a manual PR) bumps the `tag@sha256:…` pins, then publish/refresh rebuilds consume them.
+Base images are digest-pinned, so a refresh rebuild alone does not float to a newer upstream base digest. Fresh bases land when Dependabot, the Lane B digest bot, or a manual PR bumps the `tag@sha256:…` pins, then publish/refresh rebuilds consume them.
 
 The refresh workflow still rebuilds with `pull: true` and `no-cache: true` so it republishes `latest` / `refresh-*` from current pins and any future Dockerfile install steps (`apt`, `apk`, downloads) against those pins.
 
@@ -115,13 +120,22 @@ It does **not** republish SHA tags, because a scheduled rebuild on the same Git 
 
 Dependabot is configured in `.github/dependabot.yml` to check weekly for:
 
-- npm dependencies
-- GitHub Actions versions
-- Dockerfile tag updates
+- npm dependencies (grouped: `npm-non-major` for patch/minor; majors ungrouped)
+- GitHub Actions versions (grouped: `actions-non-major` for patch/minor; majors ungrouped)
+- Dockerfile tag/digest updates under `apps/api` and `apps/web`
 
-Safe patch and minor Dependabot PRs are automatically approved and set to auto-merge by `.github/workflows/automerge-dependencies.yml`.
+Safe patch and minor Dependabot PRs are automatically approved and set to auto-merge by `.github/workflows/automerge-dependencies.yml`. Grouped non-major PRs use the same path (Dependabot metadata still reports patch/minor).
 
 This keeps Git as the source of truth while still minimizing human involvement.
+
+### Lane B image-scan CVE remediation
+
+Image scanner findings (Trivy SARIF on code scanning) are **not** a Dependabot group. Remediation:
+
+1. `publish-images` / `refresh-images` scan built images (SARIF + JSON artifacts).
+2. `base-image-cve-fix` scans committed base pins, bumps digests when a newer same-tag digest can address fixed findings, and opens one deduped PR.
+3. `automerge-base-image-cve` merges only crit/high digest-only PRs when required checks pass.
+4. Hosts pick up republished `latest` via `autoupdate.sh` / `up.sh` (publish ≠ deploy).
 
 Major Dependabot PRs are not auto-approved. They should go through an AI-assisted review and validation pass before a human decides whether to approve and merge them.
 

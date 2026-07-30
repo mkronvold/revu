@@ -43,11 +43,23 @@ Weekly (and manual) rebuild of deployment tags (`latest`, `refresh-*`) so base-i
 
 Auto-approves and auto-merges eligible patch/minor Dependabot PRs when repository settings allow it. Major updates stay manual. See [`LCM.md`](./LCM.md) and [`GITHUB-SETUP.md`](./GITHUB-SETUP.md).
 
+### `base-image-cve-fix.yml` (Lane B)
+
+Event-driven + weekly safety net that scans **digest-pinned base images** (Dockerfiles + Compose `db`/`backup` pins). When fixed CVEs exist and a newer same-tag digest is available, it opens or updates a digest-only PR on `chore/base-image-cve-digests` labeled `base-image-cve` and `severity:critical|high|other`.
+
+Triggers: successful `publish-images` / `refresh-images` on `main` (non-PR), Monday schedule, and `workflow_dispatch`.
+
+### `automerge-base-image-cve.yml`
+
+Auto-approves and enables auto-merge **only** for open `base-image-cve` PRs labeled `severity:critical` or `severity:high` after verifying the diff is digest-only (no major tag jump, only pin files). `severity:other` stays human-merge.
+
 ## Container scanning policy
 
 | Stage                 | Behavior                                                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Now                   | Report-only Trivy SARIF upload per deployable service (`revu-api`, `revu-web`). Scans must not fail the job solely on finding severity. |
+| Artifacts             | Per-service Trivy **JSON** artifacts (`trivy-json-revu-api`, `trivy-json-revu-web`) retained for bot/triage use.                         |
+| Lane B remediation    | `base-image-cve-fix` opens digest pin PRs for any severity when a newer digest exists; crit/high auto-merge when checks are green.     |
 | After baseline triage | Enable reviewed severity gates; unresolved policy-severity findings block merge unless an approved exception exists.                    |
 | Exceptions            | Record accepted risks in [`security/exceptions.md`](../security/exceptions.md) with ID, owner, rationale, mitigation, and expiry.       |
 
@@ -58,7 +70,7 @@ SBOM artifacts are produced with the image build so published contents remain tr
 - Dockerfiles pin official images as `tag@sha256:digest`.
 - Compose pins Postgres and the backup Node image the same way.
 - Node **26** is the single supported major across `package.json` `engines`, CI `node-version`, API/web Dockerfiles, and the backup sidecar.
-- Dependabot watches npm, GitHub Actions, and Dockerfiles under `apps/api` and `apps/web` weekly. Compose digest bumps are reviewed alongside Dockerfile pin updates.
+- Dependabot watches npm, GitHub Actions, and Dockerfiles under `apps/api` and `apps/web` weekly with **non-major groups** for npm and Actions. Compose/base digest bumps also come from the Lane B bot; security digest PRs supersede stale Dependabot docker pin PRs for the same bases.
 
 ## Node and package manager
 

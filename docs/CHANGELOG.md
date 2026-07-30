@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Grouped weekly Dependabot non-major npm and GitHub Actions updates; majors stay ungrouped
+- Added Lane B base-image CVE automation: Trivy JSON artifacts, `base-image-cve-fix` digest PRs, and crit/high-only automerge for digest-only pin bumps
 - Aligned techstack compliance: Node 26 on the backup sidecar, digest-pinned base images, ESLint/Prettier `lint`/`format` scripts in `validate`, `docs/CI.md` + `docs/DOCKER.md`, SBOM + report-only Trivy SARIF in image workflows, and `autoupdate.sh` flock plus post-update health/digest checks
 - Documented that `prisma/migrations` are plain SQL files (not Prisma ORM)
 
