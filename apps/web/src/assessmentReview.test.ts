@@ -21,7 +21,9 @@ import {
   submitAssessment,
 } from './assessmentReview';
 
-const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+const elliot = employeesListExample.items.find(
+  (employee) => employee.username === 'elliot.employee',
+)!;
 const manny = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
 const ada = employeesListExample.items.find((employee) => employee.username === 'ada.admin')!;
 const selfAssessmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -30,10 +32,20 @@ const peerAssessmentId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 describe('assessment and review helpers', () => {
   it('groups drafts by completeness and supports save-for-later plus submit transitions', () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const readyToSubmitSnapshot = rejectAssessmentToDraft(snapshot, selfAssessmentId, 'Add one more example.');
+    const readyToSubmitSnapshot = rejectAssessmentToDraft(
+      snapshot,
+      selfAssessmentId,
+      'Add one more example.',
+    );
 
-    const readyToSubmitQueues = buildAssessmentQueues(elliot, readyToSubmitSnapshot, employeesListExample.items);
-    expect(readyToSubmitQueues[2]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
+    const readyToSubmitQueues = buildAssessmentQueues(
+      elliot,
+      readyToSubmitSnapshot,
+      employeesListExample.items,
+    );
+    expect(readyToSubmitQueues[2]?.items.map((item) => item.assessmentId)).toContain(
+      selfAssessmentId,
+    );
 
     const incompleteDraftSnapshot = saveAssessmentDraft(
       readyToSubmitSnapshot,
@@ -44,7 +56,11 @@ describe('assessment and review helpers', () => {
       },
       { now: '2026-02-14T12:00:00.000Z' },
     );
-    const incompleteQueues = buildAssessmentQueues(elliot, incompleteDraftSnapshot, employeesListExample.items);
+    const incompleteQueues = buildAssessmentQueues(
+      elliot,
+      incompleteDraftSnapshot,
+      employeesListExample.items,
+    );
     expect(incompleteQueues[1]?.items.map((item) => item.assessmentId)).toContain(selfAssessmentId);
 
     const submittedSnapshot = submitAssessment(
@@ -56,8 +72,16 @@ describe('assessment and review helpers', () => {
       },
       { now: '2026-02-15T09:30:00.000Z' },
     );
-    const submittedQueues = buildAssessmentQueues(elliot, submittedSnapshot, employeesListExample.items);
-    expect(submittedQueues.every((queue) => queue.items.every((item) => item.assessmentId !== selfAssessmentId))).toBe(true);
+    const submittedQueues = buildAssessmentQueues(
+      elliot,
+      submittedSnapshot,
+      employeesListExample.items,
+    );
+    expect(
+      submittedQueues.every((queue) =>
+        queue.items.every((item) => item.assessmentId !== selfAssessmentId),
+      ),
+    ).toBe(true);
   });
 
   it('tracks manager acceptance queues plus scheduling-ready set transitions', () => {
@@ -91,7 +115,10 @@ describe('assessment and review helpers', () => {
     });
     const initialQueue = buildReviewQueues(manny, submittedSnapshot, employeesListExample.items);
 
-    expect(initialQueue.map((item) => item.assessmentId)).toEqual([selfAssessmentId, peerAssessmentId]);
+    expect(initialQueue.map((item) => item.assessmentId)).toEqual([
+      selfAssessmentId,
+      peerAssessmentId,
+    ]);
     expect(initialQueue[0]).toMatchObject({
       title: '2026 Self Assessment - Elliot Employee',
       subjectName: 'Elliot Employee',
@@ -110,18 +137,32 @@ describe('assessment and review helpers', () => {
       statusLabel: 'Submitted',
     });
 
-    const acceptedSelfSnapshot = acceptAssessmentReview(submittedSnapshot, selfAssessmentId, 'Ready for meeting.', {
-      actorId: manny.id,
-      now: '2026-02-16T08:00:00.000Z',
-    });
-    const acceptedSnapshot = acceptAssessmentReview(acceptedSelfSnapshot, peerAssessmentId, 'Ready for meeting.', {
-      actorId: manny.id,
-      now: '2026-02-16T08:05:00.000Z',
-    });
+    const acceptedSelfSnapshot = acceptAssessmentReview(
+      submittedSnapshot,
+      selfAssessmentId,
+      'Ready for meeting.',
+      {
+        actorId: manny.id,
+        now: '2026-02-16T08:00:00.000Z',
+      },
+    );
+    const acceptedSnapshot = acceptAssessmentReview(
+      acceptedSelfSnapshot,
+      peerAssessmentId,
+      'Ready for meeting.',
+      {
+        actorId: manny.id,
+        now: '2026-02-16T08:05:00.000Z',
+      },
+    );
     const acceptedQueue = buildReviewQueues(manny, acceptedSnapshot, employeesListExample.items);
     expect(acceptedQueue).toHaveLength(0);
 
-    const readyQueues = buildReadyForMeetingQueues(manny, acceptedSnapshot, employeesListExample.items);
+    const readyQueues = buildReadyForMeetingQueues(
+      manny,
+      acceptedSnapshot,
+      employeesListExample.items,
+    );
     expect(readyQueues).toHaveLength(1);
     expect(readyQueues[0]).toMatchObject({
       employeeId: elliot.id,
@@ -130,14 +171,22 @@ describe('assessment and review helpers', () => {
       statusLabel: 'Accepted',
     });
 
-    const rejectedSnapshot = rejectAssessmentToDraft(submittedSnapshot, selfAssessmentId, 'Please expand the self-review examples.');
+    const rejectedSnapshot = rejectAssessmentToDraft(
+      submittedSnapshot,
+      selfAssessmentId,
+      'Please expand the self-review examples.',
+    );
     const rejectedQueue = buildReviewQueues(manny, rejectedSnapshot, employeesListExample.items);
     expect(rejectedQueue.map((item) => item.assessmentId)).not.toContain(selfAssessmentId);
   });
 
   it('builds an admin assessment list for the active review period', () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const rows = buildAdminAssessmentRows(snapshot, employeesListExample.items, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const rows = buildAdminAssessmentRows(
+      snapshot,
+      employeesListExample.items,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
 
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
@@ -165,8 +214,14 @@ describe('assessment and review helpers', () => {
 
   it('renders tombstone-linked assessment names as deleted user when the employee record is missing', () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const employees = employeesListExample.items.filter((employee) => employee.username !== 'pat.peer');
-    const rows = buildAdminAssessmentRows(snapshot, employees, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const employees = employeesListExample.items.filter(
+      (employee) => employee.username !== 'pat.peer',
+    );
+    const rows = buildAdminAssessmentRows(
+      snapshot,
+      employees,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
 
     expect(rows[1]).toMatchObject({
       assessorLabel: 'deleted user',
@@ -179,13 +234,22 @@ describe('assessment and review helpers', () => {
       selfAssessmentId,
       'Please add one more example.',
     );
-    const reviewedSnapshot = completeAssessmentReview(readyToSubmitSnapshot, peerAssessmentId, 'Closed out.', {
-      actorId: manny.id,
-      now: '2026-02-18T15:30:00.000Z',
-    });
+    const reviewedSnapshot = completeAssessmentReview(
+      readyToSubmitSnapshot,
+      peerAssessmentId,
+      'Closed out.',
+      {
+        actorId: manny.id,
+        now: '2026-02-18T15:30:00.000Z',
+      },
+    );
 
     const summary = buildAdminAssessmentSummary(
-      buildAdminAssessmentRows(reviewedSnapshot, employeesListExample.items, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+      buildAdminAssessmentRows(
+        reviewedSnapshot,
+        employeesListExample.items,
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
     );
 
     expect(summary).toEqual([
@@ -247,10 +311,14 @@ describe('assessment and review helpers', () => {
     const employeeManagerQueue = buildReviewQueues(manny, snapshot, employees);
     const assignmentManagerQueue = buildReviewQueues(riley, snapshot, employees);
 
-    expect(employeeManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
+    expect(
+      employeeManagerQueue.find((item) => item.assessmentId === peerAssessmentId),
+    ).toMatchObject({
       nextStepLabel: 'waiting for acceptance',
     });
-    expect(assignmentManagerQueue.find((item) => item.assessmentId === peerAssessmentId)).toMatchObject({
+    expect(
+      assignmentManagerQueue.find((item) => item.assessmentId === peerAssessmentId),
+    ).toMatchObject({
       nextStepLabel: 'waiting for acceptance',
     });
   });
@@ -439,24 +507,32 @@ describe('assessment and review helpers', () => {
       canSchedule: true,
       statusLabel: 'Ready for meeting',
     });
-    expect(scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer1')).toMatchObject({
+    expect(
+      scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer1'),
+    ).toMatchObject({
       canConclude: false,
       canReopen: false,
       isCurrentUserResponsible: false,
       statusLabel: 'Pending',
     });
-    expect(scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer2')).toMatchObject({
+    expect(
+      scheduledPanel?.reviewerActions.find((action) => action.role === 'reviewer2'),
+    ).toMatchObject({
       canConclude: true,
       canReopen: false,
       isCurrentUserResponsible: true,
       statusLabel: 'Pending',
     });
-    expect(concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer1')).toMatchObject({
+    expect(
+      concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer1'),
+    ).toMatchObject({
       canConclude: false,
       canReopen: true,
       statusLabel: 'Concluded',
     });
-    expect(concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer2')).toMatchObject({
+    expect(
+      concludedPanel?.reviewerActions.find((action) => action.role === 'reviewer2'),
+    ).toMatchObject({
       canConclude: false,
       canReopen: true,
       statusLabel: 'Concluded',
@@ -472,12 +548,20 @@ describe('assessment and review helpers', () => {
       managerId: ada.id,
       assessorId: elliot.id,
     });
-    expect(result.snapshot.assignments.find((assignment) => assignment.id === 'cccccccc-cccc-4ccc-8ccc-cccccccccccc')).toMatchObject({
+    expect(
+      result.snapshot.assignments.find(
+        (assignment) => assignment.id === 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ),
+    ).toMatchObject({
       managerId: ada.id,
       assessorId: elliot.id,
     });
-    expect(result.snapshot.assessments.find((assessment) => assessment.id === peerAssessmentId)?.assessorId).toBe(
-      foundationSnapshotExample.assessments.find((assessment) => assessment.id === peerAssessmentId)?.assessorId,
+    expect(
+      result.snapshot.assessments.find((assessment) => assessment.id === peerAssessmentId)
+        ?.assessorId,
+    ).toBe(
+      foundationSnapshotExample.assessments.find((assessment) => assessment.id === peerAssessmentId)
+        ?.assessorId,
     );
   });
 

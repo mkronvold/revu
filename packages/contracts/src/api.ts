@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
   assessmentReviewStateSchema,
@@ -23,7 +23,7 @@ import {
   reviewPeriodSchema,
   usernameSchema,
   workflowSettingsSchema,
-} from "./domain.js";
+} from './domain.js';
 
 export const apiResourceSchema = z.object({
   name: z.string().min(1),
@@ -32,8 +32,8 @@ export const apiResourceSchema = z.object({
 });
 
 export const apiIndexResponseSchema = z.object({
-  name: z.literal("revu-api"),
-  version: z.literal("0.1.0"),
+  name: z.literal('revu-api'),
+  version: z.literal('0.1.0'),
   seededAccountsAvailable: z.boolean(),
   resources: z.array(apiResourceSchema),
 });
@@ -122,36 +122,36 @@ export const foundationSnapshotSchema = z.object({
 });
 
 export const authPermissionSchema = z.enum([
-  "employees:read",
-  "employees:create",
-  "employees:update",
-  "employees:delete",
-  "employees:import",
-  "employees:export",
-  "employees:password:set",
-  "employees:password:reset",
-  "reviewPeriods:create",
-  "reviewPeriods:update",
-  "reviewPeriods:delete",
-  "reviewPeriods:archive",
-  "questionSets:create",
-  "questionSets:update",
-  "questionSets:activate",
-  "questionSets:import",
-  "questionSets:export",
-  "assignments:create",
-  "assignments:update",
-  "assignments:delete",
-  "assignments:import",
-  "assignments:export",
-  "assessments:read",
-  "assessments:accept",
-  "assessments:review",
-  "assessments:reassign",
-  "workflow:update",
-  "backups:read",
-  "backups:create",
-  "backups:restore",
+  'employees:read',
+  'employees:create',
+  'employees:update',
+  'employees:delete',
+  'employees:import',
+  'employees:export',
+  'employees:password:set',
+  'employees:password:reset',
+  'reviewPeriods:create',
+  'reviewPeriods:update',
+  'reviewPeriods:delete',
+  'reviewPeriods:archive',
+  'questionSets:create',
+  'questionSets:update',
+  'questionSets:activate',
+  'questionSets:import',
+  'questionSets:export',
+  'assignments:create',
+  'assignments:update',
+  'assignments:delete',
+  'assignments:import',
+  'assignments:export',
+  'assessments:read',
+  'assessments:accept',
+  'assessments:review',
+  'assessments:reassign',
+  'workflow:update',
+  'backups:read',
+  'backups:create',
+  'backups:restore',
 ]);
 
 export const authSessionUserSchema = employeeSchema;
@@ -197,7 +197,7 @@ export const authUpdateProfileRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
 export const authUpdateProfileResponseSchema = authLoginResponseSchema;
@@ -215,25 +215,27 @@ const validateDistinctReviewerIds = (
   ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["reviewer2Id"],
-      message: "Reviewer 1 and reviewer 2 must be different users",
+      path: ['reviewer2Id'],
+      message: 'Reviewer 1 and reviewer 2 must be different users',
     });
   }
 };
 
-export const createEmployeeRequestSchema = z.object({
-  username: usernameSchema,
-  fullName: z.string().min(1),
-  email: z.string().email(),
-  role: appRoleSchema,
-  status: employeeStatusSchema.default("active"),
-  managerId: idSchema.nullable().optional(),
-  assessor1Id: idSchema.nullable().optional(),
-  assessor2Id: idSchema.nullable().optional(),
-  reviewer1Id: idSchema.nullable().optional(),
-  reviewer2Id: idSchema.nullable().optional(),
-  password: z.string().min(8).optional(),
-}).superRefine(validateDistinctReviewerIds);
+export const createEmployeeRequestSchema = z
+  .object({
+    username: usernameSchema,
+    fullName: z.string().min(1),
+    email: z.string().email(),
+    role: appRoleSchema,
+    status: employeeStatusSchema.default('active'),
+    managerId: idSchema.nullable().optional(),
+    assessor1Id: idSchema.nullable().optional(),
+    assessor2Id: idSchema.nullable().optional(),
+    reviewer1Id: idSchema.nullable().optional(),
+    reviewer2Id: idSchema.nullable().optional(),
+    password: z.string().min(8).optional(),
+  })
+  .superRefine(validateDistinctReviewerIds);
 
 export const updateEmployeeRequestSchema = z
   .object({
@@ -251,10 +253,10 @@ export const updateEmployeeRequestSchema = z
   .partial()
   .superRefine(validateDistinctReviewerIds)
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
-const editableReviewPeriodStatusSchema = z.enum(["active", "inactive"]);
+const editableReviewPeriodStatusSchema = z.enum(['active', 'inactive']);
 
 export const deleteEmployeeResponseSchema = z.object({
   employeeId: idSchema,
@@ -298,7 +300,7 @@ export const createReviewPeriodRequestSchema = z.object({
   dueDate: z.string().date(),
   assessmentDueDate: z.string().date(),
   reviewDueDate: z.string().date(),
-  status: editableReviewPeriodStatusSchema.default("inactive"),
+  status: editableReviewPeriodStatusSchema.default('inactive'),
 });
 
 export const updateReviewPeriodRequestSchema = z
@@ -313,7 +315,7 @@ export const updateReviewPeriodRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
 export const syncAssessmentsResponseSchema = z.object({
@@ -334,8 +336,8 @@ export const createQuestionInputSchema = questionSchema.omit({ id: true }).exten
 export const createQuestionSetRequestSchema = z.object({
   target: questionSetSchema.shape.target,
   title: z.string().min(1),
-  headerMarkdown: z.string().default(""),
-  footerMarkdown: z.string().default(""),
+  headerMarkdown: z.string().default(''),
+  footerMarkdown: z.string().default(''),
   questions: z.array(createQuestionInputSchema).min(1),
 });
 
@@ -349,7 +351,7 @@ export const updateQuestionSetRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
 export const createAssignmentRequestSchema = z.object({
@@ -365,7 +367,7 @@ export const updateAssignmentRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
 export const reviewPeriodScopedQuerySchema = z.object({
@@ -415,12 +417,15 @@ export const adminUpdateAssessmentRequestSchema = z
   .object({
     responses: z.array(assessmentResponseSchema).optional(),
     managerNotes: z.string().trim().min(1).nullable().optional(),
-    reviewState: assessmentReviewStateSchema.exclude(["reviewed"]).optional(),
+    reviewState: assessmentReviewStateSchema.exclude(['reviewed']).optional(),
   })
   .refine(
-    (value) => value.responses !== undefined || value.managerNotes !== undefined || value.reviewState !== undefined,
+    (value) =>
+      value.responses !== undefined ||
+      value.managerNotes !== undefined ||
+      value.reviewState !== undefined,
     {
-      message: "At least one field must be provided",
+      message: 'At least one field must be provided',
     },
   );
 
@@ -443,7 +448,7 @@ export const reassignAssessmentRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "At least one field must be provided",
+    message: 'At least one field must be provided',
   });
 
 export const assessmentReassignmentResponseSchema = z.object({
@@ -452,7 +457,7 @@ export const assessmentReassignmentResponseSchema = z.object({
   assignment: assignmentSchema.nullable(),
 });
 
-export const exportFormatSchema = z.enum(["json", "csv"]);
+export const exportFormatSchema = z.enum(['json', 'csv']);
 
 export const localUsersExportResponseSchema = z.object({
   format: exportFormatSchema,
@@ -544,7 +549,7 @@ export const localUsersImportResponseSchema = z.object({
 
 export const exportStubResponseSchema = z.object({
   reviewPeriodId: idSchema,
-  resource: z.enum(["questionSets", "assignments"]),
+  resource: z.enum(['questionSets', 'assignments']),
   format: exportFormatSchema,
   exportedAt: isoTimestampSchema,
   stub: z.literal(true),
@@ -557,9 +562,9 @@ export const importStubRequestSchema = z.object({
 
 export const importStubResponseSchema = z.object({
   reviewPeriodId: idSchema,
-  resource: z.enum(["questionSets", "assignments"]),
+  resource: z.enum(['questionSets', 'assignments']),
   accepted: z.literal(false),
-  status: z.literal("not_implemented"),
+  status: z.literal('not_implemented'),
   supportedFormats: z.array(exportFormatSchema).min(1),
 });
 
@@ -600,15 +605,19 @@ export const backupSnapshotSchema = z.object({
   reviewData: backupReviewDataSchema,
 });
 
-export const backupRestoreScopeSchema = z.enum(["all", "users", "questions", "reviews"]);
-export const backupRestoreModeSchema = z.literal("replace");
-export const backupScheduleSchema = z.enum(["1hr", "3hr", "6hr", "12hr", "daily", "weekly"]);
-export const backupStoredFileNameSchema = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
+export const backupRestoreScopeSchema = z.enum(['all', 'users', 'questions', 'reviews']);
+export const backupRestoreModeSchema = z.literal('replace');
+export const backupScheduleSchema = z.enum(['1hr', '3hr', '6hr', '12hr', 'daily', 'weekly']);
+export const backupStoredFileNameSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[A-Za-z0-9._-]+$/);
 export const backupRestoreTargetSchema = z
-  .union([backupRestoreScopeSchema, z.literal("full")])
-  .transform((value) => (value === "full" ? "all" : value));
+  .union([backupRestoreScopeSchema, z.literal('full')])
+  .transform((value) => (value === 'full' ? 'all' : value));
 export const backupExportQuerySchema = z.object({
-  mode: localUsersExportModeSchema.default("preserve-passwords"),
+  mode: localUsersExportModeSchema.default('preserve-passwords'),
 });
 
 export const backupStatusResponseSchema = z.object({
@@ -617,9 +626,9 @@ export const backupStatusResponseSchema = z.object({
   retentionCount: z.number().int().positive(),
   lastBackupAt: isoTimestampSchema.nullable(),
   lastRestoreAt: isoTimestampSchema.nullable(),
-  defaultUserExportMode: z.literal("preserve-passwords"),
-  replaceStrategy: z.literal("replace"),
-  supportedFormats: z.array(z.literal("json")).length(1),
+  defaultUserExportMode: z.literal('preserve-passwords'),
+  replaceStrategy: z.literal('replace'),
+  supportedFormats: z.array(z.literal('json')).length(1),
   supportedSchedules: z.array(backupScheduleSchema).min(1),
   supportedRestoreModes: z.array(backupRestoreModeSchema).length(1),
   supportedRestoreScopes: z.array(backupRestoreScopeSchema).min(1),
@@ -653,19 +662,19 @@ export const backupStoredFileDeleteResponseSchema = z.object({
 });
 
 export const backupStoredFileDownloadQuerySchema = z.object({
-  mode: localUsersExportModeSchema.default("preserve-passwords"),
+  mode: localUsersExportModeSchema.default('preserve-passwords'),
 });
 
 export const backupStoredFileRestoreRequestSchema = z.object({
-  mode: backupRestoreModeSchema.default("replace"),
-  target: backupRestoreTargetSchema.default("all"),
+  mode: backupRestoreModeSchema.default('replace'),
+  target: backupRestoreTargetSchema.default('all'),
 });
 
 export const backupExportResponseSchema = backupSnapshotSchema;
 
 export const backupRestoreRequestSchema = z.object({
-  mode: backupRestoreModeSchema.default("replace"),
-  target: backupRestoreTargetSchema.default("all"),
+  mode: backupRestoreModeSchema.default('replace'),
+  target: backupRestoreTargetSchema.default('all'),
   backup: backupSnapshotSchema,
 });
 

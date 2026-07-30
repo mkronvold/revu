@@ -37,7 +37,11 @@ import {
   submitAssessmentToApi,
   updateAssessmentByAdminInApi,
 } from './assessmentReviewApi';
-import { createAssessmentWorkflowSnapshot, getAssessmentEditor, getReviewPanel } from './assessmentReview';
+import {
+  createAssessmentWorkflowSnapshot,
+  getAssessmentEditor,
+  getReviewPanel,
+} from './assessmentReview';
 
 describe('assessment review API orchestration', () => {
   afterEach(() => {
@@ -46,7 +50,11 @@ describe('assessment review API orchestration', () => {
 
   it('maps editor drafts into ordered assessment response payloads', async () => {
     const snapshot = createAssessmentWorkflowSnapshot(foundationSnapshotExample);
-    const editor = getAssessmentEditor(snapshot, employeesListExample.items, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!;
+    const editor = getAssessmentEditor(
+      snapshot,
+      employeesListExample.items,
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    )!;
 
     vi.mocked(saveAssessmentDraft).mockResolvedValue({
       item: foundationSnapshotExample.assessments[0]!,
@@ -175,9 +183,20 @@ describe('assessment review API orchestration', () => {
           : assessment,
       ),
     });
-    const employeeEditor = getAssessmentEditor(snapshot, employeesListExample.items, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!;
-    const manager = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
-    const reviewPanel = getReviewPanel(manager, snapshot, employeesListExample.items, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')!;
+    const employeeEditor = getAssessmentEditor(
+      snapshot,
+      employeesListExample.items,
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    )!;
+    const manager = employeesListExample.items.find(
+      (employee) => employee.username === 'manny.manager',
+    )!;
+    const reviewPanel = getReviewPanel(
+      manager,
+      snapshot,
+      employeesListExample.items,
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    )!;
 
     vi.mocked(submitAssessment).mockResolvedValue({
       item: foundationSnapshotExample.assessments[0]!,
@@ -242,7 +261,12 @@ describe('assessment review API orchestration', () => {
       ),
     });
     const admin = employeesListExample.items.find((employee) => employee.role === 'admin')!;
-    const editor = getAssessmentEditor(snapshot, employeesListExample.items, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', admin)!;
+    const editor = getAssessmentEditor(
+      snapshot,
+      employeesListExample.items,
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      admin,
+    )!;
 
     vi.mocked(updateAssessmentByAdmin).mockResolvedValue({
       item: foundationSnapshotExample.assessments[0]!,
@@ -252,12 +276,17 @@ describe('assessment review API orchestration', () => {
       deleted: true,
     });
 
-    const updateResult = await updateAssessmentByAdminInApi('session-token', editor, {
-      'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa': 'Updated answer',
-    }, {
-      reviewState: 'scheduled',
-      managerNotes: '  Ready for reviewer meeting.  ',
-    });
+    const updateResult = await updateAssessmentByAdminInApi(
+      'session-token',
+      editor,
+      {
+        'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa': 'Updated answer',
+      },
+      {
+        reviewState: 'scheduled',
+        managerNotes: '  Ready for reviewer meeting.  ',
+      },
+    );
     const deleteResult = await deleteAssessmentByAdminInApi('session-token', editor);
 
     expect(updateAssessmentByAdmin).toHaveBeenCalledWith('session-token', editor.assessmentId, {

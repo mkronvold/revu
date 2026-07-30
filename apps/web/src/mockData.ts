@@ -177,7 +177,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
     queues: [
       {
         title: 'Complete by 5/27/2026',
-        items: [{ title: '2026 Self-Assessment', actionLabel: 'View', detail: 'Admin completion is optional for the demo account.' }],
+        items: [
+          {
+            title: '2026 Self-Assessment',
+            actionLabel: 'View',
+            detail: 'Admin completion is optional for the demo account.',
+          },
+        ],
       },
       {
         title: 'Started but not completed',
@@ -193,7 +199,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
       },
       {
         title: 'Complete',
-        items: [{ title: '2025 Peer-Assessment for Elliot Employee', actionLabel: 'View', detail: 'Read-only historical example.' }],
+        items: [
+          {
+            title: '2025 Peer-Assessment for Elliot Employee',
+            actionLabel: 'View',
+            detail: 'Read-only historical example.',
+          },
+        ],
       },
     ],
     reviewSummary: '4 submitted assessments or accepted sets need dashboard follow-up.',
@@ -204,7 +216,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
     queues: [
       {
         title: 'Complete by 5/27/2026',
-        items: [{ title: '2026 Self-Assessment', actionLabel: 'Edit', detail: 'Managers can still complete their own self assessments.' }],
+        items: [
+          {
+            title: '2026 Self-Assessment',
+            actionLabel: 'Edit',
+            detail: 'Managers can still complete their own self assessments.',
+          },
+        ],
       },
       {
         title: 'Started but not completed',
@@ -220,7 +238,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
       },
       {
         title: 'Complete',
-        items: [{ title: '2025 Peer-Assessment for Casey Contributor', actionLabel: 'View', detail: 'Finished example kept on the dashboard.' }],
+        items: [
+          {
+            title: '2025 Peer-Assessment for Casey Contributor',
+            actionLabel: 'View',
+            detail: 'Finished example kept on the dashboard.',
+          },
+        ],
       },
     ],
     reviewSummary: '2 accepted assessment sets are ready for meeting follow-up.',
@@ -231,7 +255,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
     queues: [
       {
         title: 'Complete by 5/27/2026',
-        items: [{ title: '2026 Peer-Assessment for Pat Peer', actionLabel: 'Edit', detail: 'Assigned peer feedback that still needs a final pass.' }],
+        items: [
+          {
+            title: '2026 Peer-Assessment for Pat Peer',
+            actionLabel: 'Edit',
+            detail: 'Assigned peer feedback that still needs a final pass.',
+          },
+        ],
       },
       {
         title: 'Started but not completed',
@@ -239,18 +269,31 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
       },
       {
         title: 'Complete but not submitted yet',
-        items: [{ title: '2026 Self-Assessment', actionLabel: 'Edit', detail: 'Draft saved with narrative notes still in progress.' }],
+        items: [
+          {
+            title: '2026 Self-Assessment',
+            actionLabel: 'Edit',
+            detail: 'Draft saved with narrative notes still in progress.',
+          },
+        ],
       },
       {
         title: 'Complete but not accepted yet',
-        items: [{ title: '2026 Peer-Assessment for Casey Contributor', actionLabel: 'View', detail: 'Submitted and waiting on manager acceptance.' }],
+        items: [
+          {
+            title: '2026 Peer-Assessment for Casey Contributor',
+            actionLabel: 'View',
+            detail: 'Submitted and waiting on manager acceptance.',
+          },
+        ],
       },
       {
         title: 'Complete',
         items: [],
       },
     ],
-    reviewSummary: 'No workflow follow-up is assigned right now. Dashboard stays centered on authored assessments.',
+    reviewSummary:
+      'No workflow follow-up is assigned right now. Dashboard stays centered on authored assessments.',
     adminSummary: null,
   },
   '44444444-4444-4444-8444-444444444444': {
@@ -258,7 +301,13 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
     queues: [
       {
         title: 'Complete by 5/27/2026',
-        items: [{ title: '2026 Peer-Assessment for Elliot Employee', actionLabel: 'Edit', detail: 'Peer feedback assignment due this cycle.' }],
+        items: [
+          {
+            title: '2026 Peer-Assessment for Elliot Employee',
+            actionLabel: 'Edit',
+            detail: 'Peer feedback assignment due this cycle.',
+          },
+        ],
       },
       {
         title: 'Started but not completed',
@@ -274,10 +323,17 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
       },
       {
         title: 'Complete',
-        items: [{ title: '2025 Peer-Assessment for Manny Manager', actionLabel: 'View', detail: 'Finished example kept in the demo data.' }],
+        items: [
+          {
+            title: '2025 Peer-Assessment for Manny Manager',
+            actionLabel: 'View',
+            detail: 'Finished example kept in the demo data.',
+          },
+        ],
       },
     ],
-    reviewSummary: 'No dashboard workflow actions are assigned right now. Peer reviewer dashboard remains employee-focused.',
+    reviewSummary:
+      'No dashboard workflow actions are assigned right now. Peer reviewer dashboard remains employee-focused.',
     adminSummary: null,
   },
   '55555555-5555-4555-8555-555555555555': {
@@ -285,11 +341,23 @@ export const dashboardSnapshotsByEmployeeId: Record<string, DashboardSnapshot> =
     queues: [
       {
         title: 'Complete by 5/27/2026',
-        items: [{ title: '2026 Self-Assessment', actionLabel: 'Edit', detail: 'Due soon with one ranking question still unanswered.' }],
+        items: [
+          {
+            title: '2026 Self-Assessment',
+            actionLabel: 'Edit',
+            detail: 'Due soon with one ranking question still unanswered.',
+          },
+        ],
       },
       {
         title: 'Started but not completed',
-        items: [{ title: '2026 Peer-Assessment for Elliot Employee', actionLabel: 'Edit', detail: 'Saved after the first narrative response.' }],
+        items: [
+          {
+            title: '2026 Peer-Assessment for Elliot Employee',
+            actionLabel: 'Edit',
+            detail: 'Saved after the first narrative response.',
+          },
+        ],
       },
       {
         title: 'Complete but not submitted yet',

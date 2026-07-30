@@ -1,14 +1,14 @@
 services:
   db:
     container_name: revu-postgres
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-revu}
       POSTGRES_USER: ${POSTGRES_USER:-revu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-revu}
     expose:
-      - "5432"
+      - '5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -41,7 +41,7 @@ services:
       BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
       VITE_ENABLE_QUESTION_SET_STATUS: ${VITE_ENABLE_QUESTION_SET_STATUS:-false}
     expose:
-      - "4000"
+      - '4000'
     volumes:
       - backup-archive:${BACKUP_ARCHIVE_DIR:-/var/lib/revu/backups/archive}
       - backup-handoff:${BACKUP_HANDOFF_DIR:-/var/lib/revu/backups/handoff}
@@ -66,7 +66,7 @@ services:
 
   backup:
     container_name: revu-backup
-    image: node:22-bookworm-slim
+    image: node:26-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
     restart: unless-stopped
     working_dir: /opt/revu
     entrypoint:

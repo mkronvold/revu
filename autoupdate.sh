@@ -7,8 +7,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 readonly default_interval_minutes=30
 readonly no_updates_exit_code=10
 readonly ghcr_services=(api web)
+readonly health_services=(api web)
 readonly manifest_accept_header='application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json'
 readonly docker_config_path="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+readonly lock_file="${REVU_AUTOUPDATE_LOCK_FILE:-${TMPDIR:-/tmp}/revu-autoupdate.lock}"
+readonly lock_fd=9
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -313,12 +316,94 @@ pull_updates() {
   docker compose pull "${services[@]}"
 }
 
+service_health() {
+  local service="$1"
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "$(docker compose ps -q "$service" 2>/dev/null | head -n 1)" 2>/dev/null || true
+}
+
+record_deployed_digests() {
+  local service=""
+  local image=""
+  local repository=""
+  local digest=""
+
+  for service in "${ghcr_services[@]}"; do
+    image="$(service_image "$service" || true)"
+    if [[ -z "$image" ]]; then
+      log "Could not resolve deployed image for '${service}'."
+      continue
+    fi
+
+    repository="$(image_repository "$image")"
+    digest="$(local_image_digest "$image" "$repository" || true)"
+    if [[ -n "$digest" ]]; then
+      log "Deployed ${service} digest: ${digest}"
+    else
+      log "Deployed ${service} image: ${image} (local digest unavailable)"
+    fi
+  done
+}
+
+verify_stack_health() {
+  local service=""
+  local health=""
+  local attempt=1
+  local max_attempts=30
+  local unhealthy=()
+
+  log 'Verifying deployment health checks...'
+
+  while (( attempt <= max_attempts )); do
+    unhealthy=()
+    for service in "${health_services[@]}"; do
+      health="$(service_health "$service")"
+      case "$health" in
+        healthy|running)
+          ;;
+        *)
+          unhealthy+=("${service}:${health:-unknown}")
+          ;;
+      esac
+    done
+
+    if (( ${#unhealthy[@]} == 0 )); then
+      log 'Health checks passed for api and web.'
+      record_deployed_digests
+      return 0
+    fi
+
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  log_error "Post-update health verification failed: ${unhealthy[*]}"
+  record_deployed_digests
+  return 1
+}
+
 restart_stack() {
   log 'Stopping deployment stack...'
   docker compose down
 
   log 'Restarting deployment stack through up.sh so migrations stay aligned with manual startup.'
   bash ./up.sh
+  verify_stack_health
+}
+
+acquire_lock() {
+  if ! command -v flock >/dev/null 2>&1; then
+    log_error 'flock is required to serialize autoupdate cycles.'
+    exit 1
+  fi
+
+  eval "exec ${lock_fd}>\"\${lock_file}\""
+  if ! flock -n "$lock_fd"; then
+    log_error "Another autoupdate cycle already holds ${lock_file}."
+    exit 1
+  fi
+
+  log "Acquired update lock ${lock_file}."
 }
 
 ensure_stack_running() {
@@ -375,6 +460,7 @@ wait_for_next_check() {
   return 1
 }
 
+acquire_lock
 ensure_stack_running
 
 if [[ "$one_shot" == true ]]; then
@@ -386,6 +472,7 @@ if [[ "$one_shot" == true ]]; then
     if (( status != no_updates_exit_code )); then
       exit "$status"
     fi
+    exit 0
   fi
   exit 0
 fi
@@ -394,7 +481,7 @@ log "Watching GHCR deployment images every ${interval_minutes} minute(s). Press 
 
 while true; do
   if check_for_updates; then
-    restart_stack
+    restart_stack || log_error 'Restart completed but health verification failed.'
   else
     status="$?"
     if (( status != no_updates_exit_code )); then

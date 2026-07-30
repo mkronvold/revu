@@ -1,4 +1,11 @@
-export const themePreferences = ['light', 'spring', 'summer', 'autumn', 'summer-nights', 'winter-nights'] as const;
+export const themePreferences = [
+  'light',
+  'spring',
+  'summer',
+  'autumn',
+  'summer-nights',
+  'winter-nights',
+] as const;
 
 export type ThemePreference = (typeof themePreferences)[number];
 
@@ -361,7 +368,11 @@ const themedMutedTextSelectors = [
   '.question-order',
 ];
 
-const themedTableHeaderSelectors = ['.employee-roster-header', '.assessments-header', '.review-queue-header'];
+const themedTableHeaderSelectors = [
+  '.employee-roster-header',
+  '.assessments-header',
+  '.review-queue-header',
+];
 
 const themedInteractiveSurfaceSelectors = [
   '.section-toggle',
@@ -599,7 +610,9 @@ function buildThemeOverrides(theme: Exclude<ThemePreference, 'light'>, palette: 
 `;
 }
 
-export const themeStyleOverrides = (Object.entries(themePalettes) as Array<[Exclude<ThemePreference, 'light'>, ThemePalette]>)
+export const themeStyleOverrides = (
+  Object.entries(themePalettes) as Array<[Exclude<ThemePreference, 'light'>, ThemePalette]>
+)
   .map(([theme, palette]) => buildThemeOverrides(theme, palette))
   .join('\n');
 
@@ -608,7 +621,9 @@ export function normalizeThemePreference(value: string | null): ThemePreference 
     return 'winter-nights';
   }
 
-  return (themePreferences as readonly string[]).includes(value ?? '') ? (value as ThemePreference) : 'light';
+  return (themePreferences as readonly string[]).includes(value ?? '')
+    ? (value as ThemePreference)
+    : 'light';
 }
 
 export function getThemeLabel(theme: ThemePreference) {

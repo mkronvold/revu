@@ -59,7 +59,8 @@ export type AdminAssessmentRow = {
   assessmentStatusLabel: string;
   lifecycleLabel: string;
   nextStepLabel: string;
-  summaryBucket: 'drafting' | 'submitted' | 'accepted' | 'ready-for-meeting' | 'scheduled' | 'concluded';
+  summaryBucket:
+    'drafting' | 'submitted' | 'accepted' | 'ready-for-meeting' | 'scheduled' | 'concluded';
 };
 
 export type AdminAssessmentSummary = {
@@ -140,7 +141,8 @@ export type ReviewPanel = {
   questions: AssessmentEditorQuestion[];
 };
 
-export type AssessmentSetQueueAction = 'mark-ready' | 'schedule' | 'complete-reviewer-step' | 'none';
+export type AssessmentSetQueueAction =
+  'mark-ready' | 'schedule' | 'complete-reviewer-step' | 'none';
 
 export type AssessmentSetQueueItem = {
   id: string;
@@ -236,7 +238,9 @@ function getActiveReviewPeriod(snapshot: AssessmentWorkflowSnapshot) {
 }
 
 function getQuestionSet(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
-  return snapshot.questionSets.find((questionSet) => questionSet.id === assessment.questionSetId) ?? null;
+  return (
+    snapshot.questionSets.find((questionSet) => questionSet.id === assessment.questionSetId) ?? null
+  );
 }
 
 function getAssignment(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
@@ -244,7 +248,9 @@ function getAssignment(snapshot: AssessmentWorkflowSnapshot, assessment: Assessm
     return null;
   }
 
-  return snapshot.assignments.find((assignment) => assignment.id === assessment.assignmentId) ?? null;
+  return (
+    snapshot.assignments.find((assignment) => assignment.id === assessment.assignmentId) ?? null
+  );
 }
 
 function getEmployeeName(employeesById: Map<string, Employee>, employeeId: string | null) {
@@ -260,7 +266,9 @@ function buildAssessmentKindLabel(assessment: Assessment) {
 }
 
 function getAssessorLabel(assessment: Assessment, employeesById: Map<string, Employee>) {
-  return assessment.target === 'self' ? 'self' : getEmployeeName(employeesById, assessment.assessorId);
+  return assessment.target === 'self'
+    ? 'self'
+    : getEmployeeName(employeesById, assessment.assessorId);
 }
 
 function buildAssessmentTitle(
@@ -290,7 +298,11 @@ function getCurrentManagerId(
   assessment: Assessment,
   employeesById: Map<string, Employee>,
 ) {
-  return getAssignment(snapshot, assessment)?.managerId ?? employeesById.get(assessment.employeeId)?.managerId ?? null;
+  return (
+    getAssignment(snapshot, assessment)?.managerId ??
+    employeesById.get(assessment.employeeId)?.managerId ??
+    null
+  );
 }
 
 function getCurrentAssessorId(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
@@ -348,7 +360,9 @@ function getAssessmentSetState(assessments: Assessment[]): Assessment['reviewSta
   return null;
 }
 
-function collectActiveAssessmentSets(snapshot: AssessmentWorkflowSnapshot): AssessmentSetSnapshot[] {
+function collectActiveAssessmentSets(
+  snapshot: AssessmentWorkflowSnapshot,
+): AssessmentSetSnapshot[] {
   const activeReviewPeriodId = getActiveReviewPeriod(snapshot)?.id ?? null;
   if (!activeReviewPeriodId) {
     return [];
@@ -357,7 +371,10 @@ function collectActiveAssessmentSets(snapshot: AssessmentWorkflowSnapshot): Asse
   const sets = new Map<string, AssessmentSetSnapshot>();
 
   for (const assessment of snapshot.assessments) {
-    if (assessment.archiveState !== 'active' || assessment.reviewPeriodId !== activeReviewPeriodId) {
+    if (
+      assessment.archiveState !== 'active' ||
+      assessment.reviewPeriodId !== activeReviewPeriodId
+    ) {
       continue;
     }
 
@@ -404,7 +421,9 @@ function buildReviewerRoleLabel(role: AssessmentReviewerRole) {
 }
 
 function hasReviewerCompleted(assessment: Assessment, role: AssessmentReviewerRole) {
-  return role === 'reviewer1' ? assessment.reviewer1CompletedAt !== null : assessment.reviewer2CompletedAt !== null;
+  return role === 'reviewer1'
+    ? assessment.reviewer1CompletedAt !== null
+    : assessment.reviewer2CompletedAt !== null;
 }
 
 function getReviewerNotes(assessment: Assessment, role: AssessmentReviewerRole) {
@@ -416,14 +435,21 @@ function getReviewerCompletedAt(assessment: Assessment, role: AssessmentReviewer
 }
 
 function collectUniqueNonEmptyValues(values: Array<string | null | undefined>) {
-  return [...new Set(values.map((value) => value?.trim() ?? '').filter((value) => value.length > 0))];
+  return [
+    ...new Set(values.map((value) => value?.trim() ?? '').filter((value) => value.length > 0)),
+  ];
 }
 
 function toResponseMap(assessment: Assessment) {
-  return new Map(assessment.responses.map((response) => [response.questionId, response.response] as const));
+  return new Map(
+    assessment.responses.map((response) => [response.questionId, response.response] as const),
+  );
 }
 
-export function getAssessmentQuestionRows(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment): AssessmentEditorQuestion[] {
+export function getAssessmentQuestionRows(
+  snapshot: AssessmentWorkflowSnapshot,
+  assessment: Assessment,
+): AssessmentEditorQuestion[] {
   const questionSet = getQuestionSet(snapshot, assessment);
   const responsesByQuestionId = toResponseMap(assessment);
 
@@ -457,7 +483,9 @@ export function isAssessmentComplete(snapshot: AssessmentWorkflowSnapshot, asses
 }
 
 function hasAssessmentResponses(snapshot: AssessmentWorkflowSnapshot, assessment: Assessment) {
-  return getAssessmentQuestionRows(snapshot, assessment).some((question) => question.response.trim().length > 0);
+  return getAssessmentQuestionRows(snapshot, assessment).some(
+    (question) => question.response.trim().length > 0,
+  );
 }
 
 type DashboardAssessmentQueueStatus = 'not-started' | 'incomplete' | 'ready-to-submit';
@@ -474,7 +502,9 @@ function getDashboardAssessmentQueueStatus(
     return 'ready-to-submit';
   }
 
-  return assessment.reviewState === 'draft' || hasAssessmentResponses(snapshot, assessment) ? 'incomplete' : 'not-started';
+  return assessment.reviewState === 'draft' || hasAssessmentResponses(snapshot, assessment)
+    ? 'incomplete'
+    : 'not-started';
 }
 
 function buildAssessmentDetail(
@@ -731,37 +761,37 @@ function toReviewQueueItem(
     reviewPeriodLabel: getReviewPeriodLabel(snapshot, assessment),
     targetLabel: assessment.target === 'self' ? 'Self assessment' : 'Peer assessment',
     assessorLabel: getAssessorLabel(assessment, employeesById),
-    dueDate: reviewPeriod && !isConcludedState(assessment.reviewState)
-      ? formatDate(reviewPeriod.reviewDueDate)
-      : '—',
+    dueDate:
+      reviewPeriod && !isConcludedState(assessment.reviewState)
+        ? formatDate(reviewPeriod.reviewDueDate)
+        : '—',
     nextStepLabel: buildReviewNextStepLabel(assessment),
     statusLabel: buildAssessmentStatusLabel(snapshot, assessment),
     actionLabel: 'Open',
   };
 }
 
-function orderAssessments(
-  assessments: Assessment[],
-  snapshot: AssessmentWorkflowSnapshot,
-) {
-  const reviewPeriodsById = new Map(snapshot.reviewPeriods.map((reviewPeriod) => [reviewPeriod.id, reviewPeriod] as const));
-  return assessments
-    .slice()
-    .sort((left, right) => {
-      const leftReviewPeriod = reviewPeriodsById.get(left.reviewPeriodId);
-      const rightReviewPeriod = reviewPeriodsById.get(right.reviewPeriodId);
-      const leftDueDate = leftReviewPeriod?.assessmentDueDate ?? '';
-      const rightDueDate = rightReviewPeriod?.assessmentDueDate ?? '';
+function orderAssessments(assessments: Assessment[], snapshot: AssessmentWorkflowSnapshot) {
+  const reviewPeriodsById = new Map(
+    snapshot.reviewPeriods.map((reviewPeriod) => [reviewPeriod.id, reviewPeriod] as const),
+  );
+  return assessments.slice().sort((left, right) => {
+    const leftReviewPeriod = reviewPeriodsById.get(left.reviewPeriodId);
+    const rightReviewPeriod = reviewPeriodsById.get(right.reviewPeriodId);
+    const leftDueDate = leftReviewPeriod?.assessmentDueDate ?? '';
+    const rightDueDate = rightReviewPeriod?.assessmentDueDate ?? '';
 
-      if (leftDueDate !== rightDueDate) {
-        return leftDueDate.localeCompare(rightDueDate);
-      }
+    if (leftDueDate !== rightDueDate) {
+      return leftDueDate.localeCompare(rightDueDate);
+    }
 
-      return left.createdAt.localeCompare(right.createdAt);
-    });
+    return left.createdAt.localeCompare(right.createdAt);
+  });
 }
 
-export function createAssessmentWorkflowSnapshot(foundation?: FoundationSnapshot | null): AssessmentWorkflowSnapshot {
+export function createAssessmentWorkflowSnapshot(
+  foundation?: FoundationSnapshot | null,
+): AssessmentWorkflowSnapshot {
   const source = foundation ?? foundationSnapshotExample;
 
   return {
@@ -797,21 +827,28 @@ export function buildAssessmentQueues(
       id: 'not-started',
       title: 'Not Started',
       items: authoredAssessments
-        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'not-started')
+        .filter(
+          (assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'not-started',
+        )
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'incomplete',
       title: 'Incomplete',
       items: authoredAssessments
-        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'incomplete')
+        .filter(
+          (assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'incomplete',
+        )
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
     {
       id: 'ready-to-submit',
       title: 'Complete but Not Submitted',
       items: authoredAssessments
-        .filter((assessment) => getDashboardAssessmentQueueStatus(snapshot, assessment) === 'ready-to-submit')
+        .filter(
+          (assessment) =>
+            getDashboardAssessmentQueueStatus(snapshot, assessment) === 'ready-to-submit',
+        )
         .map((assessment) => toAssessmentQueueItem(assessment, snapshot, employeesById)),
     },
   ];
@@ -831,27 +868,35 @@ export function getAssessmentEditor(
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const questionSet = getQuestionSet(snapshot, assessment);
   const reviewPeriod = getReviewPeriod(snapshot, assessment.reviewPeriodId);
-  const isAdminOverride = user?.role === 'admin' && assessment.archiveState !== 'archived' && reviewPeriod?.status !== 'archived';
-  const readOnly = !isAdminOverride && (assessment.isReadOnly || assessment.archiveState === 'archived' || reviewPeriod?.status === 'archived');
+  const isAdminOverride =
+    user?.role === 'admin' &&
+    assessment.archiveState !== 'archived' &&
+    reviewPeriod?.status !== 'archived';
+  const readOnly =
+    !isAdminOverride &&
+    (assessment.isReadOnly ||
+      assessment.archiveState === 'archived' ||
+      reviewPeriod?.status === 'archived');
   const isComplete = isAssessmentComplete(snapshot, assessment);
-  const normalizedReviewState = assessment.reviewState === 'reviewed' ? 'accepted' : assessment.reviewState;
-  const saveLabel = isAdminOverride && normalizedReviewState !== 'new' && normalizedReviewState !== 'draft' ? 'Save changes' : 'Save for later';
+  const normalizedReviewState =
+    assessment.reviewState === 'reviewed' ? 'accepted' : assessment.reviewState;
+  const saveLabel =
+    isAdminOverride && normalizedReviewState !== 'new' && normalizedReviewState !== 'draft'
+      ? 'Save changes'
+      : 'Save for later';
   const submitLabel =
-    normalizedReviewState === 'new' || normalizedReviewState === 'draft'
-      ? 'Submit'
-      : null;
-  const adminQuickAction =
-    !isAdminOverride
-      ? null
-      : normalizedReviewState === 'submitted'
-        ? { label: 'Accept', reviewState: 'accepted' as const }
-        : normalizedReviewState === 'accepted'
+    normalizedReviewState === 'new' || normalizedReviewState === 'draft' ? 'Submit' : null;
+  const adminQuickAction = !isAdminOverride
+    ? null
+    : normalizedReviewState === 'submitted'
+      ? { label: 'Accept', reviewState: 'accepted' as const }
+      : normalizedReviewState === 'accepted'
+        ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
+        : normalizedReviewState === 'ready_for_meeting'
           ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
-          : normalizedReviewState === 'ready_for_meeting'
-            ? { label: 'Schedule meeting', reviewState: 'scheduled' as const }
-            : normalizedReviewState === 'concluded'
-              ? { label: 'Reopen conclusion', reviewState: 'scheduled' as const }
-              : null;
+          : normalizedReviewState === 'concluded'
+            ? { label: 'Reopen conclusion', reviewState: 'scheduled' as const }
+            : null;
 
   return {
     assessmentId: assessment.id,
@@ -864,7 +909,10 @@ export function getAssessmentEditor(
     dueDate: reviewPeriod ? formatDate(reviewPeriod.assessmentDueDate) : 'Unknown due date',
     subjectName: getEmployeeName(employeesById, assessment.employeeId),
     assessorName: getEmployeeName(employeesById, assessment.assessorId),
-    managerName: getEmployeeName(employeesById, employeesById.get(assessment.employeeId)?.managerId ?? null),
+    managerName: getEmployeeName(
+      employeesById,
+      employeesById.get(assessment.employeeId)?.managerId ?? null,
+    ),
     questionSetTitle: questionSet?.title ?? 'Assessment questions',
     headerMarkdown: questionSet?.headerMarkdown ?? '',
     footerMarkdown: questionSet?.footerMarkdown ?? '',
@@ -943,7 +991,9 @@ export function buildReviewQueues(
         return left.target === 'self' ? -1 : 1;
       }
 
-      return buildReviewTitle(left, snapshot, employeesById).localeCompare(buildReviewTitle(right, snapshot, employeesById));
+      return buildReviewTitle(left, snapshot, employeesById).localeCompare(
+        buildReviewTitle(right, snapshot, employeesById),
+      );
     })
     .map((assessment) => toReviewQueueItem(assessment, snapshot, employeesById));
 }
@@ -975,7 +1025,9 @@ function canManageAssessmentSet(
     return true;
   }
 
-  return assessmentSet.assessments.some((assessment) => getAssessmentManagerIds(snapshot, assessment, employeesById).has(user.id));
+  return assessmentSet.assessments.some((assessment) =>
+    getAssessmentManagerIds(snapshot, assessment, employeesById).has(user.id),
+  );
 }
 
 function toAssessmentSetQueueItem(
@@ -1003,7 +1055,9 @@ function toAssessmentSetQueueItem(
     subjectName: getEmployeeName(employeesById, assessmentSet.employeeId),
     reviewPeriodLabel: reviewPeriod?.label ?? 'Current review period',
     dueDate: reviewPeriod ? formatDate(reviewPeriod.reviewDueDate) : 'Unknown due date',
-    statusLabel: setState ? buildReviewStatusLabel({ ...assessmentSet.assessments[0]!, reviewState: setState }) : 'Mixed state',
+    statusLabel: setState
+      ? buildReviewStatusLabel({ ...assessmentSet.assessments[0]!, reviewState: setState })
+      : 'Mixed state',
     actionLabel: options.actionLabel,
     actionKind: options.actionKind,
     responsibilityLabel: options.responsibilityLabel,
@@ -1049,7 +1103,9 @@ export function buildReviewerScheduledQueues(
     .filter(({ reviewerRole }) => reviewerRole !== null)
     .filter(({ assessmentSet }) => getAssessmentSetState(assessmentSet.assessments) === 'scheduled')
     .filter(({ assessmentSet, reviewerRole }) =>
-      assessmentSet.assessments.some((assessment) => reviewerRole && !hasReviewerCompleted(assessment, reviewerRole)),
+      assessmentSet.assessments.some(
+        (assessment) => reviewerRole && !hasReviewerCompleted(assessment, reviewerRole),
+      ),
     )
     .map(({ assessmentSet, reviewerRole }) =>
       toAssessmentSetQueueItem(snapshot, employeesById, assessmentSet, {
@@ -1074,7 +1130,9 @@ export function buildAdminOversightQueues(
 
   return {
     readyForMeeting: assessmentSets
-      .filter((assessmentSet) => getAssessmentSetState(assessmentSet.assessments) === 'ready_for_meeting')
+      .filter(
+        (assessmentSet) => getAssessmentSetState(assessmentSet.assessments) === 'ready_for_meeting',
+      )
       .map((assessmentSet) =>
         toAssessmentSetQueueItem(snapshot, employeesById, assessmentSet, {
           actionKind: 'schedule',
@@ -1118,14 +1176,21 @@ export function getAssessmentSetWorkflowPanel(
 ): AssessmentSetWorkflowPanel | null {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const assessmentSet = collectActiveAssessmentSets(snapshot).find(
-    (candidate) => candidate.reviewPeriodId === reviewPeriodId && candidate.employeeId === employeeId,
+    (candidate) =>
+      candidate.reviewPeriodId === reviewPeriodId && candidate.employeeId === employeeId,
   );
   if (!assessmentSet) {
     return null;
   }
 
   const setState = getAssessmentSetState(assessmentSet.assessments);
-  if (!setState || (setState !== 'accepted' && setState !== 'ready_for_meeting' && setState !== 'scheduled' && setState !== 'concluded')) {
+  if (
+    !setState ||
+    (setState !== 'accepted' &&
+      setState !== 'ready_for_meeting' &&
+      setState !== 'scheduled' &&
+      setState !== 'concluded')
+  ) {
     return null;
   }
 
@@ -1136,7 +1201,11 @@ export function getAssessmentSetWorkflowPanel(
     return null;
   }
 
-  if ((setState === 'scheduled' || setState === 'concluded') && user.role !== 'admin' && currentUserReviewerRole === null) {
+  if (
+    (setState === 'scheduled' || setState === 'concluded') &&
+    user.role !== 'admin' &&
+    currentUserReviewerRole === null
+  ) {
     return null;
   }
 
@@ -1161,15 +1230,24 @@ export function getAssessmentSetWorkflowPanel(
       managerNotes: assessment.managerNotes,
     }));
 
-  const reviewerActions: AssessmentSetReviewerWorkflow[] = (['reviewer1', 'reviewer2'] as const).map((role) => {
-    const assignedReviewerId = role === 'reviewer1' ? subject?.reviewer1Id ?? null : subject?.reviewer2Id ?? null;
-    const completed = assessmentSet.assessments.every((assessment) => hasReviewerCompleted(assessment, role));
-    const partial = !completed && assessmentSet.assessments.some((assessment) => hasReviewerCompleted(assessment, role));
-    const notes = collectUniqueNonEmptyValues(assessmentSet.assessments.map((assessment) => getReviewerNotes(assessment, role))).join(
-      '\n\n',
+  const reviewerActions: AssessmentSetReviewerWorkflow[] = (
+    ['reviewer1', 'reviewer2'] as const
+  ).map((role) => {
+    const assignedReviewerId =
+      role === 'reviewer1' ? (subject?.reviewer1Id ?? null) : (subject?.reviewer2Id ?? null);
+    const completed = assessmentSet.assessments.every((assessment) =>
+      hasReviewerCompleted(assessment, role),
     );
+    const partial =
+      !completed &&
+      assessmentSet.assessments.some((assessment) => hasReviewerCompleted(assessment, role));
+    const notes = collectUniqueNonEmptyValues(
+      assessmentSet.assessments.map((assessment) => getReviewerNotes(assessment, role)),
+    ).join('\n\n');
     const completedAt =
-      assessmentSet.assessments.map((assessment) => getReviewerCompletedAt(assessment, role)).find((value) => value !== null) ?? null;
+      assessmentSet.assessments
+        .map((assessment) => getReviewerCompletedAt(assessment, role))
+        .find((value) => value !== null) ?? null;
     const isCurrentUserResponsible = user.role === 'admin' || currentUserReviewerRole === role;
 
     return {
@@ -1181,10 +1259,21 @@ export function getAssessmentSetWorkflowPanel(
         role === 'reviewer1'
           ? 'Reviewer 1 records the first conclusion after the meeting and can reopen it later if follow-up changes.'
           : 'Reviewer 2 records the final conclusion after the meeting and can reopen it later if follow-up changes.',
-      statusLabel: assignedReviewerId === null ? 'Not assigned' : completed ? 'Concluded' : partial ? 'Partially concluded' : 'Pending',
+      statusLabel:
+        assignedReviewerId === null
+          ? 'Not assigned'
+          : completed
+            ? 'Concluded'
+            : partial
+              ? 'Partially concluded'
+              : 'Pending',
       notes,
       completedAt,
-      canConclude: assignedReviewerId !== null && isCurrentUserResponsible && !completed && setState === 'scheduled',
+      canConclude:
+        assignedReviewerId !== null &&
+        isCurrentUserResponsible &&
+        !completed &&
+        setState === 'scheduled',
       canReopen: assignedReviewerId !== null && isCurrentUserResponsible && (completed || partial),
       isCurrentUserResponsible,
     };
@@ -1204,8 +1293,8 @@ export function getAssessmentSetWorkflowPanel(
             : `${buildReviewerRoleLabel(currentUserReviewerRole!)} is responsible for recording this conclusion.`,
     dialogKind:
       setState === 'accepted' || setState === 'ready_for_meeting'
-          ? 'schedule-meeting'
-          : 'conclude-review',
+        ? 'schedule-meeting'
+        : 'conclude-review',
     subjectName,
     reviewPeriodLabel: reviewPeriod?.label ?? 'Current review period',
     dueDate: reviewPeriod ? formatDate(reviewPeriod.reviewDueDate) : 'Unknown due date',
@@ -1233,7 +1322,10 @@ export function buildAdminAssessmentRows(
 ): AdminAssessmentRow[] {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee] as const));
   const assessments = snapshot.assessments
-    .filter((assessment) => assessment.reviewPeriodId === reviewPeriodId && assessment.archiveState === 'active')
+    .filter(
+      (assessment) =>
+        assessment.reviewPeriodId === reviewPeriodId && assessment.archiveState === 'active',
+    )
     .slice()
     .sort((left, right) => {
       const subjectNameDifference = getEmployeeName(employeesById, left.employeeId).localeCompare(
@@ -1247,7 +1339,9 @@ export function buildAdminAssessmentRows(
         return left.target === 'self' ? -1 : 1;
       }
 
-      return getAssessorLabel(left, employeesById).localeCompare(getAssessorLabel(right, employeesById));
+      return getAssessorLabel(left, employeesById).localeCompare(
+        getAssessorLabel(right, employeesById),
+      );
     });
 
   return assessments.map((assessment) => {
@@ -1275,30 +1369,30 @@ export function buildAdminAssessmentSummary(rows: AdminAssessmentRow[]): AdminAs
   const summaryByTarget = new Map<Assessment['target'], AdminAssessmentSummary>([
     [
       'self',
-        {
-          target: 'self',
-          total: 0,
-          drafting: 0,
-          submitted: 0,
-          accepted: 0,
-          readyForMeeting: 0,
-          scheduled: 0,
-          concluded: 0,
-        },
-      ],
+      {
+        target: 'self',
+        total: 0,
+        drafting: 0,
+        submitted: 0,
+        accepted: 0,
+        readyForMeeting: 0,
+        scheduled: 0,
+        concluded: 0,
+      },
+    ],
     [
       'peer',
-        {
-          target: 'peer',
-          total: 0,
-          drafting: 0,
-          submitted: 0,
-          accepted: 0,
-          readyForMeeting: 0,
-          scheduled: 0,
-          concluded: 0,
-        },
-      ],
+      {
+        target: 'peer',
+        total: 0,
+        drafting: 0,
+        submitted: 0,
+        accepted: 0,
+        readyForMeeting: 0,
+        scheduled: 0,
+        concluded: 0,
+      },
+    ],
   ]);
 
   for (const row of rows) {
@@ -1340,7 +1434,9 @@ export function getReviewPanel(
   employees: Employee[],
   assessmentId: string,
 ): ReviewPanel | null {
-  const assessment = getReviewableAssessments(user, snapshot, employees).find((candidate) => candidate.id === assessmentId);
+  const assessment = getReviewableAssessments(user, snapshot, employees).find(
+    (candidate) => candidate.id === assessmentId,
+  );
   if (!assessment) {
     return null;
   }
@@ -1373,7 +1469,9 @@ export function getReviewPanel(
   };
 }
 
-export function groupAssessmentEditorQuestions(questions: AssessmentEditorQuestion[]): AssessmentEditorQuestionGroup[] {
+export function groupAssessmentEditorQuestions(
+  questions: AssessmentEditorQuestion[],
+): AssessmentEditorQuestionGroup[] {
   const groups: AssessmentEditorQuestionGroup[] = [];
 
   for (const question of questions.slice().sort((left, right) => left.order - right.order)) {
@@ -1591,7 +1689,8 @@ export function reassignAssessmentRelationships(
     };
   }
 
-  const nextAssessorId = assessment.target === 'peer' ? assessorId ?? assessment.assessorId : assessment.assessorId;
+  const nextAssessorId =
+    assessment.target === 'peer' ? (assessorId ?? assessment.assessorId) : assessment.assessorId;
   const nextSnapshot: AssessmentWorkflowSnapshot = {
     ...snapshot,
     reviewPeriods: snapshot.reviewPeriods.map((reviewPeriod) => ({ ...reviewPeriod })),

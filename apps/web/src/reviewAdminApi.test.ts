@@ -115,7 +115,10 @@ describe('review admin API orchestration', () => {
         },
       ],
     });
-    expect(activateQuestionSet).toHaveBeenCalledWith('session-token', '99999999-9999-4999-8999-999999999999');
+    expect(activateQuestionSet).toHaveBeenCalledWith(
+      'session-token',
+      '99999999-9999-4999-8999-999999999999',
+    );
     expect(result.questionSet.status).toBe('active');
     expect(result.notice).toContain('activated');
   });
@@ -243,7 +246,9 @@ describe('review admin API orchestration', () => {
     });
     vi.mocked(updateEmployee).mockResolvedValue({
       item: {
-        ...employeesListExample.items.find((employee) => employee.id === existingAssignment.employeeId)!,
+        ...employeesListExample.items.find(
+          (employee) => employee.id === existingAssignment.employeeId,
+        )!,
         assessor2Id: null,
         auth: {
           passwordConfigured: true,
@@ -289,7 +294,10 @@ describe('review admin API orchestration', () => {
       true,
     );
 
-    expect(archiveReviewPeriod).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(archiveReviewPeriod).toHaveBeenCalledWith(
+      'session-token',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
     expect(archiveResult.reviewPeriod.status).toBe('archived');
     expect(
       buildAssignmentsExportNotice({
@@ -365,7 +373,9 @@ describe('review admin API orchestration', () => {
   });
 
   it('serializes and parses question-set and assignment transfers for download/upload', () => {
-    const questionSet = foundationSnapshotExample.questionSets.find((item) => item.questions.length > 0)!;
+    const questionSet = foundationSnapshotExample.questionSets.find(
+      (item) => item.questions.length > 0,
+    )!;
     const questionSetResponse = {
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       format: 'csv' as const,
@@ -375,10 +385,8 @@ describe('review admin API orchestration', () => {
     };
     expect(serializeQuestionSetsTransfer(questionSetResponse)).toContain('questionSetId');
     expect(
-      buildQuestionSetsImportPayload(
-        'csv',
-        serializeQuestionSetsTransfer(questionSetResponse),
-      ).items[0],
+      buildQuestionSetsImportPayload('csv', serializeQuestionSetsTransfer(questionSetResponse))
+        .items[0],
     ).toMatchObject({
       id: questionSet.id,
       title: questionSet.title,
@@ -402,7 +410,10 @@ describe('review admin API orchestration', () => {
       ],
     };
     expect(serializeAssignmentsTransfer(assignmentResponse)).toContain('employeeUsername');
-    expect(buildAssignmentsImportPayload('csv', serializeAssignmentsTransfer(assignmentResponse)).items[0]).toMatchObject({
+    expect(
+      buildAssignmentsImportPayload('csv', serializeAssignmentsTransfer(assignmentResponse))
+        .items[0],
+    ).toMatchObject({
       assignmentId: foundationSnapshotExample.assignments[0]!.id,
       employeeUsername: 'elliot.employee',
       assessorUsername: 'pat.peer',
@@ -425,9 +436,9 @@ describe('review admin API orchestration', () => {
     expect(csvPayload).toContain('reviewPeriodId,questionSetId,target,status,title');
     expect(csvPayload).toContain('2026 Self Questions');
     expect(buildQuestionSetExportNotice(exportResponse)).toBe('Exported 2 question sets as CSV.');
-    expect(buildQuestionSetExportFilename(foundationSnapshotExample.reviewPeriods[0]!, exportResponse)).toBe(
-      '2026-question-sets-20260601T120000Z.csv',
-    );
+    expect(
+      buildQuestionSetExportFilename(foundationSnapshotExample.reviewPeriods[0]!, exportResponse),
+    ).toBe('2026-question-sets-20260601T120000Z.csv');
   });
 
   it('autodetects JSON vs CSV when parsing from a file', () => {
@@ -447,14 +458,31 @@ describe('review admin API orchestration', () => {
       passwordResetRequired: true,
     };
 
-    const jsonContent = serializeLocalUsersTransfer({ format: 'json', mode: 'rotate-passcodes', items: [item] });
-    expect(buildLocalUsersImportPayloadFromFile(jsonContent)).toEqual({ format: 'json', items: [item] });
+    const jsonContent = serializeLocalUsersTransfer({
+      format: 'json',
+      mode: 'rotate-passcodes',
+      items: [item],
+    });
+    expect(buildLocalUsersImportPayloadFromFile(jsonContent)).toEqual({
+      format: 'json',
+      items: [item],
+    });
 
     const jsonArrayContent = JSON.stringify([item]);
-    expect(buildLocalUsersImportPayloadFromFile(jsonArrayContent)).toEqual({ format: 'json', items: [item] });
+    expect(buildLocalUsersImportPayloadFromFile(jsonArrayContent)).toEqual({
+      format: 'json',
+      items: [item],
+    });
 
-    const csvContent = serializeLocalUsersTransfer({ format: 'csv', mode: 'rotate-passcodes', items: [item] });
-    expect(buildLocalUsersImportPayloadFromFile(csvContent)).toEqual({ format: 'csv', items: [item] });
+    const csvContent = serializeLocalUsersTransfer({
+      format: 'csv',
+      mode: 'rotate-passcodes',
+      items: [item],
+    });
+    expect(buildLocalUsersImportPayloadFromFile(csvContent)).toEqual({
+      format: 'csv',
+      items: [item],
+    });
   });
 
   it('describes local user export/import credential behavior', () => {

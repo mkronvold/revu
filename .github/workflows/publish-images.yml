@@ -6,7 +6,7 @@ on:
     branches:
       - main
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -59,15 +59,20 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - image_name: revu-api
             dockerfile: apps/api/Dockerfile
-            build_args: ""
+            scan_category: revu-api
+            build_args: ''
           - image_name: revu-web
             dockerfile: apps/web/Dockerfile
+            scan_category: revu-web
             build_args: |-
               VITE_API_BASE_URL=/api/v1
               VITE_COMPANY_NAME=Your Company
@@ -100,12 +105,38 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and publish image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix.build_args }}
           pull: true
+          # PRs load a single-platform image for local Trivy. Push path keeps SBOM/provenance.
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || false }}
+
+      - name: Run Trivy vulnerability scan (report-only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: >-
+            ${{
+              github.event_name == 'pull_request'
+              && fromJSON(steps.meta.outputs.json).tags[0]
+              || format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image_name, steps.build.outputs.digest)
+            }}
+          format: sarif
+          output: trivy-${{ matrix.scan_category }}.sarif
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.scan_category)) != ''
+        with:
+          sarif_file: trivy-${{ matrix.scan_category }}.sarif
+          category: ${{ matrix.scan_category }}

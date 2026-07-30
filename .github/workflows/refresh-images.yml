@@ -2,7 +2,7 @@ name: refresh-images
 
 on:
   schedule:
-    - cron: "0 5 * * 1"
+    - cron: '0 5 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -55,15 +55,20 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - image_name: revu-api
             dockerfile: apps/api/Dockerfile
-            build_args: ""
+            scan_category: revu-api
+            build_args: ''
           - image_name: revu-web
             dockerfile: apps/web/Dockerfile
+            scan_category: revu-web
             build_args: |-
               VITE_API_BASE_URL=/api/v1
               VITE_COMPANY_NAME=Your Company
@@ -97,6 +102,7 @@ jobs:
             type=raw,value=${{ steps.refresh_tag.outputs.value }}
 
       - name: Build and publish refreshed image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -107,3 +113,21 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Run Trivy vulnerability scan (report-only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.scan_category }}.sarif
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.scan_category)) != ''
+        with:
+          sarif_file: trivy-${{ matrix.scan_category }}.sarif
+          category: ${{ matrix.scan_category }}

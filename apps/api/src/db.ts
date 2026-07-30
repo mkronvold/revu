@@ -1,6 +1,6 @@
-import { Pool, type PoolClient } from "pg";
+import { Pool, type PoolClient } from 'pg';
 
-import { config } from "./config.js";
+import { config } from './config.js';
 
 let pool: Pool | null = null;
 let closingPool: Promise<void> | null = null;
@@ -14,8 +14,8 @@ export function getPool(): Pool {
       connectionTimeoutMillis: 5000,
     });
 
-    pool.on("error", (err) => {
-      console.error("Unexpected error on idle database client", err);
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle database client', err);
     });
   }
 
@@ -43,19 +43,17 @@ export async function closePool(): Promise<void> {
   await closingPool;
 }
 
-export async function withTransaction<T>(
-  callback: (client: PoolClient) => Promise<T>,
-): Promise<T> {
+export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
   const pool = getPool();
   const client = await pool.connect();
 
   try {
-    await client.query("BEGIN");
+    await client.query('BEGIN');
     const result = await callback(client);
-    await client.query("COMMIT");
+    await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();

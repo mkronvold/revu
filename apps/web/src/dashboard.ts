@@ -128,7 +128,11 @@ function toAssessmentSetDashboardItem(item: AssessmentSetQueueItem): DashboardAc
   };
 }
 
-export function buildDashboardSnapshot(user: Employee, foundation: FoundationSnapshot, employees: Employee[]): DashboardSnapshot {
+export function buildDashboardSnapshot(
+  user: Employee,
+  foundation: FoundationSnapshot,
+  employees: Employee[],
+): DashboardSnapshot {
   const activeReviewPeriod = foundation.reviewPeriods.find((period) => period.status === 'active');
   const inactiveEmployees = employees.filter((employee) => employee.status === 'inactive').length;
   const workflowSnapshot = createAssessmentWorkflowSnapshot(foundation);
@@ -140,11 +144,16 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
     items: queue.items.map(toAuthoredDashboardItem),
   }));
 
-  const managerSubmittedItems = user.role === 'employee' ? [] : buildReviewQueues(user, workflowSnapshot, employees);
-  const managerReadyItems = user.role === 'employee' ? [] : buildReadyForMeetingQueues(user, workflowSnapshot, employees);
+  const managerSubmittedItems =
+    user.role === 'employee' ? [] : buildReviewQueues(user, workflowSnapshot, employees);
+  const managerReadyItems =
+    user.role === 'employee' ? [] : buildReadyForMeetingQueues(user, workflowSnapshot, employees);
   const reviewerItems = buildReviewerScheduledQueues(user, workflowSnapshot, employees);
-  const reviewerAssignments = employees.some((employee) => employee.reviewer1Id === user.id || employee.reviewer2Id === user.id);
-  const adminOversight = user.role === 'admin' ? buildAdminOversightQueues(workflowSnapshot, employees) : null;
+  const reviewerAssignments = employees.some(
+    (employee) => employee.reviewer1Id === user.id || employee.reviewer2Id === user.id,
+  );
+  const adminOversight =
+    user.role === 'admin' ? buildAdminOversightQueues(workflowSnapshot, employees) : null;
 
   const sections: DashboardSection[] = [];
 
@@ -152,7 +161,8 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
     sections.push({
       id: 'manager-workflow',
       title: 'Manager workflow',
-      description: 'Accept submitted assessments and schedule meetings for accepted assessment sets.',
+      description:
+        'Accept submitted assessments and schedule meetings for accepted assessment sets.',
       queues: [
         {
           id: 'submitted-assessments',
@@ -174,7 +184,8 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
     sections.push({
       id: 'reviewer-workflow',
       title: 'Reviewer follow-up',
-      description: 'Scheduled assessment sets assigned to you stay on the dashboard until your reviewer conclusion is recorded.',
+      description:
+        'Scheduled assessment sets assigned to you stay on the dashboard until your reviewer conclusion is recorded.',
       queues: [
         {
           id: 'scheduled-reviewer-work',
@@ -190,7 +201,8 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
     sections.push({
       id: 'admin-oversight',
       title: 'Admin oversight',
-      description: 'Track sets that are ready for meeting, scheduled, or concluded without leaving the dashboard.',
+      description:
+        'Track sets that are ready for meeting, scheduled, or concluded without leaving the dashboard.',
       queues: [
         {
           id: 'admin-ready-for-meeting',
@@ -225,7 +237,9 @@ export function buildDashboardSnapshot(user: Employee, foundation: FoundationSna
           )} need workflow follow-up.`;
 
   return {
-    dueLabel: activeReviewPeriod ? `Complete by ${formatDate(activeReviewPeriod.assessmentDueDate)}` : 'No active review period',
+    dueLabel: activeReviewPeriod
+      ? `Complete by ${formatDate(activeReviewPeriod.assessmentDueDate)}`
+      : 'No active review period',
     queues,
     sections,
     reviewSummary,

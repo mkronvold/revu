@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { authenticateDemoUser, buildTemporaryPassword, demoEmployees, demoPasswords } from './mockData';
+import {
+  authenticateDemoUser,
+  buildTemporaryPassword,
+  demoEmployees,
+  demoPasswords,
+} from './mockData';
 
 describe('demo auth and employee admin data', () => {
   it('authenticates an active seeded demo account', () => {
-    const result = authenticateDemoUser('ada.admin@example.com', 'admin123', demoEmployees, demoPasswords);
+    const result = authenticateDemoUser(
+      'ada.admin@example.com',
+      'admin123',
+      demoEmployees,
+      demoPasswords,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -12,7 +22,12 @@ describe('demo auth and employee admin data', () => {
   });
 
   it('rejects inactive accounts even when the password matches', () => {
-    const result = authenticateDemoUser('ivy.inactive@example.com', 'inactive123', demoEmployees, demoPasswords);
+    const result = authenticateDemoUser(
+      'ivy.inactive@example.com',
+      'inactive123',
+      demoEmployees,
+      demoPasswords,
+    );
 
     expect(result).toEqual({
       ok: false,

@@ -1,7 +1,12 @@
 /** @vitest-environment jsdom */
 
 import type { AuthSession, BackupStatusResponse, FoundationSnapshot } from '@revu/contracts';
-import { adminEmployeeExample, adminLoginExample, employeesListExample, foundationSnapshotExample } from '@revu/contracts';
+import {
+  adminEmployeeExample,
+  adminLoginExample,
+  employeesListExample,
+  foundationSnapshotExample,
+} from '@revu/contracts';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -169,7 +174,8 @@ function createBackupExample() {
           assessor2Username: null,
           reviewer1Username: null,
           reviewer2Username: null,
-          password: '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+          password:
+            '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
           credentialKind: 'password-hash' as const,
           passwordResetRequired: false,
         },
@@ -179,7 +185,9 @@ function createBackupExample() {
   };
 }
 
-function createBackupStatusExample(overrides: Partial<BackupStatusResponse> = {}): BackupStatusResponse {
+function createBackupStatusExample(
+  overrides: Partial<BackupStatusResponse> = {},
+): BackupStatusResponse {
   return {
     automaticBackupsEnabled: true,
     schedule: 'daily' as const,
@@ -197,7 +205,9 @@ function createBackupStatusExample(overrides: Partial<BackupStatusResponse> = {}
   };
 }
 
-function createStoredBackupFileExample(overrides: Partial<{ name: string; storedAt: string; sizeBytes: number }> = {}) {
+function createStoredBackupFileExample(
+  overrides: Partial<{ name: string; storedAt: string; sizeBytes: number }> = {},
+) {
   return {
     name: 'revu-backup-20260602T153000Z.json',
     storedAt: '2026-06-02T15:30:00.000Z',
@@ -206,12 +216,20 @@ function createStoredBackupFileExample(overrides: Partial<{ name: string; stored
   };
 }
 
-const mannyManager = employeesListExample.items.find((employee) => employee.username === 'manny.manager')!;
+const mannyManager = employeesListExample.items.find(
+  (employee) => employee.username === 'manny.manager',
+)!;
 
 function createManagerSession(): AuthSession {
   return {
     ...adminLoginExample.session,
-    permissions: ['employees:read', 'assessments:read', 'assessments:accept', 'assessments:review', 'assessments:reassign'],
+    permissions: [
+      'employees:read',
+      'assessments:read',
+      'assessments:accept',
+      'assessments:review',
+      'assessments:reassign',
+    ],
     user: mannyManager,
   };
 }
@@ -363,7 +381,10 @@ async function flushRender() {
   });
 }
 
-function setFieldValue(field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
+function setFieldValue(
+  field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  value: string,
+) {
   const prototype =
     field instanceof window.HTMLTextAreaElement
       ? window.HTMLTextAreaElement.prototype
@@ -396,7 +417,9 @@ describe('questions screen', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     if (!HTMLElement.prototype.scrollIntoView) {
       Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
         configurable: true,
@@ -447,7 +470,9 @@ describe('questions screen', () => {
     expect(usernameInput?.value).toBe('');
     expect(container.textContent).toContain('Sign into');
     expect(container.textContent).toContain('Revu');
-    expect(container.textContent).not.toContain('Use the API-backed local username and password flow');
+    expect(container.textContent).not.toContain(
+      'Use the API-backed local username and password flow',
+    );
     expect(container.textContent).not.toContain('Seeded API accounts');
   });
 
@@ -461,7 +486,9 @@ describe('questions screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -473,7 +500,9 @@ describe('questions screen', () => {
 
     const buildLink = container.querySelector('a.revision-sha') as HTMLAnchorElement | null;
     expect(buildLink).toBeTruthy();
-    expect(buildLink?.getAttribute('href')).toBe('https://github.com/mkronvold/revu/blob/main/docs/CHANGELOG.md');
+    expect(buildLink?.getAttribute('href')).toBe(
+      'https://github.com/mkronvold/revu/blob/main/docs/CHANGELOG.md',
+    );
     expect(buildLink?.textContent).toBe('deadbee');
   });
 
@@ -487,7 +516,9 @@ describe('questions screen', () => {
     vi.mocked(login).mockResolvedValue(adminLoginExample);
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.localStorage.setItem('revu-login-username', 'Last.User');
@@ -498,9 +529,15 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Sign into') ?? false);
 
-    const usernameInput = container.querySelector('input[type="text"], input:not([type])') as HTMLInputElement | null;
-    const passwordInput = container.querySelector('input[type="password"]') as HTMLInputElement | null;
-    const signInButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Sign in');
+    const usernameInput = container.querySelector(
+      'input[type="text"], input:not([type])',
+    ) as HTMLInputElement | null;
+    const passwordInput = container.querySelector(
+      'input[type="password"]',
+    ) as HTMLInputElement | null;
+    const signInButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Sign in',
+    );
 
     expect(usernameInput?.value).toBe('Last.User');
     expect(passwordInput?.value).toBe('');
@@ -553,8 +590,12 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockResolvedValue(questionSlice);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
-    vi.mocked(updateQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Strategy', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
+    vi.mocked(updateQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Strategy', 'Teamwork'],
+    });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -585,7 +626,9 @@ describe('questions screen', () => {
     const questionSetCards = Array.from(container.querySelectorAll('.question-set-card'));
     expect(questionSetCards).toHaveLength(2);
     expect(questionSetCards.every((card) => card.getAttribute('role') === 'button')).toBe(true);
-    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit set');
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit set',
+    );
     expect(editButton).toBeUndefined();
 
     await act(async () => {
@@ -597,9 +640,9 @@ describe('questions screen', () => {
     expect(editor).toBeTruthy();
     expect(container.querySelector('#question-set-editor')).toBeNull();
 
-    const fieldOrder = Array.from(editor?.querySelectorAll('.question-set-dialog-fields > label') ?? []).map(
-      (field) => field.childNodes[0]?.textContent?.trim(),
-    );
+    const fieldOrder = Array.from(
+      editor?.querySelectorAll('.question-set-dialog-fields > label') ?? [],
+    ).map((field) => field.childNodes[0]?.textContent?.trim());
     expect(fieldOrder).toEqual(['Title', 'Header markdown', 'Footer markdown']);
 
     const questionRow = editor?.querySelector('.question-set-dialog-row-button');
@@ -612,20 +655,25 @@ describe('questions screen', () => {
 
     const questionEditor = container.querySelector('.question-edit-dialog');
     expect(questionEditor).toBeTruthy();
-    expect(Array.from(questionEditor?.querySelectorAll('button') ?? []).map((button) => button.textContent)).toEqual([
-      'Close',
-      'Save question',
-      'Cancel',
-    ]);
+    expect(
+      Array.from(questionEditor?.querySelectorAll('button') ?? []).map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['Close', 'Save question', 'Cancel']);
     expect(questionEditor?.querySelector('.question-edit-preview')).toBeNull();
 
-    const categorySelect = questionEditor?.querySelector('select[aria-label="Question category"]') as HTMLSelectElement | null;
-    const questionPromptField = questionEditor?.querySelector('.question-prompt-field textarea') as HTMLTextAreaElement | null;
+    const categorySelect = questionEditor?.querySelector(
+      'select[aria-label="Question category"]',
+    ) as HTMLSelectElement | null;
+    const questionPromptField = questionEditor?.querySelector(
+      '.question-prompt-field textarea',
+    ) as HTMLTextAreaElement | null;
     expect(categorySelect).toBeTruthy();
     expect(questionPromptField).toBeTruthy();
-    expect(questionEditor?.querySelector('.question-edit-response-preview .question-prompt-markdown')?.textContent).toContain(
-      'How did you lead?',
-    );
+    expect(
+      questionEditor?.querySelector('.question-edit-response-preview .question-prompt-markdown')
+        ?.textContent,
+    ).toContain('How did you lead?');
     expect(categorySelect?.value).toBe('');
     expect(Array.from(categorySelect?.options ?? []).map((option) => option.textContent)).toEqual([
       'No category',
@@ -634,12 +682,22 @@ describe('questions screen', () => {
       'Teamwork',
       'New category…',
     ]);
-    const initialHelperInputs = Array.from(questionEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    const initialHelperInputs = Array.from(
+      questionEditor?.querySelectorAll('.question-response-helper-option input') ?? [],
+    );
     expect(initialHelperInputs).toHaveLength(5);
-    expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly agree');
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Neutral');
-    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain('Strongly disagree');
+    expect(initialHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(
+      true,
+    );
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+      'Strongly agree',
+    );
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+      'Neutral',
+    );
+    expect(questionEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+      'Strongly disagree',
+    );
 
     await act(async () => {
       setFieldValue(categorySelect!, '__new-question-category__');
@@ -650,7 +708,9 @@ describe('questions screen', () => {
     const newCategoryDialog = container.querySelector('.question-category-dialog');
     expect(newCategoryDialog).toBeTruthy();
 
-    const newCategoryInput = newCategoryDialog?.querySelector('input[aria-label="New category name"]') as HTMLInputElement | null;
+    const newCategoryInput = newCategoryDialog?.querySelector(
+      'input[aria-label="New category name"]',
+    ) as HTMLInputElement | null;
     expect(newCategoryInput).toBeTruthy();
     await act(async () => {
       setFieldValue(newCategoryInput!, 'Strategy');
@@ -667,10 +727,14 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    const updatedCategorySelect = container.querySelector('select[aria-label="Question category"]') as HTMLSelectElement | null;
+    const updatedCategorySelect = container.querySelector(
+      'select[aria-label="Question category"]',
+    ) as HTMLSelectElement | null;
     expect(updatedCategorySelect?.value).toBe('Strategy');
 
-    const responseTypeField = questionEditor?.querySelector('.question-response-type-field select') as HTMLSelectElement | null;
+    const responseTypeField = questionEditor?.querySelector(
+      '.question-response-type-field select',
+    ) as HTMLSelectElement | null;
     const saveQuestionButton = Array.from(questionEditor?.querySelectorAll('button') ?? []).find(
       (button) => button.textContent === 'Save question',
     ) as HTMLButtonElement | undefined;
@@ -705,7 +769,9 @@ describe('questions screen', () => {
 
     const reopenedEditor = container.querySelector('.question-edit-dialog');
     expect(reopenedEditor).toBeTruthy();
-    const reopenedPromptField = reopenedEditor?.querySelector('.question-prompt-field textarea') as HTMLTextAreaElement | null;
+    const reopenedPromptField = reopenedEditor?.querySelector(
+      '.question-prompt-field textarea',
+    ) as HTMLTextAreaElement | null;
     const reopenedResponseTypeField = reopenedEditor?.querySelector(
       '.question-response-type-field select',
     ) as HTMLSelectElement | null;
@@ -717,10 +783,16 @@ describe('questions screen', () => {
     });
     await flushRender();
 
-    const rankingHelperInputs = Array.from(reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    const rankingHelperInputs = Array.from(
+      reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? [],
+    );
     expect(rankingHelperInputs).toHaveLength(5);
-    expect(rankingHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(true);
-    expect(reopenedEditor?.querySelector('.question-response-helper')?.textContent).toContain("Don't know");
+    expect(rankingHelperInputs.every((input) => (input as HTMLInputElement).type === 'radio')).toBe(
+      true,
+    );
+    expect(reopenedEditor?.querySelector('.question-response-helper')?.textContent).toContain(
+      "Don't know",
+    );
 
     await act(async () => {
       setFieldValue(reopenedResponseTypeField!, 'narrative');
@@ -728,7 +800,9 @@ describe('questions screen', () => {
     });
     await flushRender();
 
-    const narrativeHelperInputs = Array.from(reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? []);
+    const narrativeHelperInputs = Array.from(
+      reopenedEditor?.querySelectorAll('.question-response-helper-option input') ?? [],
+    );
     expect(narrativeHelperInputs).toHaveLength(0);
     expect(reopenedEditor?.querySelector('.question-response-helper')?.textContent).toContain(
       'Use a written self-rating with supporting context and examples.',
@@ -741,9 +815,9 @@ describe('questions screen', () => {
     });
     await flushRender();
 
-    const saveUpdatedQuestionButton = Array.from(reopenedEditor?.querySelectorAll('button') ?? []).find(
-      (button) => button.textContent === 'Save question',
-    );
+    const saveUpdatedQuestionButton = Array.from(
+      reopenedEditor?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === 'Save question');
     expect(saveUpdatedQuestionButton).toBeTruthy();
 
     await act(async () => {
@@ -752,7 +826,9 @@ describe('questions screen', () => {
     });
 
     expect(container.querySelector('.question-edit-dialog')).toBeNull();
-    expect(container.querySelector('.question-set-dialog-row-button')?.textContent).toContain('Saved question prompt');
+    expect(container.querySelector('.question-set-dialog-row-button')?.textContent).toContain(
+      'Saved question prompt',
+    );
   });
 
   it('shows end, assessment due, and review due fields when editing a review period from the review period page', async () => {
@@ -761,7 +837,9 @@ describe('questions screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -772,7 +850,9 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Review period management') ?? false);
 
-    const editPeriodButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit period');
+    const editPeriodButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit period',
+    );
     expect(editPeriodButton).toBeTruthy();
 
     await act(async () => {
@@ -801,7 +881,9 @@ describe('questions screen', () => {
       (assignment) => assignment.reviewPeriodId === reviewPeriodToDelete.id,
     ).length;
     const refreshedSnapshot = structuredClone(initialSnapshot);
-    refreshedSnapshot.reviewPeriods = refreshedSnapshot.reviewPeriods.filter((period) => period.id !== reviewPeriodToDelete.id);
+    refreshedSnapshot.reviewPeriods = refreshedSnapshot.reviewPeriods.filter(
+      (period) => period.id !== reviewPeriodToDelete.id,
+    );
     refreshedSnapshot.questionSets = refreshedSnapshot.questionSets.filter(
       (questionSet) => questionSet.reviewPeriodId !== reviewPeriodToDelete.id,
     );
@@ -813,10 +895,14 @@ describe('questions screen', () => {
     );
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValueOnce(refreshedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValueOnce(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(deleteReviewPeriod).mockResolvedValue({
       reviewPeriodId: reviewPeriodToDelete.id,
@@ -853,7 +939,9 @@ describe('questions screen', () => {
     expect(confirmationMessage).toContain(`- ${removedAssessmentCount} assessment`);
     expect(confirmationMessage).toContain(`- ${removedAssignmentCount} assignment`);
     expect(deleteReviewPeriod).toHaveBeenCalledWith('session-token', reviewPeriodToDelete.id);
-    await waitFor(() => container.textContent?.includes(`Removed ${reviewPeriodToDelete.label}.`) ?? false);
+    await waitFor(
+      () => container.textContent?.includes(`Removed ${reviewPeriodToDelete.label}.`) ?? false,
+    );
   });
 
   it('keeps the make active button live and to the left of the picker for inactive review periods', async () => {
@@ -880,7 +968,9 @@ describe('questions screen', () => {
       .mockResolvedValueOnce(activatedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
     vi.mocked(updateReviewPeriod).mockResolvedValue({
       item: activatedSnapshot.reviewPeriods[1]!,
     });
@@ -893,7 +983,9 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Self questions') ?? false);
 
-    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    const reviewPeriodSelect = container.querySelector(
+      '.review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(reviewPeriodSelect).toBeTruthy();
 
     await act(async () => {
@@ -907,7 +999,9 @@ describe('questions screen', () => {
     expect(makeActiveButton).toBeTruthy();
     expect(makeActiveButton?.hasAttribute('disabled')).toBe(false);
     expect(makeActiveButton?.parentElement?.className).toContain('review-period-picker-row');
-    expect(makeActiveButton?.parentElement?.parentElement?.className).toContain('review-period-heading');
+    expect(makeActiveButton?.parentElement?.parentElement?.className).toContain(
+      'review-period-heading',
+    );
     expect(makeActiveButton?.nextElementSibling?.className).toContain('review-period-picker');
 
     await act(async () => {
@@ -915,16 +1009,24 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    expect(updateReviewPeriod).toHaveBeenCalledWith('session-token', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', {
-      key: '2025',
-      label: '2025 Annual Review',
-      startDate: '2025-01-01',
-      dueDate: '2025-03-07',
-      assessmentDueDate: '2025-02-21',
-      reviewDueDate: '2025-02-28',
-      status: 'active',
-    });
-    await waitFor(() => container.textContent?.includes('Made 2025 Annual Review the active review period.') ?? false);
+    expect(updateReviewPeriod).toHaveBeenCalledWith(
+      'session-token',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      {
+        key: '2025',
+        label: '2025 Annual Review',
+        startDate: '2025-01-01',
+        dueDate: '2025-03-07',
+        assessmentDueDate: '2025-02-21',
+        reviewDueDate: '2025-02-28',
+        status: 'active',
+      },
+    );
+    await waitFor(
+      () =>
+        container.textContent?.includes('Made 2025 Annual Review the active review period.') ??
+        false,
+    );
   });
 
   it('archives inactive review periods directly from lifecycle controls', async () => {
@@ -941,7 +1043,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundation));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
     vi.mocked(archiveReviewPeriod).mockImplementation(async (_token, reviewPeriodId) => {
       currentFoundation = {
         ...currentFoundation,
@@ -958,7 +1062,11 @@ describe('questions screen', () => {
       };
 
       return {
-        item: structuredClone(currentFoundation.reviewPeriods.find((reviewPeriod) => reviewPeriod.id === reviewPeriodId)!),
+        item: structuredClone(
+          currentFoundation.reviewPeriods.find(
+            (reviewPeriod) => reviewPeriod.id === reviewPeriodId,
+          )!,
+        ),
       };
     });
 
@@ -971,8 +1079,8 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Review period lifecycle') ?? false);
 
-    const inactiveSection = Array.from(container.querySelectorAll('.archive-section')).find((section) =>
-      section.textContent?.includes('Manage inactive review periods'),
+    const inactiveSection = Array.from(container.querySelectorAll('.archive-section')).find(
+      (section) => section.textContent?.includes('Manage inactive review periods'),
     );
     expect(inactiveSection?.textContent).toContain(reviewPeriodToArchive.label);
 
@@ -987,11 +1095,13 @@ describe('questions screen', () => {
     });
 
     expect(archiveReviewPeriod).toHaveBeenCalledWith('session-token', reviewPeriodToArchive.id);
-    await waitFor(() => container.textContent?.includes('Archived the review period in the API.') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('Archived the review period in the API.') ?? false,
+    );
     expect(inactiveSection?.textContent).not.toContain(reviewPeriodToArchive.label);
 
-    const archivedSection = Array.from(container.querySelectorAll('.archive-section')).find((section) =>
-      section.textContent?.includes('Restore archived review periods'),
+    const archivedSection = Array.from(container.querySelectorAll('.archive-section')).find(
+      (section) => section.textContent?.includes('Restore archived review periods'),
     );
     expect(archivedSection?.textContent).toContain(reviewPeriodToArchive.label);
     expect(archivedSection?.textContent).toContain('Unarchive');
@@ -1002,7 +1112,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1012,12 +1124,16 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Self questions') ?? false);
 
-    const activeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Active');
+    const activeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Active',
+    );
     expect(activeButton).toBeTruthy();
     expect(activeButton?.disabled).toBe(true);
     expect(activeButton?.className).toContain('review-period-status-button-active');
 
-    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    const reviewPeriodSelect = container.querySelector(
+      '.review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(reviewPeriodSelect).toBeTruthy();
 
     await act(async () => {
@@ -1025,7 +1141,9 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    const archivedButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Archived');
+    const archivedButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Archived',
+    );
     expect(archivedButton).toBeTruthy();
     expect(archivedButton?.disabled).toBe(true);
   });
@@ -1036,7 +1154,9 @@ describe('questions screen', () => {
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Teamwork'] });
-    vi.mocked(updateQuestionCategories).mockResolvedValue({ items: ['Growth', 'Strategy', 'Teamwork'] });
+    vi.mocked(updateQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Strategy', 'Teamwork'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1059,10 +1179,14 @@ describe('questions screen', () => {
     const dialog = container.querySelector('.question-categories-dialog');
     expect(dialog).toBeTruthy();
 
-    const inputs = Array.from(dialog?.querySelectorAll('input[aria-label^="Question category "]') ?? []) as HTMLInputElement[];
+    const inputs = Array.from(
+      dialog?.querySelectorAll('input[aria-label^="Question category "]') ?? [],
+    ) as HTMLInputElement[];
     expect(inputs.map((input) => input.value)).toEqual(['Growth', 'Teamwork']);
 
-    const addButton = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Add category');
+    const addButton = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Add category',
+    );
     expect(addButton).toBeTruthy();
 
     await act(async () => {
@@ -1071,7 +1195,9 @@ describe('questions screen', () => {
     });
 
     const updatedInputs = Array.from(
-      container.querySelectorAll('.question-categories-dialog input[aria-label^="Question category "]'),
+      container.querySelectorAll(
+        '.question-categories-dialog input[aria-label^="Question category "]',
+      ),
     ) as HTMLInputElement[];
     expect(updatedInputs).toHaveLength(3);
 
@@ -1081,9 +1207,9 @@ describe('questions screen', () => {
     });
     await flushRender();
 
-    const saveButton = Array.from(container.querySelectorAll('.question-categories-dialog button')).find(
-      (button) => button.textContent === 'Save categories',
-    );
+    const saveButton = Array.from(
+      container.querySelectorAll('.question-categories-dialog button'),
+    ).find((button) => button.textContent === 'Save categories');
     expect(saveButton).toBeTruthy();
 
     await act(async () => {
@@ -1107,7 +1233,9 @@ describe('questions screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(reviewSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Growth', 'Impact', 'Teamwork'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Growth', 'Impact', 'Teamwork'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1117,7 +1245,9 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Self questions') ?? false);
 
-    const questionReviewPeriodSelect = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    const questionReviewPeriodSelect = container.querySelector(
+      '.review-period-card .review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(questionReviewPeriodSelect).toBeTruthy();
 
     await act(async () => {
@@ -1140,7 +1270,9 @@ describe('questions screen', () => {
     await waitFor(() => window.location.pathname === '/review-period');
     expect(container.textContent).toContain('Review period lifecycle');
 
-    const reviewPeriodManagementSelect = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    const reviewPeriodManagementSelect = container.querySelector(
+      '.review-period-card .review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(reviewPeriodManagementSelect?.value).toBe(activeReviewPeriodId);
 
     const questionsLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
@@ -1154,7 +1286,9 @@ describe('questions screen', () => {
     });
 
     await waitFor(() => window.location.pathname === '/questions');
-    const questionReviewPeriodSelectAgain = container.querySelector('.review-period-card .review-period-picker select') as HTMLSelectElement | null;
+    const questionReviewPeriodSelectAgain = container.querySelector(
+      '.review-period-card .review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(questionReviewPeriodSelectAgain?.value).toBe(alternateReviewPeriodId);
   });
 
@@ -1165,7 +1299,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1197,9 +1333,15 @@ describe('questions screen', () => {
     });
     await flushRender();
 
-    const closeButton = Array.from(editor?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Close');
+    const closeButton = Array.from(editor?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Close',
+    );
     expect(closeButton).toBeTruthy();
-    expect(Array.from(editor?.querySelectorAll('button') ?? []).filter((button) => button.textContent === 'Cancel')).toHaveLength(1);
+    expect(
+      Array.from(editor?.querySelectorAll('button') ?? []).filter(
+        (button) => button.textContent === 'Cancel',
+      ),
+    ).toHaveLength(1);
 
     await act(async () => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1226,7 +1368,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1257,15 +1401,25 @@ describe('questions screen', () => {
       await flushRender();
     });
 
-    expect(confirmSpy).toHaveBeenCalledWith('Delete this question set and reset it to a blank question set?');
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Delete this question set and reset it to a blank question set?',
+    );
 
     const titleInput = Array.from(container.querySelectorAll('.question-set-dialog label'))
       .find((label) => label.textContent?.includes('Title'))
       ?.querySelector('input') as HTMLInputElement | null;
-    expect(container.querySelector('.question-set-dialog')?.textContent).toContain('New self question set');
+    expect(container.querySelector('.question-set-dialog')?.textContent).toContain(
+      'New self question set',
+    );
     expect(titleInput?.value).toBe('');
-    expect(Array.from(container.querySelectorAll('.question-set-dialog label')).some((label) => label.textContent?.includes('Status'))).toBe(false);
-    expect(container.querySelectorAll('.question-set-dialog .question-set-dialog-row')).toHaveLength(0);
+    expect(
+      Array.from(container.querySelectorAll('.question-set-dialog label')).some((label) =>
+        label.textContent?.includes('Status'),
+      ),
+    ).toBe(false);
+    expect(
+      container.querySelectorAll('.question-set-dialog .question-set-dialog-row'),
+    ).toHaveLength(0);
   });
 
   it('keeps archived question-set dialogs read-only and dismissible from the backdrop', async () => {
@@ -1279,7 +1433,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockResolvedValue(archivedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -1300,7 +1456,9 @@ describe('questions screen', () => {
     const editor = container.querySelector('.question-set-dialog');
     expect(editor).toBeTruthy();
     expect(editor?.textContent).toContain('Read only');
-    expect(editor?.textContent).toContain('Archived review periods keep question sets visible, but editing stays disabled.');
+    expect(editor?.textContent).toContain(
+      'Archived review periods keep question sets visible, but editing stays disabled.',
+    );
 
     const titleInput = Array.from(editor?.querySelectorAll('label') ?? [])
       .find((label) => label.textContent?.includes('Title'))
@@ -1321,18 +1479,34 @@ describe('questions screen', () => {
     expect(titleInput?.disabled).toBe(true);
     expect(headerField?.disabled).toBe(true);
     expect(footerField?.disabled).toBe(true);
-    expect(Array.from(editor?.querySelectorAll('label') ?? []).some((label) => label.textContent?.includes('Status'))).toBe(false);
+    expect(
+      Array.from(editor?.querySelectorAll('label') ?? []).some((label) =>
+        label.textContent?.includes('Status'),
+      ),
+    ).toBe(false);
     expect(removeButtons.length).toBeGreaterThan(0);
     expect(removeButtons.every((button) => button.disabled)).toBe(true);
     expect(addQuestionButton).toBeUndefined();
-    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Save question set')).toBe(
-      false,
-    );
-    expect(Array.from(editor?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Cancel')).toBe(false);
-    expect(Array.from(editor?.querySelectorAll('button') ?? []).filter((button) => button.textContent === 'Close')).toHaveLength(1);
+    expect(
+      Array.from(editor?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Save question set',
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(editor?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Cancel',
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(editor?.querySelectorAll('button') ?? []).filter(
+        (button) => button.textContent === 'Close',
+      ),
+    ).toHaveLength(1);
 
     await act(async () => {
-      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector('.modal-backdrop')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
@@ -1346,7 +1520,9 @@ describe('questions screen', () => {
     vi.mocked(getFoundation).mockImplementation(async () => structuredClone(archivedSnapshot));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(createQuestionSet).mockResolvedValue({
       item: {
         ...archivedSnapshot.questionSets[2]!,
@@ -1375,7 +1551,9 @@ describe('questions screen', () => {
 
     await waitFor(() => container.textContent?.includes('Self questions') ?? false);
 
-    const reviewPeriodSelect = container.querySelector('.review-period-picker select') as HTMLSelectElement | null;
+    const reviewPeriodSelect = container.querySelector(
+      '.review-period-picker select',
+    ) as HTMLSelectElement | null;
     expect(reviewPeriodSelect).toBeTruthy();
 
     await act(async () => {
@@ -1406,21 +1584,27 @@ describe('questions screen', () => {
 
     await waitFor(() => vi.mocked(createQuestionSet).mock.calls.length === 1);
 
-    expect(createQuestionSet).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
-      target: 'self',
-      title: '2026 Self Questions',
-      headerMarkdown: 'Archived self questions.',
-      footerMarkdown: 'Archive only.',
-      questions: [
-        {
-          order: 1,
-          type: 'subjective',
-          category: 'Impact',
-          prompt: 'Archived prompt',
-        },
-      ],
-    });
-    expect(container.querySelector('.question-set-dialog')?.textContent).toContain('2026 Self Questions');
+    expect(createQuestionSet).toHaveBeenCalledWith(
+      'session-token',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      {
+        target: 'self',
+        title: '2026 Self Questions',
+        headerMarkdown: 'Archived self questions.',
+        footerMarkdown: 'Archive only.',
+        questions: [
+          {
+            order: 1,
+            type: 'subjective',
+            category: 'Impact',
+            prompt: 'Archived prompt',
+          },
+        ],
+      },
+    );
+    expect(container.querySelector('.question-set-dialog')?.textContent).toContain(
+      '2026 Self Questions',
+    );
   });
 });
 
@@ -1433,7 +1617,9 @@ describe('workflow entry', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/dashboard');
@@ -1452,7 +1638,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1463,14 +1651,19 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('File Management') ?? false);
 
-    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    const navLinkLabels = Array.from(
+      container.querySelectorAll('.sidebar-nav .nav-link span'),
+      (link) => link.textContent,
+    );
     expect(navLinkLabels).toContain('Review Period');
     expect(navLinkLabels).toContain('File Management');
     expect(navLinkLabels).not.toContain('Archive');
     expect(navLinkLabels).not.toContain('Backups');
     expect(navLinkLabels).toContain('Workflow');
     expect(navLinkLabels.indexOf('Dashboard')).toBe(0);
-    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(navLinkLabels.indexOf('File Management'));
+    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(
+      navLinkLabels.indexOf('File Management'),
+    );
 
     const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
       (link) => link.textContent === 'Workflow',
@@ -1485,10 +1678,14 @@ describe('workflow entry', () => {
     await waitFor(() => window.location.pathname === '/workflow');
 
     expect(container.textContent).toContain('Reference the current lifecycle');
-    expect(container.querySelector('.workflow-page-card .section-label')?.textContent).toBe('Workflow');
+    expect(container.querySelector('.workflow-page-card .section-label')?.textContent).toBe(
+      'Workflow',
+    );
     expect(container.textContent).not.toContain('Review workflow markdown');
     expect(container.textContent).toContain('Edit workflow');
-    expect(container.textContent).toContain('Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled');
+    expect(container.textContent).toContain(
+      'Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled',
+    );
   });
 
   it('keeps direct workflow access working while hiding the nav item from employees when visibility is managers', async () => {
@@ -1507,21 +1704,30 @@ describe('workflow entry', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Reference the current lifecycle') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('Reference the current lifecycle') ?? false,
+    );
 
-    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    const navLinkLabels = Array.from(
+      container.querySelectorAll('.sidebar-nav .nav-link span'),
+      (link) => link.textContent,
+    );
     expect(navLinkLabels).not.toContain('Workflow');
     expect(window.location.pathname).toBe('/workflow');
     expect(container.textContent).not.toContain('Edit workflow');
     expect(container.textContent).not.toContain('Sidebar visibility:');
-    expect(container.textContent).toContain('Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled');
+    expect(container.textContent).toContain(
+      'Dashboard follow-up treats accepted sets as ready to be scheduled and then marks them scheduled',
+    );
   });
 
   it('warns before closing the workflow editor when there are unsaved changes', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(updateWorkflowSettings).mockResolvedValue({
       item: {
@@ -1539,7 +1745,9 @@ describe('workflow entry', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Reference the current lifecycle') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('Reference the current lifecycle') ?? false,
+    );
 
     const workflowEditButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Edit workflow',
@@ -1552,11 +1760,17 @@ describe('workflow entry', () => {
     });
 
     await waitFor(() => container.querySelector('.workflow-editor-dialog') !== null);
-    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe('Edit workflow');
+    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe(
+      'Edit workflow',
+    );
     expect(container.textContent).not.toContain('Edit workflow markdown');
 
-    const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
-    const cancelButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Cancel');
+    const workflowTextarea = container.querySelector(
+      'textarea[aria-label="Workflow markdown"]',
+    ) as HTMLTextAreaElement | null;
+    const cancelButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Cancel',
+    );
 
     expect(workflowTextarea).toBeTruthy();
     expect(cancelButton).toBeTruthy();
@@ -1596,7 +1810,9 @@ describe('workflow entry', () => {
       },
     });
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.localStorage.setItem('revu-workflow-markdown', '## Stale local workflow');
@@ -1610,8 +1826,12 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Shared workflow') ?? false);
 
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Shared workflow');
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: admin only');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain(
+      'Shared workflow',
+    );
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain(
+      'Sidebar visibility: admin only',
+    );
     expect(container.textContent).not.toContain('Stale local workflow');
   });
 
@@ -1631,9 +1851,13 @@ describe('workflow entry', () => {
     let currentFoundationSnapshot = initialSnapshot;
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
-    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundationSnapshot));
+    vi.mocked(getFoundation).mockImplementation(async () =>
+      structuredClone(currentFoundationSnapshot),
+    );
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1644,7 +1868,9 @@ describe('workflow entry', () => {
     });
 
     await waitFor(() => container.textContent?.includes('Original workflow') ?? false);
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: all');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain(
+      'Sidebar visibility: all',
+    );
 
     currentFoundationSnapshot = refreshedSnapshot;
 
@@ -1663,21 +1889,27 @@ describe('workflow entry', () => {
     });
 
     await waitFor(() => container.textContent?.includes('Synced from another browser') ?? false);
-    expect(container.querySelector('.workflow-page-card')?.textContent).toContain('Sidebar visibility: managers');
+    expect(container.querySelector('.workflow-page-card')?.textContent).toContain(
+      'Sidebar visibility: managers',
+    );
   });
 
   it('pauses automatic refresh while the workflow editor is open', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     let activeIntervalId: number | null = null;
     let activeRefreshHandler: (() => void) | null = null;
     let nextIntervalId = 1;
 
-    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((handler: TimerHandler) => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((
+      handler: TimerHandler,
+    ) => {
       const intervalId = nextIntervalId++;
       if (typeof handler === 'function') {
         activeIntervalId = intervalId;
@@ -1685,7 +1917,9 @@ describe('workflow entry', () => {
       }
       return intervalId;
     }) as typeof window.setInterval);
-    const clearIntervalSpy = vi.spyOn(window, 'clearInterval').mockImplementation(((intervalId?: number) => {
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval').mockImplementation(((
+      intervalId?: number,
+    ) => {
       if (intervalId === activeIntervalId) {
         activeIntervalId = null;
         activeRefreshHandler = null;
@@ -1699,7 +1933,9 @@ describe('workflow entry', () => {
       root.render(<App />);
     });
 
-    await waitFor(() => container.textContent?.includes('Reference the current lifecycle') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('Reference the current lifecycle') ?? false,
+    );
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60000);
     expect(activeRefreshHandler).toBeTruthy();
 
@@ -1722,7 +1958,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1734,7 +1972,9 @@ describe('workflow entry', () => {
     await waitFor(() => container.textContent?.includes('File Management') ?? false);
 
     const shell = container.querySelector('.app-shell');
-    const toggleButton = container.querySelector('button[aria-label="Collapse sidebar"]') as HTMLButtonElement | null;
+    const toggleButton = container.querySelector(
+      'button[aria-label="Collapse sidebar"]',
+    ) as HTMLButtonElement | null;
     expect(shell?.getAttribute('data-sidebar-collapsed')).toBe('false');
     expect(toggleButton).toBeTruthy();
 
@@ -1747,12 +1987,21 @@ describe('workflow entry', () => {
     expect(window.localStorage.getItem('revu-sidebar-collapsed')).toBe('true');
     expect(container.querySelector('button[aria-label="Expand sidebar"]')).toBeTruthy();
 
-    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    const navLinkLabels = Array.from(
+      container.querySelectorAll('.sidebar-nav .nav-link span'),
+      (link) => link.textContent,
+    );
     expect(navLinkLabels).toContain('Workflow');
     expect(navLinkLabels).toContain('Review Period');
     expect(navLinkLabels).toContain('File Management');
-    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(navLinkLabels.indexOf('File Management'));
-    expect(Array.from(container.querySelectorAll('.sidebar button')).some((button) => button.textContent === 'Sign out')).toBe(true);
+    expect(navLinkLabels.indexOf('Review Period')).toBeLessThan(
+      navLinkLabels.indexOf('File Management'),
+    );
+    expect(
+      Array.from(container.querySelectorAll('.sidebar button')).some(
+        (button) => button.textContent === 'Sign out',
+      ),
+    ).toBe(true);
     expect(container.querySelector('.theme-card')).toBeTruthy();
   });
 
@@ -1767,7 +2016,9 @@ describe('workflow entry', () => {
         assessments: [],
       });
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(clearReadyToStartAssessments).mockResolvedValue({
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -1783,7 +2034,10 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
-    const navLinkLabels = Array.from(container.querySelectorAll('.sidebar-nav .nav-link span'), (link) => link.textContent);
+    const navLinkLabels = Array.from(
+      container.querySelectorAll('.sidebar-nav .nav-link span'),
+      (link) => link.textContent,
+    );
     expect(navLinkLabels).toContain('Assessments');
     expect(container.textContent).toContain('Assessment List');
     expect(container.textContent).toContain('2026 Annual Review');
@@ -1805,8 +2059,10 @@ describe('workflow entry', () => {
     expect(container.querySelectorAll('.assessment-row-card')).toHaveLength(2);
 
     const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
-    const lifecycleSelect = Array.from(container.querySelectorAll('select')).find(
-      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All stages'),
+    const lifecycleSelect = Array.from(container.querySelectorAll('select')).find((field) =>
+      Array.from(field.querySelectorAll('option')).some(
+        (option) => option.textContent === 'All stages',
+      ),
     ) as HTMLSelectElement | undefined;
     expect(searchInput).toBeTruthy();
     expect(lifecycleSelect).toBeTruthy();
@@ -1853,16 +2109,27 @@ describe('workflow entry', () => {
       await flushRender();
     });
 
-    expect(confirmSpy).toHaveBeenCalledWith('Clear all not started assessments from the active review period?');
-    expect(clearReadyToStartAssessments).toHaveBeenCalledWith('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-    await waitFor(() => container.textContent?.includes('No assessments exist for the active review period yet.') ?? false);
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Clear all not started assessments from the active review period?',
+    );
+    expect(clearReadyToStartAssessments).toHaveBeenCalledWith(
+      'session-token',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    await waitFor(
+      () =>
+        container.textContent?.includes('No assessments exist for the active review period yet.') ??
+        false,
+    );
   });
 
   it('refreshes the assessment list from the header icon', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1877,7 +2144,9 @@ describe('workflow entry', () => {
     vi.mocked(getFoundation).mockClear();
     vi.mocked(listEmployees).mockClear();
 
-    const refreshButton = container.querySelector('button[aria-label="Refresh assessment list"]') as HTMLButtonElement | null;
+    const refreshButton = container.querySelector(
+      'button[aria-label="Refresh assessment list"]',
+    ) as HTMLButtonElement | null;
     expect(refreshButton).toBeTruthy();
 
     await act(async () => {
@@ -1893,11 +2162,15 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     let refreshHandler: (() => void) | null = null;
-    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((handler: TimerHandler) => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(((
+      handler: TimerHandler,
+    ) => {
       if (typeof handler === 'function') {
         refreshHandler = handler as () => void;
       }
@@ -1935,7 +2208,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('scheduled'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -1948,11 +2223,15 @@ describe('workflow entry', () => {
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
     const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
-    const lifecycleSelect = Array.from(container.querySelectorAll('select')).find(
-      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All stages'),
+    const lifecycleSelect = Array.from(container.querySelectorAll('select')).find((field) =>
+      Array.from(field.querySelectorAll('option')).some(
+        (option) => option.textContent === 'All stages',
+      ),
     ) as HTMLSelectElement | undefined;
-    const targetSelect = Array.from(container.querySelectorAll('select')).find(
-      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All assessments'),
+    const targetSelect = Array.from(container.querySelectorAll('select')).find((field) =>
+      Array.from(field.querySelectorAll('option')).some(
+        (option) => option.textContent === 'All assessments',
+      ),
     ) as HTMLSelectElement | undefined;
 
     expect(searchInput).toBeTruthy();
@@ -1979,12 +2258,18 @@ describe('workflow entry', () => {
 
     await waitFor(() => container.textContent?.includes('Assessment List') ?? false);
 
-    const restoredSearchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
-    const restoredLifecycleSelect = Array.from(container.querySelectorAll('select')).find(
-      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All stages'),
+    const restoredSearchInput = container.querySelector(
+      'input[type="search"]',
+    ) as HTMLInputElement | null;
+    const restoredLifecycleSelect = Array.from(container.querySelectorAll('select')).find((field) =>
+      Array.from(field.querySelectorAll('option')).some(
+        (option) => option.textContent === 'All stages',
+      ),
     ) as HTMLSelectElement | undefined;
-    const restoredTargetSelect = Array.from(container.querySelectorAll('select')).find(
-      (field) => Array.from(field.querySelectorAll('option')).some((option) => option.textContent === 'All assessments'),
+    const restoredTargetSelect = Array.from(container.querySelectorAll('select')).find((field) =>
+      Array.from(field.querySelectorAll('option')).some(
+        (option) => option.textContent === 'All assessments',
+      ),
     ) as HTMLSelectElement | undefined;
 
     expect(restoredSearchInput?.value).toBe('Peer');
@@ -2014,7 +2299,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('draft'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -2050,12 +2337,16 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundation));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(deleteAssessmentByAdmin).mockImplementation(async (_token, deletedAssessmentId) => {
       currentFoundation = {
         ...currentFoundation,
-        assessments: currentFoundation.assessments.filter((assessment) => assessment.id !== deletedAssessmentId),
+        assessments: currentFoundation.assessments.filter(
+          (assessment) => assessment.id !== deletedAssessmentId,
+        ),
       };
       return {
         assessmentId: deletedAssessmentId,
@@ -2087,7 +2378,11 @@ describe('workflow entry', () => {
     expect(container.textContent).toContain('Save changes');
     expect(container.textContent).toContain('Schedule meeting');
     expect(container.textContent).toContain('Delete assessment');
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Submit')).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Submit',
+      ),
+    ).toBe(false);
 
     const deleteButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Delete assessment',
@@ -2107,7 +2402,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('concluded'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -2131,14 +2428,20 @@ describe('workflow entry', () => {
 
     expect(container.textContent).toContain('Save changes');
     expect(container.textContent).toContain('Reopen conclusion');
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Submit')).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Submit',
+      ),
+    ).toBe(false);
   });
 
   it('opens submitted review actions from the admin assessments page', async () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('submitted'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -2171,7 +2474,9 @@ describe('workflow entry', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(createAssessmentLifecycleSnapshot('accepted'));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -2208,7 +2513,9 @@ describe('file management screen', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/file-management');
@@ -2240,7 +2547,9 @@ describe('file management screen', () => {
     let currentBackupStatus = createBackupStatusExample();
     let currentStoredBackups = [createStoredBackupFileExample()];
     const selectedReviewPeriod = questionSnapshot.reviewPeriods[0]!;
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
     const session: AuthSession = {
       ...adminLoginExample.session,
       permissions: [
@@ -2255,12 +2564,18 @@ describe('file management screen', () => {
     };
 
     vi.mocked(me).mockResolvedValue({ session });
-    vi.mocked(getFoundation).mockImplementation(async () => structuredClone(currentFoundationSnapshot));
+    vi.mocked(getFoundation).mockImplementation(async () =>
+      structuredClone(currentFoundationSnapshot),
+    );
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(getEmployee).mockResolvedValue(adminEmployeeExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockImplementation(async () => structuredClone(currentBackupStatus));
-    vi.mocked(listStoredBackups).mockImplementation(async () => ({ items: structuredClone(currentStoredBackups) }));
+    vi.mocked(listStoredBackups).mockImplementation(async () => ({
+      items: structuredClone(currentStoredBackups),
+    }));
     vi.mocked(exportLocalUsers).mockResolvedValue({
       format: 'json',
       mode: 'preserve-passwords',
@@ -2314,7 +2629,9 @@ describe('file management screen', () => {
       format: 'json',
       exportedAt: '2026-06-03T08:00:00.000Z',
       itemCount: 2,
-      items: questionSnapshot.questionSets.filter((item) => item.reviewPeriodId === selectedReviewPeriod.id),
+      items: questionSnapshot.questionSets.filter(
+        (item) => item.reviewPeriodId === selectedReviewPeriod.id,
+      ),
     });
     vi.mocked(importQuestionSets).mockResolvedValue({
       reviewPeriodId: selectedReviewPeriod.id,
@@ -2323,7 +2640,9 @@ describe('file management screen', () => {
       itemCount: 2,
       createdCount: 0,
       updatedCount: 2,
-      items: questionSnapshot.questionSets.filter((item) => item.reviewPeriodId === selectedReviewPeriod.id),
+      items: questionSnapshot.questionSets.filter(
+        (item) => item.reviewPeriodId === selectedReviewPeriod.id,
+      ),
     });
     vi.mocked(exportAssignments).mockResolvedValue({
       reviewPeriodId: selectedReviewPeriod.id,
@@ -2487,25 +2806,33 @@ describe('file management screen', () => {
     });
 
     await waitFor(() => container.querySelector('.workflow-editor-dialog') !== null);
-    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe('Edit workflow');
+    expect(container.querySelector('.workflow-editor-dialog .section-label')?.textContent).toBe(
+      'Edit workflow',
+    );
     expect(container.textContent).not.toContain('Edit workflow markdown');
 
     const workflowEditorGrid = container.querySelector('.workflow-editor-grid');
-    const workflowTextarea = container.querySelector('textarea[aria-label="Workflow markdown"]') as HTMLTextAreaElement | null;
+    const workflowTextarea = container.querySelector(
+      'textarea[aria-label="Workflow markdown"]',
+    ) as HTMLTextAreaElement | null;
     const workflowVisibilitySelect = container.querySelector(
       'select[aria-label="Workflow visibility"]',
     ) as HTMLSelectElement | null;
-    const workflowPreviewBody = container.querySelector('.workflow-editor-preview-body') as HTMLDivElement | null;
-    expect(workflowEditorGrid?.children[0]?.classList.contains('workflow-editor-fields')).toBe(true);
-    expect(workflowEditorGrid?.children[1]?.classList.contains('workflow-editor-preview')).toBe(true);
+    const workflowPreviewBody = container.querySelector(
+      '.workflow-editor-preview-body',
+    ) as HTMLDivElement | null;
+    expect(workflowEditorGrid?.children[0]?.classList.contains('workflow-editor-fields')).toBe(
+      true,
+    );
+    expect(workflowEditorGrid?.children[1]?.classList.contains('workflow-editor-preview')).toBe(
+      true,
+    );
     expect(workflowTextarea).toBeTruthy();
     expect(workflowVisibilitySelect).toBeTruthy();
     expect(workflowPreviewBody).toBeTruthy();
-    expect(Array.from(workflowVisibilitySelect?.options ?? [], (option) => option.textContent)).toEqual([
-      'all',
-      'managers',
-      'admin only',
-    ]);
+    expect(
+      Array.from(workflowVisibilitySelect?.options ?? [], (option) => option.textContent),
+    ).toEqual(['all', 'managers', 'admin only']);
 
     await act(async () => {
       if (workflowVisibilitySelect) {
@@ -2517,14 +2844,24 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    expect(container.querySelector('.workflow-editor-preview')?.innerHTML).toContain('<strong>Bold</strong>');
+    expect(container.querySelector('.workflow-editor-preview')?.innerHTML).toContain(
+      '<strong>Bold</strong>',
+    );
 
     Object.defineProperty(workflowTextarea!, 'scrollHeight', { configurable: true, value: 900 });
     Object.defineProperty(workflowTextarea!, 'clientHeight', { configurable: true, value: 300 });
-    Object.defineProperty(workflowTextarea!, 'scrollTop', { configurable: true, writable: true, value: 300 });
+    Object.defineProperty(workflowTextarea!, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 300,
+    });
     Object.defineProperty(workflowPreviewBody!, 'scrollHeight', { configurable: true, value: 600 });
     Object.defineProperty(workflowPreviewBody!, 'clientHeight', { configurable: true, value: 200 });
-    Object.defineProperty(workflowPreviewBody!, 'scrollTop', { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(workflowPreviewBody!, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
 
     await act(async () => {
       workflowTextarea?.dispatchEvent(new Event('scroll', { bubbles: true }));
@@ -2558,14 +2895,18 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
 
     const transferCards = Array.from(container.querySelectorAll('.file-management-transfer-card'));
-    const localUserTransferCard = transferCards.find((card) => card.textContent?.includes('Employee import/export'));
-    const questionTransferCard = transferCards.find((card) => card.textContent?.includes('Question set import/export'));
+    const localUserTransferCard = transferCards.find((card) =>
+      card.textContent?.includes('Employee import/export'),
+    );
+    const questionTransferCard = transferCards.find((card) =>
+      card.textContent?.includes('Question set import/export'),
+    );
     expect(localUserTransferCard).toBeTruthy();
     expect(questionTransferCard).toBeTruthy();
 
-    const localUserExportButton = Array.from(localUserTransferCard?.querySelectorAll('button') ?? []).find(
-      (button) => button.textContent === 'Export JSON',
-    );
+    const localUserExportButton = Array.from(
+      localUserTransferCard?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === 'Export JSON');
     expect(localUserExportButton).toBeTruthy();
 
     await act(async () => {
@@ -2628,13 +2969,15 @@ describe('file management screen', () => {
       }),
     );
 
-    const questionExportButton = Array.from(questionTransferCard?.querySelectorAll('button') ?? []).find(
-      (button) => button.textContent === 'Export JSON',
-    );
-    const questionImportButton = Array.from(questionTransferCard?.querySelectorAll('button') ?? []).find(
-      (button) => button.textContent === 'Import CSV',
-    );
-    const questionImportInput = questionTransferCard?.querySelector('input[type="file"]') as HTMLInputElement | null;
+    const questionExportButton = Array.from(
+      questionTransferCard?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === 'Export JSON');
+    const questionImportButton = Array.from(
+      questionTransferCard?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === 'Import CSV');
+    const questionImportInput = questionTransferCard?.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
     expect(questionExportButton).toBeTruthy();
     expect(questionImportButton).toBeTruthy();
     expect(questionImportInput).toBeTruthy();
@@ -2644,7 +2987,11 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    expect(exportQuestionSets).toHaveBeenCalledWith('session-token', selectedReviewPeriod.id, 'json');
+    expect(exportQuestionSets).toHaveBeenCalledWith(
+      'session-token',
+      selectedReviewPeriod.id,
+      'json',
+    );
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(container.textContent).toContain('Exported 2 question sets as JSON.');
 
@@ -2687,7 +3034,9 @@ describe('file management screen', () => {
       }),
     );
 
-    const showBackupsButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Show backups');
+    const showBackupsButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Show backups',
+    );
     expect(showBackupsButton).toBeTruthy();
 
     await act(async () => {
@@ -2701,9 +3050,9 @@ describe('file management screen', () => {
     expect(container.textContent).toContain('Upload backup');
     expect(container.textContent).toContain('Backup now');
 
-    const openDownloadDialogButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
-      (button) => button.textContent === 'Download',
-    );
+    const openDownloadDialogButton = Array.from(
+      container.querySelectorAll('.backup-list-dialog button'),
+    ).find((button) => button.textContent === 'Download');
     expect(openDownloadDialogButton).toBeTruthy();
 
     await act(async () => {
@@ -2713,9 +3062,9 @@ describe('file management screen', () => {
 
     await waitFor(() => container.textContent?.includes('Download backup') ?? false);
 
-    const confirmDownloadButton = Array.from(container.querySelectorAll('.backup-download-dialog button')).find(
-      (button) => button.textContent === 'Download',
-    );
+    const confirmDownloadButton = Array.from(
+      container.querySelectorAll('.backup-download-dialog button'),
+    ).find((button) => button.textContent === 'Download');
     expect(confirmDownloadButton).toBeTruthy();
 
     await act(async () => {
@@ -2723,12 +3072,20 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    expect(downloadStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260602T153000Z.json', 'preserve-passwords');
+    expect(downloadStoredBackup).toHaveBeenCalledWith(
+      'session-token',
+      'revu-backup-20260602T153000Z.json',
+      'preserve-passwords',
+    );
 
-    const backupInput = container.querySelector('input[type="file"][accept=".json,application/json,text/plain"]') as HTMLInputElement | null;
+    const backupInput = container.querySelector(
+      'input[type="file"][accept=".json,application/json,text/plain"]',
+    ) as HTMLInputElement | null;
     expect(backupInput).toBeTruthy();
 
-    const backupFile = new File([JSON.stringify(backup, null, 2)], 'backup-file.json', { type: 'application/json' });
+    const backupFile = new File([JSON.stringify(backup, null, 2)], 'backup-file.json', {
+      type: 'application/json',
+    });
     Object.defineProperty(backupInput, 'files', {
       configurable: true,
       value: [backupFile],
@@ -2742,9 +3099,9 @@ describe('file management screen', () => {
     await waitFor(() => container.textContent?.includes('backup-file-2.json') ?? false);
     expect(uploadStoredBackup).toHaveBeenCalledWith('session-token', backupFile);
 
-    const createBackupNowButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
-      (button) => button.textContent === 'Backup now',
-    );
+    const createBackupNowButton = Array.from(
+      container.querySelectorAll('.backup-list-dialog button'),
+    ).find((button) => button.textContent === 'Backup now');
     expect(createBackupNowButton).toBeTruthy();
 
     await act(async () => {
@@ -2752,12 +3109,14 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('revu-backup-20260603T081500Z.json') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('revu-backup-20260603T081500Z.json') ?? false,
+    );
     expect(createStoredBackup).toHaveBeenCalledWith('session-token');
 
-    const openRestoreDialogButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
-      (button) => button.textContent === 'Restore',
-    );
+    const openRestoreDialogButton = Array.from(
+      container.querySelectorAll('.backup-list-dialog button'),
+    ).find((button) => button.textContent === 'Restore');
     expect(openRestoreDialogButton).toBeTruthy();
 
     await act(async () => {
@@ -2765,9 +3124,9 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    const restoreQuestionsButton = Array.from(container.querySelectorAll('.backup-restore-dialog button')).find(
-      (button) => button.textContent?.includes('Restore questions'),
-    );
+    const restoreQuestionsButton = Array.from(
+      container.querySelectorAll('.backup-restore-dialog button'),
+    ).find((button) => button.textContent?.includes('Restore questions'));
     expect(restoreQuestionsButton).toBeTruthy();
 
     await act(async () => {
@@ -2775,11 +3134,20 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Restored questions from revu-backup-20260603T081500Z.json') ?? false);
-    expect(restoreStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260603T081500Z.json', {
-      target: 'questions',
-      mode: 'replace',
-    });
+    await waitFor(
+      () =>
+        container.textContent?.includes(
+          'Restored questions from revu-backup-20260603T081500Z.json',
+        ) ?? false,
+    );
+    expect(restoreStoredBackup).toHaveBeenCalledWith(
+      'session-token',
+      'revu-backup-20260603T081500Z.json',
+      {
+        target: 'questions',
+        mode: 'replace',
+      },
+    );
 
     const deleteButton = Array.from(container.querySelectorAll('.backup-list-dialog button')).find(
       (button) => button.textContent === 'Delete',
@@ -2791,8 +3159,13 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Deleted revu-backup-20260603T081500Z.json.') ?? false);
-    expect(deleteStoredBackup).toHaveBeenCalledWith('session-token', 'revu-backup-20260603T081500Z.json');
+    await waitFor(
+      () => container.textContent?.includes('Deleted revu-backup-20260603T081500Z.json.') ?? false,
+    );
+    expect(deleteStoredBackup).toHaveBeenCalledWith(
+      'session-token',
+      'revu-backup-20260603T081500Z.json',
+    );
 
     const workflowLink = Array.from(container.querySelectorAll('.sidebar-nav .nav-link')).find(
       (link) => link.textContent === 'Workflow',
@@ -2813,7 +3186,9 @@ describe('file management screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(updateBackupStatus).mockResolvedValue(
       createBackupStatusExample({
@@ -2832,9 +3207,15 @@ describe('file management screen', () => {
 
     await waitFor(() => container.textContent?.includes('Automatic backups') ?? false);
 
-    const enableField = container.querySelector('select[aria-label="Automatic backups enabled"]') as HTMLSelectElement | null;
-    const periodField = container.querySelector('select[aria-label="Backup period"]') as HTMLSelectElement | null;
-    const retentionField = container.querySelector('input[aria-label="Backup retention count"]') as HTMLInputElement | null;
+    const enableField = container.querySelector(
+      'select[aria-label="Automatic backups enabled"]',
+    ) as HTMLSelectElement | null;
+    const periodField = container.querySelector(
+      'select[aria-label="Backup period"]',
+    ) as HTMLSelectElement | null;
+    const retentionField = container.querySelector(
+      'input[aria-label="Backup retention count"]',
+    ) as HTMLInputElement | null;
     const saveButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Save automatic backups',
     );
@@ -2862,7 +3243,9 @@ describe('file management screen', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Updated automatic backup settings.') ?? false);
+    await waitFor(
+      () => container.textContent?.includes('Updated automatic backup settings.') ?? false,
+    );
 
     expect(updateBackupStatus).toHaveBeenCalledWith('session-token', {
       automaticBackupsEnabled: false,
@@ -2884,7 +3267,9 @@ describe('sidebar refresh detection', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/dashboard');
@@ -2903,7 +3288,9 @@ describe('sidebar refresh detection', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(cloneQuestionSlice());
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(checkApiHealth).mockResolvedValue(true);
 
@@ -2934,7 +3321,9 @@ describe('sidebar profile editor', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/dashboard');
@@ -3039,7 +3428,9 @@ describe('sidebar profile editor', () => {
       await flushRender();
     });
 
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save profile');
+    const saveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save profile',
+    );
     expect(saveButton).toBeTruthy();
 
     await act(async () => {
@@ -3162,7 +3553,9 @@ describe('dashboard workflow surface', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/dashboard');
@@ -3224,20 +3617,26 @@ describe('dashboard workflow surface', () => {
     expect(container.textContent).not.toContain('Details');
 
     const dialog = container.querySelector('[role="dialog"]');
-    const responseHeaderLabels = Array.from(dialog?.querySelectorAll('.review-response-header span') ?? []).map((cell) =>
-      cell.textContent?.trim(),
-    );
+    const responseHeaderLabels = Array.from(
+      dialog?.querySelectorAll('.review-response-header span') ?? [],
+    ).map((cell) => cell.textContent?.trim());
     expect(responseHeaderLabels).toEqual(['Question', 'Response', 'Category']);
 
     const responseMetaCells = Array.from(dialog?.querySelectorAll('.review-response-meta') ?? []);
     expect(responseMetaCells.length).toBeGreaterThan(0);
-    expect(responseMetaCells.every((cell) => cell.querySelectorAll('span').length === 1)).toBe(true);
-    const responseMetaText = responseMetaCells.map((cell) => cell.textContent?.toLowerCase() ?? '').join(' ');
+    expect(responseMetaCells.every((cell) => cell.querySelectorAll('span').length === 1)).toBe(
+      true,
+    );
+    const responseMetaText = responseMetaCells
+      .map((cell) => cell.textContent?.toLowerCase() ?? '')
+      .join(' ');
     expect(responseMetaText).not.toContain('subjective');
     expect(responseMetaText).not.toContain('ranking');
     expect(responseMetaText).not.toContain('narrative');
 
-    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    const closeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close',
+    );
     expect(closeButton).toBeTruthy();
 
     await act(async () => {
@@ -3277,7 +3676,9 @@ describe('dashboard workflow surface', () => {
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
     await act(async () => {
-      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector('.modal-backdrop')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
@@ -3300,10 +3701,14 @@ describe('dashboard workflow surface', () => {
     ) as FoundationSnapshot['assessments'];
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(acceptedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValue(acceptedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(acceptAssessment).mockResolvedValue({
-      item: acceptedSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+      item: acceptedSnapshot.assessments.find(
+        (assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      )!,
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -3326,7 +3731,9 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    const reviewNotes = container.querySelector('textarea[aria-label="Manager notes"]') as HTMLTextAreaElement | null;
+    const reviewNotes = container.querySelector(
+      'textarea[aria-label="Manager notes"]',
+    ) as HTMLTextAreaElement | null;
     expect(reviewNotes).toBeTruthy();
 
     await act(async () => {
@@ -3352,12 +3759,18 @@ describe('dashboard workflow surface', () => {
 
     await waitFor(() => vi.mocked(acceptAssessment).mock.calls.length === 1);
 
-    expect(acceptAssessment).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
-      managerNotes: 'Ready for meeting.',
-    });
+    expect(acceptAssessment).toHaveBeenCalledWith(
+      'session-token',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      {
+        managerNotes: 'Ready for meeting.',
+      },
+    );
 
     await waitFor(() => container.textContent?.includes('Ready to be Scheduled') ?? false);
-    expect(container.textContent).toContain('Assessment accepted. The dashboard now tracks the set as ready to be scheduled.');
+    expect(container.textContent).toContain(
+      'Assessment accepted. The dashboard now tracks the set as ready to be scheduled.',
+    );
   });
 
   it('opens the scheduling summary dialog before moving an accepted set forward', async () => {
@@ -3365,12 +3778,16 @@ describe('dashboard workflow surface', () => {
     const refreshedSnapshot = createReadyForMeetingWorkflowSnapshot();
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValue(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(scheduleAssessmentSet).mockResolvedValue({
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       employeeId: '33333333-3333-4333-8333-333333333333',
-      items: refreshedSnapshot.assessments.filter((assessment) => assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+      items: refreshedSnapshot.assessments.filter(
+        (assessment) => assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -3398,7 +3815,9 @@ describe('dashboard workflow surface', () => {
 
     expect(container.textContent).toContain('Schedule review meeting');
     expect(container.textContent).toContain('Reviewer responsibilities');
-    expect(container.textContent).toContain('Reviewer 1 records the first conclusion after the meeting');
+    expect(container.textContent).toContain(
+      'Reviewer 1 records the first conclusion after the meeting',
+    );
     expect(container.textContent).toContain('Mark meeting scheduled');
 
     const readyButton = Array.from(container.querySelectorAll('button')).find(
@@ -3463,7 +3882,9 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.querySelector('[aria-labelledby="assessment-dialog-title"]') !== null);
+    await waitFor(
+      () => container.querySelector('[aria-labelledby="assessment-dialog-title"]') !== null,
+    );
     expect(container.textContent).not.toContain('Assessments in this set');
   });
 
@@ -3483,10 +3904,14 @@ describe('dashboard workflow surface', () => {
     );
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValue(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(rejectAssessmentToDraft).mockResolvedValue({
-      item: refreshedSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+      item: refreshedSnapshot.assessments.find(
+        (assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      )!,
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -3510,7 +3935,9 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    const reviewNotes = container.querySelector('textarea[aria-label="Manager notes"]') as HTMLTextAreaElement | null;
+    const reviewNotes = container.querySelector(
+      'textarea[aria-label="Manager notes"]',
+    ) as HTMLTextAreaElement | null;
     expect(reviewNotes).toBeTruthy();
 
     await act(async () => {
@@ -3528,7 +3955,12 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Your manager notes will be saved with the return message.') ?? false);
+    await waitFor(
+      () =>
+        container.textContent?.includes(
+          'Your manager notes will be saved with the return message.',
+        ) ?? false,
+    );
 
     const dialogs = Array.from(container.querySelectorAll('[role="dialog"]'));
     const confirmDialog = dialogs[dialogs.length - 1] as HTMLElement | undefined;
@@ -3544,10 +3976,16 @@ describe('dashboard workflow surface', () => {
 
     await waitFor(() => vi.mocked(rejectAssessmentToDraft).mock.calls.length === 1);
 
-    expect(rejectAssessmentToDraft).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
-      managerNotes: 'Please add one concrete example.',
-    });
-    expect(container.textContent).toContain('Assessment returned to incomplete so the employee can edit it again.');
+    expect(rejectAssessmentToDraft).toHaveBeenCalledWith(
+      'session-token',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      {
+        managerNotes: 'Please add one concrete example.',
+      },
+    );
+    expect(container.textContent).toContain(
+      'Assessment returned to incomplete so the employee can edit it again.',
+    );
   });
 
   it('shows reviewer-specific conclusion copy and records reviewer notes from the dashboard', async () => {
@@ -3565,12 +4003,16 @@ describe('dashboard workflow surface', () => {
     );
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValue(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
     vi.mocked(concludeAssessmentSet).mockResolvedValue({
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       employeeId: '33333333-3333-4333-8333-333333333333',
-      items: refreshedSnapshot.assessments.filter((assessment) => assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+      items: refreshedSnapshot.assessments.filter(
+        (assessment) => assessment.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -3594,9 +4036,16 @@ describe('dashboard workflow surface', () => {
       await flushRender();
     });
 
-    await waitFor(() => container.textContent?.includes('Reviewer 2 records the final conclusion after the meeting') ?? false);
+    await waitFor(
+      () =>
+        container.textContent?.includes(
+          'Reviewer 2 records the final conclusion after the meeting',
+        ) ?? false,
+    );
 
-    const reviewerNotes = container.querySelector('textarea[aria-label="Reviewer 2 notes"]') as HTMLTextAreaElement | null;
+    const reviewerNotes = container.querySelector(
+      'textarea[aria-label="Reviewer 2 notes"]',
+    ) as HTMLTextAreaElement | null;
     expect(reviewerNotes).toBeTruthy();
 
     await act(async () => {
@@ -3625,7 +4074,6 @@ describe('dashboard workflow surface', () => {
     });
     expect(container.textContent).toContain('Reviewer 2 conclusion recorded.');
   });
-
 });
 
 describe('dashboard screen', () => {
@@ -3637,7 +4085,9 @@ describe('dashboard screen', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/dashboard');
@@ -3705,14 +4155,14 @@ describe('dashboard screen', () => {
     expect(container.textContent).toContain('Due');
     expect(container.textContent).toContain('2/21/2026');
     expect(container.textContent).toContain('Status');
-    const dashboardAssessorField = Array.from(container.querySelectorAll('.dashboard-identity-field')).find((field) =>
-      field.textContent?.includes('Assessors'),
-    );
+    const dashboardAssessorField = Array.from(
+      container.querySelectorAll('.dashboard-identity-field'),
+    ).find((field) => field.textContent?.includes('Assessors'));
     expect(dashboardAssessorField?.textContent).not.toContain('Assessor 1:');
     expect(dashboardAssessorField?.textContent).not.toContain('Assessor 2:');
-    const dashboardReviewerField = Array.from(container.querySelectorAll('.dashboard-identity-field')).find((field) =>
-      field.textContent?.includes('Reviewers'),
-    );
+    const dashboardReviewerField = Array.from(
+      container.querySelectorAll('.dashboard-identity-field'),
+    ).find((field) => field.textContent?.includes('Reviewers'));
     expect(dashboardReviewerField?.textContent).toContain('Ada Admin');
     expect(dashboardReviewerField?.textContent).toContain('Manny Manager');
     expect(dashboardReviewerField?.textContent).not.toContain('Reviewer 1:');
@@ -3732,21 +4182,27 @@ describe('dashboard screen', () => {
     expect(container.textContent).toContain('Self assessment form');
     expect(container.textContent).not.toContain('2026 Self Questions');
     expect(container.textContent).toContain('Save for later');
-    expect(Array.from(container.querySelectorAll('.assessment-editor-category h4')).map((heading) => heading.textContent)).toEqual([
-      'Growth',
-    ]);
+    expect(
+      Array.from(container.querySelectorAll('.assessment-editor-category h4')).map(
+        (heading) => heading.textContent,
+      ),
+    ).toEqual(['Growth']);
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(5);
     expect(container.textContent).toContain('Status');
     const printResponseTable = container.querySelector('.assessment-print-response-table');
     expect(printResponseTable).toBeTruthy();
     expect(printResponseTable?.textContent).toContain('Question');
     expect(printResponseTable?.textContent).toContain('Response');
-    expect(Array.from(printResponseTable?.querySelectorAll('tbody td:last-child') ?? []).map((cell) => cell.textContent?.trim())).toEqual([
-      'Somewhat agree',
-    ]);
+    expect(
+      Array.from(printResponseTable?.querySelectorAll('tbody td:last-child') ?? []).map((cell) =>
+        cell.textContent?.trim(),
+      ),
+    ).toEqual(['Somewhat agree']);
 
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
-    const printButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Print');
+    const printButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Print',
+    );
     expect(printButton).toBeTruthy();
 
     await act(async () => {
@@ -3765,7 +4221,9 @@ describe('dashboard screen', () => {
     expect(document.body.classList.contains('assessment-print-active')).toBe(false);
     printSpy.mockRestore();
 
-    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    const closeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close',
+    );
     expect(closeButton).toBeTruthy();
 
     await act(async () => {
@@ -3790,7 +4248,9 @@ describe('dashboard screen', () => {
 
     vi.mocked(getFoundation).mockClear();
 
-    const refreshButton = container.querySelector('button[aria-label="Refresh assessment queue"]') as HTMLButtonElement | null;
+    const refreshButton = container.querySelector(
+      'button[aria-label="Refresh assessment queue"]',
+    ) as HTMLButtonElement | null;
     expect(refreshButton).toBeTruthy();
 
     await act(async () => {
@@ -3840,7 +4300,9 @@ describe('dashboard screen', () => {
     });
 
     expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
-    expect(window.localStorage.getItem('revu-dashboard-queue-expanded-state')).toContain('"assessment:incomplete":false');
+    expect(window.localStorage.getItem('revu-dashboard-queue-expanded-state')).toContain(
+      '"assessment:incomplete":false',
+    );
 
     await act(async () => {
       root.unmount();
@@ -3850,8 +4312,10 @@ describe('dashboard screen', () => {
     await act(async () => {
       root.render(<App />);
     });
-    await waitFor(() => container.querySelector('button[aria-label="Expand Incomplete queue"]') !== null);
-expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
+    await waitFor(
+      () => container.querySelector('button[aria-label="Expand Incomplete queue"]') !== null,
+    );
+    expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).toBeTruthy();
   });
 
   it('uses submit to save draft changes even before an assessment is complete', async () => {
@@ -3876,7 +4340,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
     vi.mocked(saveAssessmentDraft).mockResolvedValue({
       item: {
-        ...dashboardSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+        ...dashboardSnapshot.assessments.find(
+          (assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        )!,
         reviewState: 'draft',
       },
     });
@@ -3899,7 +4365,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
-    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    const narrativeResponse = container.querySelector(
+      '.assessment-editor-question textarea',
+    ) as HTMLTextAreaElement | null;
     expect(narrativeResponse).toBeTruthy();
 
     await act(async () => {
@@ -3907,7 +4375,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
       await flushRender();
     });
 
-    const submitButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Submit');
+    const submitButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Submit',
+    );
     expect(submitButton).toBeTruthy();
     expect(submitButton?.getAttribute('disabled')).toBeNull();
 
@@ -3916,22 +4386,28 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
       await flushRender();
     });
 
-    expect(saveAssessmentDraft).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
-      responses: [
-        {
-          questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
-          order: 1,
-          response: '',
-        },
-        {
-          questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
-          order: 2,
-          response: 'Saving partial progress before completing the form.',
-        },
-      ],
-    });
+    expect(saveAssessmentDraft).toHaveBeenCalledWith(
+      'session-token',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      {
+        responses: [
+          {
+            questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+            order: 1,
+            response: '',
+          },
+          {
+            questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+            order: 2,
+            response: 'Saving partial progress before completing the form.',
+          },
+        ],
+      },
+    );
     expect(submitAssessment).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Assessment saved for later. Complete every response before submitting.');
+    expect(container.textContent).toContain(
+      'Assessment saved for later. Complete every response before submitting.',
+    );
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
@@ -3941,7 +4417,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
     vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -3963,7 +4441,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
     await act(async () => {
-      container.querySelector('.modal-backdrop')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector('.modal-backdrop')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
@@ -3976,7 +4456,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
     vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     const confirmSpy = vi.spyOn(window, 'confirm');
@@ -3998,7 +4480,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
-    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    const closeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close',
+    );
     expect(closeButton).toBeTruthy();
 
     await act(async () => {
@@ -4016,7 +4500,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
     vi.mocked(getFoundation).mockResolvedValue(dashboardSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -4038,7 +4524,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
-    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    const narrativeResponse = container.querySelector(
+      '.assessment-editor-question textarea',
+    ) as HTMLTextAreaElement | null;
     expect(narrativeResponse).toBeTruthy();
 
     await act(async () => {
@@ -4046,7 +4534,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
       await flushRender();
     });
 
-    const closeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    const closeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close',
+    );
 
     await act(async () => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -4071,12 +4561,18 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     const refreshedSnapshot = createAssessmentLifecycleSnapshot('submitted');
 
     vi.mocked(me).mockResolvedValue({ session: createEmployeeSession() });
-    vi.mocked(getFoundation).mockResolvedValueOnce(initialSnapshot).mockResolvedValue(refreshedSnapshot);
+    vi.mocked(getFoundation)
+      .mockResolvedValueOnce(initialSnapshot)
+      .mockResolvedValue(refreshedSnapshot);
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(listQuestionCategories).mockResolvedValue({ items: ['Teamwork', 'Growth', 'Impact'] });
+    vi.mocked(listQuestionCategories).mockResolvedValue({
+      items: ['Teamwork', 'Growth', 'Impact'],
+    });
     vi.mocked(getBackupStatus).mockResolvedValue(createBackupStatusExample());
     vi.mocked(submitAssessment).mockResolvedValue({
-      item: refreshedSnapshot.assessments.find((assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')!,
+      item: refreshedSnapshot.assessments.find(
+        (assessment) => assessment.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      )!,
     });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -4097,7 +4593,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
 
     await waitFor(() => container.querySelector('[role="dialog"]') !== null);
 
-    const narrativeResponse = container.querySelector('.assessment-editor-question textarea') as HTMLTextAreaElement | null;
+    const narrativeResponse = container.querySelector(
+      '.assessment-editor-question textarea',
+    ) as HTMLTextAreaElement | null;
     expect(narrativeResponse).toBeTruthy();
 
     await act(async () => {
@@ -4105,7 +4603,9 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
       await flushRender();
     });
 
-    const submitButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Submit');
+    const submitButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Submit',
+    );
     expect(submitButton).toBeTruthy();
 
     await act(async () => {
@@ -4114,20 +4614,24 @@ expect(container.querySelector('button[aria-label="Expand Incomplete queue"]')).
     });
 
     await waitFor(() => container.querySelector('[role="dialog"]') === null);
-    expect(submitAssessment).toHaveBeenCalledWith('session-token', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
-      responses: [
-        {
-          questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
-          order: 1,
-          response: 'somewhat agree',
-        },
-        {
-          questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
-          order: 2,
-          response: 'Completed and ready to submit.',
-        },
-      ],
-    });
+    expect(submitAssessment).toHaveBeenCalledWith(
+      'session-token',
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      {
+        responses: [
+          {
+            questionId: 'aaaaaaaa-2111-4111-8111-aaaaaaaaaaaa',
+            order: 1,
+            response: 'somewhat agree',
+          },
+          {
+            questionId: 'aaaaaaaa-3111-4111-8111-aaaaaaaaaaaa',
+            order: 2,
+            response: 'Completed and ready to submit.',
+          },
+        ],
+      },
+    );
   });
 });
 
@@ -4140,7 +4644,9 @@ describe('employees screen', () => {
     document.body.innerHTML = '';
     document.body.appendChild(container);
     root = createRoot(container);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState(null, '', '/employees');
@@ -4156,7 +4662,9 @@ describe('employees screen', () => {
   });
 
   it('uses a single employee table and keeps edit and password actions in employee dialogs', async () => {
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
     const ada = employeesListExample.items.find((employee) => employee.username === 'ada.admin')!;
     const pat = employeesListExample.items.find((employee) => employee.username === 'pat.peer')!;
     const updatedEmployee = {
@@ -4170,7 +4678,9 @@ describe('employees screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
     vi.mocked(updateEmployee).mockResolvedValue({ item: updatedEmployee });
     vi.mocked(resetEmployeePassword).mockResolvedValue({
@@ -4203,10 +4713,20 @@ describe('employees screen', () => {
     expect(elliotRow?.textContent).not.toContain('Reviewer 1:');
     expect(elliotRow?.textContent).not.toContain('Reviewer 2:');
 
-    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const summaryButton = elliotRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
     expect(summaryButton).toBeTruthy();
-    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
-    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Password')).toBe(false);
+    expect(
+      Array.from(elliotRow?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Edit',
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(elliotRow?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Password',
+      ),
+    ).toBe(false);
 
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -4220,7 +4740,9 @@ describe('employees screen', () => {
     expect(container.textContent).toContain('Reviewers');
     expect(container.textContent).toContain('Reviewer 1: Ada Admin');
     expect(container.textContent).toContain('Reviewer 2: Manny Manager');
-    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit');
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit',
+    );
     expect(editButton).toBeTruthy();
 
     await act(async () => {
@@ -4256,9 +4778,15 @@ describe('employees screen', () => {
       'Ada Admin',
       'Manny Manager',
     ]);
-    expect(Array.from(assessorSelect?.options ?? [], (option) => option.textContent)).not.toContain('Elliot Employee');
-    expect(Array.from(reviewer1Select?.options ?? [], (option) => option.textContent)).not.toContain('Elliot Employee');
-    expect(Array.from(reviewer2Select?.options ?? [], (option) => option.textContent)).not.toContain('Elliot Employee');
+    expect(Array.from(assessorSelect?.options ?? [], (option) => option.textContent)).not.toContain(
+      'Elliot Employee',
+    );
+    expect(
+      Array.from(reviewer1Select?.options ?? [], (option) => option.textContent),
+    ).not.toContain('Elliot Employee');
+    expect(
+      Array.from(reviewer2Select?.options ?? [], (option) => option.textContent),
+    ).not.toContain('Elliot Employee');
     expect(container.textContent).toContain(
       'Reviewer 1 and reviewer 2 must be different people and cannot be the employee. Reviewers may also be the manager or an assessor.',
     );
@@ -4279,7 +4807,9 @@ describe('employees screen', () => {
       await flushRender();
     });
 
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save employee');
+    const saveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save employee',
+    );
     expect(saveButton).toBeTruthy();
 
     await act(async () => {
@@ -4302,7 +4832,9 @@ describe('employees screen', () => {
       reviewer2Id: ada.id,
     });
 
-    const updatedDetailCloseButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close');
+    const updatedDetailCloseButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close',
+    );
     await act(async () => {
       updatedDetailCloseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
@@ -4316,7 +4848,9 @@ describe('employees screen', () => {
     );
     expect(passwordButton).toBeFalsy();
 
-    const updatedSummaryButton = updatedRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const updatedSummaryButton = updatedRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
     expect(updatedSummaryButton).toBeTruthy();
 
     await act(async () => {
@@ -4338,10 +4872,16 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Password management') ?? false);
     expect(container.textContent).toContain('Set password');
-    expect((container.querySelector('input[placeholder="Enter a new password"]') as HTMLInputElement | null)).toBeTruthy();
+    expect(
+      container.querySelector(
+        'input[placeholder="Enter a new password"]',
+      ) as HTMLInputElement | null,
+    ).toBeTruthy();
 
     await waitFor(() =>
-      Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Generate one-time passcode'),
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Generate one-time passcode',
+      ),
     );
 
     const resetButton = Array.from(container.querySelectorAll('button')).find(
@@ -4376,7 +4916,9 @@ describe('employees screen', () => {
 
     vi.mocked(listEmployees).mockClear();
 
-    const refreshButton = container.querySelector('button[aria-label="Refresh employee directory"]') as HTMLButtonElement | null;
+    const refreshButton = container.querySelector(
+      'button[aria-label="Refresh employee directory"]',
+    ) as HTMLButtonElement | null;
     expect(refreshButton).toBeTruthy();
 
     await act(async () => {
@@ -4423,19 +4965,22 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
 
-    const restoredSearchInput = container.querySelector('input[type="search"]') as HTMLInputElement | null;
+    const restoredSearchInput = container.querySelector(
+      'input[type="search"]',
+    ) as HTMLInputElement | null;
     expect(restoredSearchInput?.value).toBe('Elliot');
     expect(container.querySelectorAll('.employee-row-card')).toHaveLength(1);
   });
 
   it('validates reviewer assignments before saving employee edits', async () => {
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
     const pat = employeesListExample.items.find((employee) => employee.username === 'pat.peer')!;
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -4449,14 +4994,18 @@ describe('employees screen', () => {
     const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
       row.textContent?.includes('Elliot Employee'),
     );
-    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const summaryButton = elliotRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
 
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
-    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit');
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit',
+    );
     await act(async () => {
       editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
@@ -4470,7 +5019,9 @@ describe('employees screen', () => {
     const reviewer2Select = Array.from(container.querySelectorAll('label'))
       .find((label) => label.textContent?.includes('Reviewer 2'))
       ?.querySelector('select') as HTMLSelectElement | null;
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save employee');
+    const saveButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Save employee',
+    );
 
     await act(async () => {
       if (reviewer1Select) {
@@ -4491,7 +5042,9 @@ describe('employees screen', () => {
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
@@ -4510,7 +5063,10 @@ describe('employees screen', () => {
       await flushRender();
     });
 
-    const filteredRows = Array.from(container.querySelectorAll('.employee-row-card'), (row) => row.textContent ?? '');
+    const filteredRows = Array.from(
+      container.querySelectorAll('.employee-row-card'),
+      (row) => row.textContent ?? '',
+    );
     expect(filteredRows.some((text) => text.includes('Pat Peer'))).toBe(true);
     expect(filteredRows.some((text) => text.includes('Elliot Employee'))).toBe(false);
 
@@ -4519,18 +5075,24 @@ describe('employees screen', () => {
       await flushRender();
     });
 
-    expect(Array.from(container.querySelectorAll('.employee-row-card')).some((row) => row.textContent?.includes('Elliot Employee'))).toBe(
-      true,
-    );
+    expect(
+      Array.from(container.querySelectorAll('.employee-row-card')).some((row) =>
+        row.textContent?.includes('Elliot Employee'),
+      ),
+    ).toBe(true);
   });
 
   it('marks active employees inactive from the employee detail dialog', async () => {
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
     vi.mocked(updateEmployee).mockResolvedValue({
       item: {
@@ -4550,7 +5112,9 @@ describe('employees screen', () => {
     const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
       row.textContent?.includes('Elliot Employee'),
     );
-    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const summaryButton = elliotRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
 
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -4573,19 +5137,28 @@ describe('employees screen', () => {
       status: 'inactive',
     });
     await waitFor(
-      () => !Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Make Inactive'),
+      () =>
+        !Array.from(container.querySelectorAll('button')).some(
+          (button) => button.textContent === 'Make Inactive',
+        ),
     );
-    expect(container.querySelector('.employee-dialog-card .employee-status-pill')?.textContent).toBe('inactive');
+    expect(
+      container.querySelector('.employee-dialog-card .employee-status-pill')?.textContent,
+    ).toBe('inactive');
   });
 
   it('lets admins tombstone-delete employees from the edit dialog', async () => {
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     vi.mocked(me).mockResolvedValue({ session: adminLoginExample.session });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
     vi.mocked(deleteEmployee).mockResolvedValue({
       employeeId: elliot.id,
@@ -4603,7 +5176,9 @@ describe('employees screen', () => {
     const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
       row.textContent?.includes('Elliot Employee'),
     );
-    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const summaryButton = elliotRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
 
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -4612,7 +5187,9 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
 
-    const editButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Edit');
+    const editButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Edit',
+    );
     expect(editButton).toBeTruthy();
 
     await act(async () => {
@@ -4622,7 +5199,9 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Edit employee') ?? false);
 
-    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete Employee');
+    const deleteButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Delete Employee',
+    );
     expect(deleteButton).toBeTruthy();
 
     await act(async () => {
@@ -4636,14 +5215,18 @@ describe('employees screen', () => {
     expect(deleteEmployee).toHaveBeenCalledWith('session-token', elliot.id);
     expect(container.textContent).toContain('Employee deleted.');
     expect(
-      Array.from(container.querySelectorAll('.employee-row-card')).some((row) => row.textContent?.includes('Elliot Employee') ?? false),
+      Array.from(container.querySelectorAll('.employee-row-card')).some(
+        (row) => row.textContent?.includes('Elliot Employee') ?? false,
+      ),
     ).toBe(false);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('renders tombstone-linked employee relationships as deleted user', async () => {
     const deletedManagerId = '99999999-9999-4999-8999-999999999999';
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
     const employeesWithDeletedRelationship = {
       items: employeesListExample.items.map((employee) =>
         employee.id === elliot.id
@@ -4664,7 +5247,10 @@ describe('employees screen', () => {
     vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => ({
       item: {
         ...createEmployeeDetail(employeeId).item,
-        managerId: employeeId === elliot.id ? deletedManagerId : createEmployeeDetail(employeeId).item.managerId,
+        managerId:
+          employeeId === elliot.id
+            ? deletedManagerId
+            : createEmployeeDetail(employeeId).item.managerId,
       },
     }));
     vi.mocked(listQuestionCategories).mockResolvedValue({ items: [] });
@@ -4682,7 +5268,9 @@ describe('employees screen', () => {
     );
     expect(elliotRow?.textContent).toContain('deleted user');
 
-    const summaryButton = elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null;
+    const summaryButton = elliotRow?.querySelector(
+      '.employee-row-summary',
+    ) as HTMLButtonElement | null;
     await act(async () => {
       summaryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
@@ -4694,12 +5282,16 @@ describe('employees screen', () => {
 
   it('keeps password actions admin-only while managers can still edit non-admin employees', async () => {
     const ada = employeesListExample.items.find((employee) => employee.username === 'ada.admin')!;
-    const elliot = employeesListExample.items.find((employee) => employee.username === 'elliot.employee')!;
+    const elliot = employeesListExample.items.find(
+      (employee) => employee.username === 'elliot.employee',
+    )!;
 
     vi.mocked(me).mockResolvedValue({ session: createManagerSession() });
     vi.mocked(getFoundation).mockResolvedValue(structuredClone(foundationSnapshotExample));
     vi.mocked(listEmployees).mockResolvedValue(employeesListExample);
-    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) => createEmployeeDetail(employeeId));
+    vi.mocked(getEmployee).mockImplementation(async (_sessionToken, employeeId) =>
+      createEmployeeDetail(employeeId),
+    );
 
     window.sessionStorage.setItem('revu-session-token', 'session-token');
 
@@ -4710,15 +5302,29 @@ describe('employees screen', () => {
     await waitFor(() => container.textContent?.includes('Employee directory') ?? false);
 
     expect(container.querySelector('.employee-row-actions')).toBeNull();
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Add employee')).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Add employee',
+      ),
+    ).toBe(false);
 
-    const adaRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) => row.textContent?.includes('Ada Admin'));
+    const adaRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
+      row.textContent?.includes('Ada Admin'),
+    );
     const elliotRow = Array.from(container.querySelectorAll('.employee-row-card')).find((row) =>
       row.textContent?.includes('Elliot Employee'),
     );
 
-    expect(Array.from(adaRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
-    expect(Array.from(elliotRow?.querySelectorAll('button') ?? []).some((button) => button.textContent === 'Edit')).toBe(false);
+    expect(
+      Array.from(adaRow?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Edit',
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(elliotRow?.querySelectorAll('button') ?? []).some(
+        (button) => button.textContent === 'Edit',
+      ),
+    ).toBe(false);
 
     await act(async () => {
       (adaRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null)?.dispatchEvent(
@@ -4729,8 +5335,16 @@ describe('employees screen', () => {
 
     await waitFor(() => container.textContent?.includes('Employee detail') ?? false);
     expect(container.textContent).toContain(ada.fullName);
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Edit')).toBe(false);
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Manage password')).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Edit',
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Manage password',
+      ),
+    ).toBe(false);
 
     await act(async () => {
       Array.from(container.querySelectorAll('button'))
@@ -4740,14 +5354,22 @@ describe('employees screen', () => {
     });
 
     await act(async () => {
-      (elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null)?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      );
+      (
+        elliotRow?.querySelector('.employee-row-summary') as HTMLButtonElement | null
+      )?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushRender();
     });
 
     await waitFor(() => container.textContent?.includes(elliot.fullName) ?? false);
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Edit')).toBe(true);
-    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Manage password')).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Edit',
+      ),
+    ).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Manage password',
+      ),
+    ).toBe(false);
   });
 });

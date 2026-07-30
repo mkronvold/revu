@@ -1,8 +1,8 @@
-import { buildApp } from "./app.js";
-import { config } from "./config.js";
+import { buildApp } from './app.js';
+import { config } from './config.js';
 
 const app = buildApp({
-  logger: process.env.NODE_ENV !== "test",
+  logger: process.env.NODE_ENV !== 'test',
 });
 
 const start = async () => {

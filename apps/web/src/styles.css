@@ -1,7 +1,13 @@
 :root {
   color-scheme: light;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #0f172a;
@@ -726,7 +732,8 @@ button.employee-row:focus-visible {
 }
 
 .dashboard-queue-table {
-  --review-queue-columns: minmax(0, 1.65fr) fit-content(10rem) minmax(0, 1fr) fit-content(8rem) fit-content(12rem);
+  --review-queue-columns: minmax(0, 1.65fr) fit-content(10rem) minmax(0, 1fr) fit-content(8rem)
+    fit-content(12rem);
 }
 
 .queue-card {
@@ -852,8 +859,8 @@ button.employee-row:focus-visible {
 }
 
 .employee-roster-table {
-  --employee-roster-columns: minmax(0, 1.25fr) fit-content(7rem) minmax(0, 1.15fr) minmax(0, 0.9fr) minmax(0, 1fr)
-    minmax(0, 1fr) fit-content(7rem);
+  --employee-roster-columns: minmax(0, 1.25fr) fit-content(7rem) minmax(0, 1.15fr) minmax(0, 0.9fr)
+    minmax(0, 1fr) minmax(0, 1fr) fit-content(7rem);
   --employee-roster-column-gap: 0.75rem;
   width: 100%;
   min-width: 0;
@@ -883,7 +890,8 @@ button.employee-row:focus-visible {
 }
 
 .assessments-table {
-  --assessments-columns: minmax(0, 1.7fr) fit-content(9rem) minmax(0, 1fr) fit-content(11rem) minmax(0, 2.5fr);
+  --assessments-columns: minmax(0, 1.7fr) fit-content(9rem) minmax(0, 1fr) fit-content(11rem)
+    minmax(0, 2.5fr);
   width: 100%;
   min-width: 0;
   display: grid;
@@ -1394,7 +1402,8 @@ button.employee-row:focus-visible {
 }
 
 .review-queue-table {
-  --review-queue-columns: minmax(0, 1.65fr) fit-content(9rem) minmax(0, 1fr) fit-content(8rem) fit-content(10rem);
+  --review-queue-columns: minmax(0, 1.65fr) fit-content(9rem) minmax(0, 1fr) fit-content(8rem)
+    fit-content(10rem);
   width: 100%;
   min-width: 0;
   display: grid;
@@ -1729,7 +1738,10 @@ button.employee-row:focus-visible {
     page-break-inside: avoid;
   }
 
-  body.assessment-print-active .assessment-dialog-card .assessment-print-section + .assessment-print-section {
+  body.assessment-print-active
+    .assessment-dialog-card
+    .assessment-print-section
+    + .assessment-print-section {
     margin-top: 0.85rem;
   }
 
@@ -1760,7 +1772,13 @@ button.employee-row:focus-visible {
     display: table-row-group;
   }
 
-  body.assessment-print-active .assessment-dialog-card .assessment-print-response-table tbody tr + tr td {
+  body.assessment-print-active
+    .assessment-dialog-card
+    .assessment-print-response-table
+    tbody
+    tr
+    + tr
+    td {
     border-top: 1px solid #cbd5e1;
   }
 
@@ -1779,7 +1797,9 @@ button.employee-row:focus-visible {
     background: transparent;
   }
 
-  body.assessment-print-active .assessment-dialog-card .assessment-print-narrative-question:first-child {
+  body.assessment-print-active
+    .assessment-dialog-card
+    .assessment-print-narrative-question:first-child {
     margin-top: 0;
   }
 
@@ -2535,7 +2555,10 @@ button.employee-row:focus-visible {
 }
 
 .modal-card {
-  width: min(var(--modal-card-width, var(--standard-modal-width)), var(--modal-card-max-width, var(--modal-available-width)));
+  width: min(
+    var(--modal-card-width, var(--standard-modal-width)),
+    var(--modal-card-max-width, var(--modal-available-width))
+  );
   max-width: var(--modal-card-max-width, var(--modal-available-width));
   display: grid;
   gap: 1rem;

@@ -13,12 +13,19 @@ import {
 describe('review admin helpers', () => {
   it('archives review-period scoped admin data together', () => {
     const snapshot = createReviewAdminSnapshot(foundationSnapshotExample);
-    const nextSnapshot = setReviewPeriodArchived(snapshot, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true, {
-      now: '2026-03-01T12:00:00.000Z',
-      actorId: '11111111-1111-4111-8111-111111111111',
-    });
+    const nextSnapshot = setReviewPeriodArchived(
+      snapshot,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      true,
+      {
+        now: '2026-03-01T12:00:00.000Z',
+        actorId: '11111111-1111-4111-8111-111111111111',
+      },
+    );
 
-    const reviewPeriod = nextSnapshot.reviewPeriods.find((period) => period.id === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')!;
+    const reviewPeriod = nextSnapshot.reviewPeriods.find(
+      (period) => period.id === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    )!;
     expect(reviewPeriod.status).toBe('archived');
     expect(reviewPeriod.archivedByEmployeeId).toBe('11111111-1111-4111-8111-111111111111');
     expect(
@@ -36,7 +43,9 @@ describe('review admin helpers', () => {
   it('keeps one question set per period and target when saving drafts locally', () => {
     const snapshot = createReviewAdminSnapshot(foundationSnapshotExample);
     const existingSelfSet = snapshot.questionSets.find(
-      (questionSet) => questionSet.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' && questionSet.target === 'self',
+      (questionSet) =>
+        questionSet.reviewPeriodId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' &&
+        questionSet.target === 'self',
     )!;
     const draft = toQuestionSetDraft(existingSelfSet.reviewPeriodId, 'self', existingSelfSet);
     draft.title = '2026 Self Questions v2';
@@ -53,7 +62,8 @@ describe('review admin helpers', () => {
       now: '2026-01-15T09:00:00.000Z',
     });
     const selfSets = result.snapshot.questionSets.filter(
-      (questionSet) => questionSet.reviewPeriodId === draft.reviewPeriodId && questionSet.target === 'self',
+      (questionSet) =>
+        questionSet.reviewPeriodId === draft.reviewPeriodId && questionSet.target === 'self',
     );
 
     expect(selfSets).toHaveLength(1);
@@ -70,7 +80,9 @@ describe('review admin helpers', () => {
     );
 
     expect(rows[0]?.employeeName).toBe('Ada Admin');
-    expect(rows.find((row) => row.employeeId === '33333333-3333-4333-8333-333333333333')).toMatchObject({
+    expect(
+      rows.find((row) => row.employeeId === '33333333-3333-4333-8333-333333333333'),
+    ).toMatchObject({
       managerId: '22222222-2222-4222-8222-222222222222',
       assessorId: '44444444-4444-4444-8444-444444444444',
     });

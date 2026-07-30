@@ -18,7 +18,10 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "validate": "npm test && npm run typecheck && npm run build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate": "npm run lint && npm run format:check && npm test && npm run typecheck && npm run build",
     "compose:config": "docker compose config -q",
     "compose:config:dev": "PROXY_NET_EXTERNAL=false PROXY_NET_NAME=revu-dev-proxy-net docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q",
     "deploy:pull": "docker compose pull",
@@ -26,5 +29,14 @@
     "db:up": "docker compose up -d db",
     "db:migrate": "bash ./scripts/db-migrate.sh",
     "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.50.0"
   }
 }

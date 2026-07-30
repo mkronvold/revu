@@ -49,11 +49,19 @@ import {
   updateReviewPeriod,
 } from './api';
 import { questionSetStatusEnabled } from './runtimeConfig';
-import type { QuestionSetDraft, ReviewAdminSnapshot, ReviewPeriodDraft, ReviewPeriodSummary } from './reviewAdmin';
+import type {
+  QuestionSetDraft,
+  ReviewAdminSnapshot,
+  ReviewPeriodDraft,
+  ReviewPeriodSummary,
+} from './reviewAdmin';
 
 export type TransferFormat = 'json' | 'csv';
 
-type LocalUserTransferDraft = Omit<LocalUserTransferItem, 'passwordResetRequired' | 'reviewer1Username' | 'reviewer2Username'> & {
+type LocalUserTransferDraft = Omit<
+  LocalUserTransferItem,
+  'passwordResetRequired' | 'reviewer1Username' | 'reviewer2Username'
+> & {
   passwordResetRequired?: boolean;
   reviewer1Username?: string | null;
   reviewer2Username?: string | null;
@@ -241,7 +249,9 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
       reviewer2Username: row[headers.get('reviewer2Username') ?? -1]?.trim() || null,
       password: row[headers.get('password') ?? -1] ?? '',
       credentialKind: row[headers.get('credentialKind') ?? -1]?.trim() || undefined,
-      passwordResetRequired: parseBooleanCell(row[headers.get('passwordResetRequired') ?? -1] ?? ''),
+      passwordResetRequired: parseBooleanCell(
+        row[headers.get('passwordResetRequired') ?? -1] ?? '',
+      ),
     }),
   );
 
@@ -251,7 +261,10 @@ function parseLocalUsersCsv(raw: string): LocalUsersImportRequest {
   });
 }
 
-function parseLocalUsersJson(raw: string, preferredFormat: TransferFormat): LocalUsersImportRequest {
+function parseLocalUsersJson(
+  raw: string,
+  preferredFormat: TransferFormat,
+): LocalUsersImportRequest {
   let parsed: unknown;
 
   try {
@@ -260,8 +273,11 @@ function parseLocalUsersJson(raw: string, preferredFormat: TransferFormat): Loca
     throw new Error('Paste valid JSON before importing local users.');
   }
 
-  const candidate =
-    Array.isArray(parsed) ? { format: preferredFormat, items: parsed } : parsed && typeof parsed === 'object' ? parsed : null;
+  const candidate = Array.isArray(parsed)
+    ? { format: preferredFormat, items: parsed }
+    : parsed && typeof parsed === 'object'
+      ? parsed
+      : null;
 
   if (!candidate || !('items' in candidate)) {
     throw new Error('JSON imports must be an array of users or an object with an items array.');
@@ -311,13 +327,21 @@ function normalizeQuestionSetTransferItem(item: unknown): QuestionSetTransferIte
   });
 }
 
-function parseQuestionSetsJson(raw: string, preferredFormat: TransferFormat): QuestionSetsImportRequest {
+function parseQuestionSetsJson(
+  raw: string,
+  preferredFormat: TransferFormat,
+): QuestionSetsImportRequest {
   const parsed = parseJsonCandidate(raw, 'Paste valid JSON before importing question sets.');
-  const candidate =
-    Array.isArray(parsed) ? { format: preferredFormat, items: parsed } : parsed && typeof parsed === 'object' ? parsed : null;
+  const candidate = Array.isArray(parsed)
+    ? { format: preferredFormat, items: parsed }
+    : parsed && typeof parsed === 'object'
+      ? parsed
+      : null;
 
   if (!candidate || !('items' in candidate) || !Array.isArray(candidate.items)) {
-    throw new Error('JSON imports must be an array of question sets or an object with an items array.');
+    throw new Error(
+      'JSON imports must be an array of question sets or an object with an items array.',
+    );
   }
 
   return questionSetsImportRequestSchema.parse({
@@ -334,7 +358,14 @@ function parseQuestionSetsCsv(raw: string): QuestionSetsImportRequest {
 
   const [headerRow, ...dataRows] = rows;
   const headers = new Map(headerRow?.map((header, index) => [header.trim(), index]));
-  for (const header of ['target', 'status', 'title', 'questionOrder', 'questionType', 'questionPrompt']) {
+  for (const header of [
+    'target',
+    'status',
+    'title',
+    'questionOrder',
+    'questionType',
+    'questionPrompt',
+  ]) {
     if (!headers.has(header)) {
       throw new Error(`CSV imports must include the ${header} column.`);
     }
@@ -364,17 +395,15 @@ function parseQuestionSetsCsv(raw: string): QuestionSetsImportRequest {
     const target = row[headers.get('target') ?? -1]?.trim();
     const title = row[headers.get('title') ?? -1]?.trim();
     const questionSetKey = questionSetId || `${target ?? ''}\u0000${title ?? ''}`;
-    const existing =
-      itemsByKey.get(questionSetKey) ??
-      {
-        id: questionSetId || undefined,
-        target: target ?? '',
-        status: row[headers.get('status') ?? -1]?.trim() ?? '',
-        title: title ?? '',
-        headerMarkdown: row[headers.get('headerMarkdown') ?? -1] ?? '',
-        footerMarkdown: row[headers.get('footerMarkdown') ?? -1] ?? '',
-        questions: [],
-      };
+    const existing = itemsByKey.get(questionSetKey) ?? {
+      id: questionSetId || undefined,
+      target: target ?? '',
+      status: row[headers.get('status') ?? -1]?.trim() ?? '',
+      title: title ?? '',
+      headerMarkdown: row[headers.get('headerMarkdown') ?? -1] ?? '',
+      footerMarkdown: row[headers.get('footerMarkdown') ?? -1] ?? '',
+      questions: [],
+    };
 
     const prompt = row[headers.get('questionPrompt') ?? -1] ?? '';
     const type = row[headers.get('questionType') ?? -1]?.trim() ?? '';
@@ -385,7 +414,9 @@ function parseQuestionSetsCsv(raw: string): QuestionSetsImportRequest {
       existing.questions.push({
         id: row[headers.get('questionId') ?? -1]?.trim() || undefined,
         order: Number.parseInt(orderCell, 10),
-        type: row[headers.get('questionType') ?? -1]?.trim() as QuestionSet['questions'][number]['type'],
+        type: row[
+          headers.get('questionType') ?? -1
+        ]?.trim() as QuestionSet['questions'][number]['type'],
         category: row[headers.get('questionCategory') ?? -1]?.trim() || null,
         prompt,
       });
@@ -416,13 +447,21 @@ function normalizeAssignmentTransferItem(item: unknown): AssignmentTransferItem 
   });
 }
 
-function parseAssignmentsJson(raw: string, preferredFormat: TransferFormat): AssignmentsImportRequest {
+function parseAssignmentsJson(
+  raw: string,
+  preferredFormat: TransferFormat,
+): AssignmentsImportRequest {
   const parsed = parseJsonCandidate(raw, 'Paste valid JSON before importing assignments.');
-  const candidate =
-    Array.isArray(parsed) ? { format: preferredFormat, items: parsed } : parsed && typeof parsed === 'object' ? parsed : null;
+  const candidate = Array.isArray(parsed)
+    ? { format: preferredFormat, items: parsed }
+    : parsed && typeof parsed === 'object'
+      ? parsed
+      : null;
 
   if (!candidate || !('items' in candidate) || !Array.isArray(candidate.items)) {
-    throw new Error('JSON imports must be an array of assignments or an object with an items array.');
+    throw new Error(
+      'JSON imports must be an array of assignments or an object with an items array.',
+    );
   }
 
   return assignmentsImportRequestSchema.parse({
@@ -466,7 +505,12 @@ function compactTimestamp(value: string) {
 }
 
 function sanitizeFileLabel(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'review-period';
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'review-period'
+  );
 }
 
 function toQuestionInput(questionSetDraft: QuestionSetDraft, options?: { includeIds?: boolean }) {
@@ -479,7 +523,11 @@ function toQuestionInput(questionSetDraft: QuestionSetDraft, options?: { include
   }));
 }
 
-function replaceReviewPeriodText(value: string, sourceReviewPeriod: ReviewPeriod, targetReviewPeriod: ReviewPeriod) {
+function replaceReviewPeriodText(
+  value: string,
+  sourceReviewPeriod: ReviewPeriod,
+  targetReviewPeriod: ReviewPeriod,
+) {
   let nextValue = value;
 
   if (sourceReviewPeriod.label && sourceReviewPeriod.label !== targetReviewPeriod.label) {
@@ -500,7 +548,8 @@ function findAssignment(
 ): Assignment | null {
   return (
     reviewAdmin.assignments.find(
-      (assignment) => assignment.reviewPeriodId === reviewPeriodId && assignment.employeeId === employeeId,
+      (assignment) =>
+        assignment.reviewPeriodId === reviewPeriodId && assignment.employeeId === employeeId,
     ) ?? null
   );
 }
@@ -518,7 +567,10 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDraft): Promise<{
+export async function saveReviewPeriodToApi(
+  token: string,
+  draft: ReviewPeriodDraft,
+): Promise<{
   notice: string;
   reviewPeriod: ReviewPeriod;
 }> {
@@ -538,11 +590,16 @@ export async function saveReviewPeriodToApi(token: string, draft: ReviewPeriodDr
 
   return {
     reviewPeriod: response.item,
-    notice: draft.id ? 'Saved review period changes to the API.' : 'Created the review period in the API.',
+    notice: draft.id
+      ? 'Saved review period changes to the API.'
+      : 'Created the review period in the API.',
   };
 }
 
-export function buildDeleteReviewPeriodConfirmation(reviewPeriod: ReviewPeriod, summary: ReviewPeriodSummary) {
+export function buildDeleteReviewPeriodConfirmation(
+  reviewPeriod: ReviewPeriod,
+  summary: ReviewPeriodSummary,
+) {
   const lines = [
     `Remove ${reviewPeriod.label}?`,
     '',
@@ -561,7 +618,10 @@ export function buildDeleteReviewPeriodConfirmation(reviewPeriod: ReviewPeriod, 
   return lines.join('\n');
 }
 
-export async function deleteReviewPeriodFromApi(token: string, reviewPeriod: ReviewPeriod): Promise<{
+export async function deleteReviewPeriodFromApi(
+  token: string,
+  reviewPeriod: ReviewPeriod,
+): Promise<{
   notice: string;
   reviewPeriodId: string;
 }> {
@@ -573,7 +633,10 @@ export async function deleteReviewPeriodFromApi(token: string, reviewPeriod: Rev
   };
 }
 
-export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraft): Promise<{
+export async function saveQuestionSetToApi(
+  token: string,
+  draft: QuestionSetDraft,
+): Promise<{
   notice: string;
   questionSet: QuestionSet;
 }> {
@@ -618,7 +681,9 @@ export async function saveQuestionSetToApi(token: string, draft: QuestionSetDraf
 export async function copyQuestionSetToReviewPeriodInApi(
   token: string,
   sourceQuestionSet: Pick<QuestionSet, 'target' | 'title' | 'headerMarkdown' | 'footerMarkdown'> & {
-    questions: Array<Pick<QuestionSet['questions'][number], 'order' | 'type' | 'category' | 'prompt'>>;
+    questions: Array<
+      Pick<QuestionSet['questions'][number], 'order' | 'type' | 'category' | 'prompt'>
+    >;
   },
   sourceReviewPeriod: ReviewPeriod,
   targetReviewPeriod: ReviewPeriod,
@@ -629,8 +694,16 @@ export async function copyQuestionSetToReviewPeriodInApi(
   const created = await createQuestionSet(token, targetReviewPeriod.id, {
     target: sourceQuestionSet.target,
     title: replaceReviewPeriodText(sourceQuestionSet.title, sourceReviewPeriod, targetReviewPeriod),
-    headerMarkdown: replaceReviewPeriodText(sourceQuestionSet.headerMarkdown, sourceReviewPeriod, targetReviewPeriod),
-    footerMarkdown: replaceReviewPeriodText(sourceQuestionSet.footerMarkdown, sourceReviewPeriod, targetReviewPeriod),
+    headerMarkdown: replaceReviewPeriodText(
+      sourceQuestionSet.headerMarkdown,
+      sourceReviewPeriod,
+      targetReviewPeriod,
+    ),
+    footerMarkdown: replaceReviewPeriodText(
+      sourceQuestionSet.footerMarkdown,
+      sourceReviewPeriod,
+      targetReviewPeriod,
+    ),
     questions: sourceQuestionSet.questions
       .slice()
       .sort((left, right) => left.order - right.order)
@@ -666,7 +739,8 @@ export async function saveAssignmentToApi(options: {
   notice: string;
   relationships: { managerId: string | null; assessorId: string | null };
 }> {
-  const { token, reviewAdmin, employees, reviewPeriodId, employeeId, managerId, assessorId } = options;
+  const { token, reviewAdmin, employees, reviewPeriodId, employeeId, managerId, assessorId } =
+    options;
   const existingAssignment = findAssignment(reviewAdmin, reviewPeriodId, employeeId);
   const employee = findEmployee(employees, employeeId);
 
@@ -674,7 +748,8 @@ export async function saveAssignmentToApi(options: {
     if (existingAssignment) {
       await updateAssignment(token, existingAssignment.id, { managerId, assessorId });
       return {
-        notice: 'Saved assignment changes and kept the employee assessor 2 aligned with the peer reviewer.',
+        notice:
+          'Saved assignment changes and kept the employee assessor 2 aligned with the peer reviewer.',
         relationships: { managerId, assessorId },
       };
     }
@@ -738,23 +813,43 @@ export async function clearReadyAssessmentsForReviewPeriod(token: string, review
   return clearReadyToStartAssessments(token, reviewPeriodId);
 }
 
-export async function exportQuestionSetsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
+export async function exportQuestionSetsFromApi(
+  token: string,
+  reviewPeriodId: string,
+  format: TransferFormat,
+) {
   return exportQuestionSets(token, reviewPeriodId, format);
 }
 
-export async function importQuestionSetsFromApi(token: string, reviewPeriodId: string, payload: QuestionSetsImportRequest) {
+export async function importQuestionSetsFromApi(
+  token: string,
+  reviewPeriodId: string,
+  payload: QuestionSetsImportRequest,
+) {
   return importQuestionSets(token, reviewPeriodId, payload);
 }
 
-export async function exportAssignmentsFromApi(token: string, reviewPeriodId: string, format: TransferFormat) {
+export async function exportAssignmentsFromApi(
+  token: string,
+  reviewPeriodId: string,
+  format: TransferFormat,
+) {
   return exportAssignments(token, reviewPeriodId, format);
 }
 
-export async function importAssignmentsFromApi(token: string, reviewPeriodId: string, payload: AssignmentsImportRequest) {
+export async function importAssignmentsFromApi(
+  token: string,
+  reviewPeriodId: string,
+  payload: AssignmentsImportRequest,
+) {
   return importAssignments(token, reviewPeriodId, payload);
 }
 
-export async function exportLocalUsersFromApi(token: string, format: TransferFormat, mode: LocalUsersExportMode) {
+export async function exportLocalUsersFromApi(
+  token: string,
+  format: TransferFormat,
+  mode: LocalUsersExportMode,
+) {
   return exportLocalUsers(token, format, mode);
 }
 
@@ -869,7 +964,9 @@ export function buildAssignmentsImportPayload(format: TransferFormat, raw: strin
   return format === 'csv' ? parseAssignmentsCsv(raw) : parseAssignmentsJson(raw, format);
 }
 
-export function buildQuestionSetExportNotice(response: Pick<QuestionSetsExportResponse, 'format' | 'itemCount'>) {
+export function buildQuestionSetExportNotice(
+  response: Pick<QuestionSetsExportResponse, 'format' | 'itemCount'>,
+) {
   return `Exported ${response.itemCount} question ${response.itemCount === 1 ? 'set' : 'sets'} as ${response.format.toUpperCase()}.`;
 }
 
@@ -877,7 +974,9 @@ export function buildQuestionSetImportNotice(response: QuestionSetsImportRespons
   return `Imported ${response.itemCount} question ${response.itemCount === 1 ? 'set' : 'sets'} (${response.createdCount} created, ${response.updatedCount} updated).`;
 }
 
-export function buildAssignmentsExportNotice(response: Pick<AssignmentsExportResponse, 'format' | 'itemCount'>) {
+export function buildAssignmentsExportNotice(
+  response: Pick<AssignmentsExportResponse, 'format' | 'itemCount'>,
+) {
   return `Exported ${response.itemCount} assignment ${response.itemCount === 1 ? 'row' : 'rows'} as ${response.format.toUpperCase()}.`;
 }
 
@@ -885,7 +984,9 @@ export function buildAssignmentsImportNotice(response: AssignmentsImportResponse
   return `Imported ${response.itemCount} assignment ${response.itemCount === 1 ? 'row' : 'rows'} (${response.createdCount} created, ${response.updatedCount} updated).`;
 }
 
-export function buildLocalUsersExportNotice(response: Pick<LocalUsersExportResponse, 'format' | 'itemCount' | 'mode'>) {
+export function buildLocalUsersExportNotice(
+  response: Pick<LocalUsersExportResponse, 'format' | 'itemCount' | 'mode'>,
+) {
   return response.mode === 'rotate-passcodes'
     ? `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Every exported account now uses a generated one-time passcode and must change it after sign-in.`
     : `Exported ${response.itemCount} local users as ${response.format.toUpperCase()}. Passwords and active sessions were left untouched.`;

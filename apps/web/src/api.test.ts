@@ -1,4 +1,9 @@
-import { adminEmployeeExample, adminLoginExample, employeesListExample, foundationSnapshotExample } from '@revu/contracts';
+import {
+  adminEmployeeExample,
+  adminLoginExample,
+  employeesListExample,
+  foundationSnapshotExample,
+} from '@revu/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -121,7 +126,10 @@ describe('web api client', () => {
       ),
     );
 
-    const response = await deleteReviewPeriod('session-token', foundationSnapshotExample.reviewPeriods[0]!.id);
+    const response = await deleteReviewPeriod(
+      'session-token',
+      foundationSnapshotExample.reviewPeriods[0]!.id,
+    );
 
     expect(response.deleted).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -138,15 +146,23 @@ describe('web api client', () => {
   it('uses authenticated foundation and assessment workflow endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(foundationSnapshotExample), { status: 200 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ items: [foundationSnapshotExample.assessments[1]] }), { status: 200 }),
+        new Response(JSON.stringify(foundationSnapshotExample), { status: 200 }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[0] }), { status: 200 }),
+        new Response(JSON.stringify({ items: [foundationSnapshotExample.assessments[1]] }), {
+          status: 200,
+        }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[1] }), { status: 200 }),
+        new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[0] }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ item: foundationSnapshotExample.assessments[1] }), {
+          status: 200,
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -234,9 +250,11 @@ describe('web api client', () => {
   });
 
   it('lists persisted question categories from the API', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ items: ['Impact', 'Teamwork'] }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ items: ['Impact', 'Teamwork'] }), { status: 200 }),
+      );
 
     const response = await listQuestionCategories('session-token');
 
@@ -253,7 +271,9 @@ describe('web api client', () => {
 
   it('updates persisted question categories through the API', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ items: ['Growth', 'Strategy', 'Teamwork'] }), { status: 200 }),
+      new Response(JSON.stringify({ items: ['Growth', 'Strategy', 'Teamwork'] }), {
+        status: 200,
+      }),
     );
 
     const response = await updateQuestionCategories('session-token', {
@@ -287,28 +307,28 @@ describe('web api client', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-            JSON.stringify({
-              format: 'json',
-              mode: 'rotate-passcodes',
-              exportedAt: '2026-06-01T12:00:00.000Z',
-              itemCount: 1,
-              items: [
-               {
-                 username: 'elliot.employee',
-                 fullName: 'Elliot Employee',
-                 email: 'elliot.employee@example.com',
-                 role: 'employee',
-                 status: 'active',
-                 managerUsername: 'manny.manager',
-                 assessor1Username: 'manny.manager',
-                 assessor2Username: 'pat.peer',
-                 reviewer1Username: 'ada.admin',
-                 reviewer2Username: 'manny.manager',
-                 password: 'tmp-passcode-123',
-                 credentialKind: 'password',
-                 passwordResetRequired: true,
-                 },
-              ],
+          JSON.stringify({
+            format: 'json',
+            mode: 'rotate-passcodes',
+            exportedAt: '2026-06-01T12:00:00.000Z',
+            itemCount: 1,
+            items: [
+              {
+                username: 'elliot.employee',
+                fullName: 'Elliot Employee',
+                email: 'elliot.employee@example.com',
+                role: 'employee',
+                status: 'active',
+                managerUsername: 'manny.manager',
+                assessor1Username: 'manny.manager',
+                assessor2Username: 'pat.peer',
+                reviewer1Username: 'ada.admin',
+                reviewer2Username: 'manny.manager',
+                password: 'tmp-passcode-123',
+                credentialKind: 'password',
+                passwordResetRequired: true,
+              },
+            ],
           }),
           { status: 200 },
         ),
@@ -434,7 +454,11 @@ describe('web api client', () => {
       ),
     );
 
-    const response = await exportQuestionSets('session-token', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'csv');
+    const response = await exportQuestionSets(
+      'session-token',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'csv',
+    );
 
     expect(response).toMatchObject({
       reviewPeriodId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -486,7 +510,8 @@ describe('web api client', () => {
             assessor2Username: null,
             reviewer1Username: null,
             reviewer2Username: null,
-            password: '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+            password:
+              '0123456789abcdef0123456789abcdef:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
             credentialKind: 'password-hash' as const,
             passwordResetRequired: false,
           },
@@ -526,9 +551,15 @@ describe('web api client', () => {
           { status: 200 },
         ),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [storedBackup] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [storedBackup] }), { status: 200 }),
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify({ item: storedBackup }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ item: storedBackup, renamedFrom: 'backup.json' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ item: storedBackup, renamedFrom: 'backup.json' }), {
+          status: 200,
+        }),
+      )
       .mockResolvedValueOnce(
         new Response(JSON.stringify(backupExportResponse), {
           status: 200,
@@ -538,7 +569,9 @@ describe('web api client', () => {
         }),
       )
       .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ name: storedBackup.name, deleted: true }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: storedBackup.name, deleted: true }), { status: 200 }),
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify(backupExportResponse), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(backupRestoreResponse), { status: 200 }));
 
@@ -550,7 +583,12 @@ describe('web api client', () => {
     });
     await listStoredBackups('session-token');
     await createStoredBackup('session-token');
-    await uploadStoredBackup('session-token', new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }));
+    await uploadStoredBackup(
+      'session-token',
+      new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', {
+        type: 'application/json',
+      }),
+    );
     await downloadStoredBackup('session-token', storedBackup.name);
     await restoreStoredBackup('session-token', storedBackup.name, {
       target: 'reviews',
@@ -559,7 +597,9 @@ describe('web api client', () => {
     await deleteStoredBackup('session-token', storedBackup.name);
     await exportBackup('session-token');
     await restoreBackup('session-token', {
-      file: new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', { type: 'application/json' }),
+      file: new File([JSON.stringify(backupExportResponse, null, 2)], 'backup.json', {
+        type: 'application/json',
+      }),
       target: 'reviews',
       mode: 'replace',
     });
@@ -613,7 +653,9 @@ describe('web api client', () => {
         }),
       }),
     );
-    expect(((uploadCall?.[1]?.body as FormData).get('file') as File | null)?.name).toBe('backup.json');
+    expect(((uploadCall?.[1]?.body as FormData).get('file') as File | null)?.name).toBe(
+      'backup.json',
+    );
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,

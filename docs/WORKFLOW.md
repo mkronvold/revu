@@ -23,15 +23,15 @@ flowchart LR
 
 ## Lifecycle states
 
-| State | Meaning | Typical actor |
-| --- | --- | --- |
-| `new` | The assessment exists but no real work has been saved yet. | Employee or peer assessor |
-| `draft` | Work has started but has not been submitted. | Employee or peer assessor |
-| `submitted` | The author finished the assessment and handed it off. | Employee or peer assessor |
-| `accepted` | A manager or admin accepted the submission for the next phase. | Manager or admin |
-| `ready_for_meeting` | The set is prepared for the meeting/review step. | Manager or admin |
-| `scheduled` | The review meeting or review activity has been scheduled. | Manager or admin |
-| `concluded` | Required reviewer conclusions are complete. | Reviewer 1 / Reviewer 2 |
+| State               | Meaning                                                        | Typical actor             |
+| ------------------- | -------------------------------------------------------------- | ------------------------- |
+| `new`               | The assessment exists but no real work has been saved yet.     | Employee or peer assessor |
+| `draft`             | Work has started but has not been submitted.                   | Employee or peer assessor |
+| `submitted`         | The author finished the assessment and handed it off.          | Employee or peer assessor |
+| `accepted`          | A manager or admin accepted the submission for the next phase. | Manager or admin          |
+| `ready_for_meeting` | The set is prepared for the meeting/review step.               | Manager or admin          |
+| `scheduled`         | The review meeting or review activity has been scheduled.      | Manager or admin          |
+| `concluded`         | Required reviewer conclusions are complete.                    | Reviewer 1 / Reviewer 2   |
 
 ## Role responsibilities
 
