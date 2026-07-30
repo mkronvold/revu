@@ -120,17 +120,31 @@ jobs:
           sbom: ${{ github.event_name != 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || false }}
 
-      - name: Run Trivy vulnerability scan (report-only)
+      - name: Resolve image ref for scan
+        id: scan_ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "value=${{ fromJSON(steps.meta.outputs.json).tags[0] }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Trivy vulnerability scan (SARIF, report-only)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: >-
-            ${{
-              github.event_name == 'pull_request'
-              && fromJSON(steps.meta.outputs.json).tags[0]
-              || format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image_name, steps.build.outputs.digest)
-            }}
+          image-ref: ${{ steps.scan_ref.outputs.value }}
           format: sarif
           output: trivy-${{ matrix.scan_category }}.sarif
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Run Trivy vulnerability scan (JSON artifact)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.scan_ref.outputs.value }}
+          format: json
+          output: trivy-${{ matrix.scan_category }}.json
           exit-code: '0'
           ignore-unfixed: true
 
@@ -140,3 +154,12 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.scan_category }}.sarif
           category: ${{ matrix.scan_category }}
+
+      - name: Upload Trivy JSON artifact
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles(format('trivy-{0}.json', matrix.scan_category)) != ''
+        with:
+          name: trivy-json-${{ matrix.scan_category }}
+          path: trivy-${{ matrix.scan_category }}.json
+          if-no-files-found: ignore
+          retention-days: 30

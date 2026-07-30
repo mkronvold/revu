@@ -1,0 +1,126 @@
+name: automerge-base-image-cve
+
+# Auto-merge Lane B digest-fix PRs only for critical/high severity.
+# Medium/low (severity:other) stay open for humans.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - labeled
+  workflow_dispatch:
+    inputs:
+      pull-request-number:
+        description: 'Existing base-image CVE digest PR number to re-enroll'
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'base-image-cve') &&
+      (
+        contains(github.event.pull_request.labels.*.name, 'severity:critical') ||
+        contains(github.event.pull_request.labels.*.name, 'severity:high')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify digest-only change set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path')
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            echo "PR has no changed files." >&2
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            case "$f" in
+              apps/api/Dockerfile|apps/web/Dockerfile|docker-compose.yml) ;;
+              *)
+                echo "Refusing automerge; unexpected path: $f" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+          pr = os.environ["PR_NUMBER"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          diff = subprocess.check_output(["gh", "pr", "diff", pr, "--repo", repo], text=True)
+          pin_re = re.compile(r'([A-Za-z0-9._/-]+:[A-Za-z0-9._-]+)@sha256:[a-f0-9]{64}')
+          removed, added = [], []
+          for line in diff.splitlines():
+              if line.startswith('---') or line.startswith('+++'):
+                  continue
+              if line.startswith('-'):
+                  removed += pin_re.findall(line[1:])
+              elif line.startswith('+'):
+                  added += pin_re.findall(line[1:])
+          if not removed and not added:
+              print("No digest pins found in diff.", file=sys.stderr)
+              sys.exit(1)
+          if sorted(removed) != sorted(added):
+              print("Refusing automerge; image name:tag set changed (not digest-only).", file=sys.stderr)
+              print("removed tags:", sorted(set(removed)), file=sys.stderr)
+              print("added tags:", sorted(set(added)), file=sys.stderr)
+              sys.exit(1)
+          print("Digest-only pin changes verified.")
+          PY
+
+      - name: Auto-approve crit/high base-image CVE PR
+        uses: hmarr/auto-approve-action@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for crit/high base-image CVE PR
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
+
+  reenroll-existing-pr:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate requested PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels,isDraft,state)"
+          state="$(echo "$pr_json" | jq -r '.state')"
+          draft="$(echo "$pr_json" | jq -r '.isDraft')"
+          labels="$(echo "$pr_json" | jq -r '[.labels[].name] | join(",")')"
+          if [[ "$state" != "OPEN" ]]; then
+            echo "PR #$PR_NUMBER must be open." >&2
+            exit 1
+          fi
+          if [[ "$draft" == "true" ]]; then
+            echo "PR #$PR_NUMBER is draft." >&2
+            exit 1
+          fi
+          echo "$labels" | grep -q 'base-image-cve' || { echo "missing base-image-cve label" >&2; exit 1; }
+          echo "$labels" | grep -Eq 'severity:(critical|high)' || { echo "missing severity:critical|high label" >&2; exit 1; }
+
+      - name: Reopen PR to retrigger automerge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          gh pr reopen "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"

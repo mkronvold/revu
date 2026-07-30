@@ -11,6 +11,12 @@ updates:
       - 'dependencies'
       - 'npm'
     open-pull-requests-limit: 10
+    groups:
+      npm-non-major:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: 'github-actions'
     directory: '/'
@@ -23,6 +29,12 @@ updates:
       - 'dependencies'
       - 'github-actions'
     open-pull-requests-limit: 5
+    groups:
+      actions-non-major:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: 'docker'
     directory: '/apps/api'

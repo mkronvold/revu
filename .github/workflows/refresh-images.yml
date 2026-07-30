@@ -116,12 +116,22 @@ jobs:
           sbom: true
           provenance: mode=max
 
-      - name: Run Trivy vulnerability scan (report-only)
+      - name: Run Trivy vulnerability scan (SARIF, report-only)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-${{ matrix.scan_category }}.sarif
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Run Trivy vulnerability scan (JSON artifact)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
+          format: json
+          output: trivy-${{ matrix.scan_category }}.json
           exit-code: '0'
           ignore-unfixed: true
 
@@ -131,3 +141,12 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.scan_category }}.sarif
           category: ${{ matrix.scan_category }}
+
+      - name: Upload Trivy JSON artifact
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles(format('trivy-{0}.json', matrix.scan_category)) != ''
+        with:
+          name: trivy-json-${{ matrix.scan_category }}
+          path: trivy-${{ matrix.scan_category }}.json
+          if-no-files-found: ignore
+          retention-days: 30
