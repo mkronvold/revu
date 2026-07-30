@@ -117,7 +117,7 @@ jobs:
           provenance: mode=max
 
       - name: Run Trivy vulnerability scan (report-only)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           format: sarif
