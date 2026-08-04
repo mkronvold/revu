@@ -87,7 +87,7 @@ jobs:
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -149,14 +149,14 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v4.37.3
+        uses: github/codeql-action/upload-sarif@v4.37.4
         if: always() && hashFiles(format('trivy-{0}.sarif', matrix.scan_category)) != ''
         with:
           sarif_file: trivy-${{ matrix.scan_category }}.sarif
           category: ${{ matrix.scan_category }}
 
       - name: Upload Trivy JSON artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always() && hashFiles(format('trivy-{0}.json', matrix.scan_category)) != ''
         with:
           name: trivy-json-${{ matrix.scan_category }}
