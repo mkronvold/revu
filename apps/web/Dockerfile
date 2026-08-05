@@ -1,4 +1,4 @@
-FROM node:26-bookworm-slim@sha256:9e6f9357d371591e32ab6f2d8a26d63bdd0d17c29eee3f4f3e7e454d9634bf73 AS builder
+FROM node:26-bookworm-slim@sha256:679fdd370deac03f6e5189b0670d5b723a6e3ffee3a4045a9cbed41164c01c7c AS builder
 
 WORKDIR /app
 
