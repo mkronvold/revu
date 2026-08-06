@@ -66,7 +66,7 @@ services:
 
   backup:
     container_name: revu-backup
-    image: node:26-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
+    image: node:26-bookworm-slim@sha256:679fdd370deac03f6e5189b0670d5b723a6e3ffee3a4045a9cbed41164c01c7c
     restart: unless-stopped
     working_dir: /opt/revu
     entrypoint:
