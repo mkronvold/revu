@@ -22,8 +22,8 @@ See also: [GitHub setup for Revu automation](./GITHUB-SETUP.md)
    - `refresh-images.yml` runs weekly and rebuilds the published deployment images from current pins.
 5. **Lane B base-image CVE digest PRs (event-driven)**
    - After successful publish/refresh on `main` (and on a weekly schedule), `base-image-cve-fix` scans pinned bases with Trivy.
-   - If fixed CVEs exist and a newer same-tag digest is available, it opens/updates a digest-only PR.
-   - Crit/high labeled PRs auto-merge when checks are green; medium/low stay open for humans.
+   - If fixed CVEs exist and a newer same-tag digest is available, it opens/updates a digest-only PR (requires `REVU_BOT_TOKEN` and the settings in [GITHUB-SETUP.md](./GITHUB-SETUP.md) for hands-off CI + automerge).
+   - Crit/high labeled PRs auto-merge when required checks (at least `validate`) are green; medium/low stay open for humans.
 6. **Manual path for major dependency updates**
    - Major Dependabot PRs are intentionally not auto-approved or auto-merged.
    - For each major PR, run the AI review prompt in this document, let the agent make any needed compatibility fixes, review the result, then approve and merge manually if it is still acceptable.

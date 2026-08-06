@@ -25,19 +25,64 @@ permissions:
 jobs:
   automerge:
     if: >-
-      github.event_name == 'pull_request_target' &&
-      github.event.pull_request.draft == false &&
-      contains(github.event.pull_request.labels.*.name, 'base-image-cve') &&
+      github.event_name == 'workflow_dispatch' ||
       (
-        contains(github.event.pull_request.labels.*.name, 'severity:critical') ||
-        contains(github.event.pull_request.labels.*.name, 'severity:high')
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.draft == false &&
+        contains(github.event.pull_request.labels.*.name, 'base-image-cve') &&
+        (
+          contains(github.event.pull_request.labels.*.name, 'severity:critical') ||
+          contains(github.event.pull_request.labels.*.name, 'severity:high')
+        )
       )
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve PR number
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_FROM_EVENT: ${{ github.event.pull_request.number }}
+          PR_FROM_INPUT: ${{ inputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "number=${PR_FROM_INPUT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${PR_FROM_EVENT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate PR eligibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels,isDraft,state)"
+          state="$(echo "$pr_json" | jq -r '.state')"
+          draft="$(echo "$pr_json" | jq -r '.isDraft')"
+          labels="$(echo "$pr_json" | jq -r '[.labels[].name] | join(",")')"
+
+          if [[ "$state" != "OPEN" ]]; then
+            echo "PR #$PR_NUMBER must be open (state=$state)." >&2
+            exit 1
+          fi
+          if [[ "$draft" == "true" ]]; then
+            echo "PR #$PR_NUMBER is draft." >&2
+            exit 1
+          fi
+          echo "$labels" | grep -q 'base-image-cve' || {
+            echo "missing base-image-cve label (labels=$labels)" >&2
+            exit 1
+          }
+          echo "$labels" | grep -Eq 'severity:(critical|high)' || {
+            echo "missing severity:critical|high label (labels=$labels)" >&2
+            exit 1
+          }
+
       - name: Verify digest-only change set
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
           mapfile -t files < <(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path')
@@ -84,43 +129,11 @@ jobs:
         uses: hmarr/auto-approve-action@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.pr.outputs.number }}
 
       - name: Enable auto-merge for crit/high base-image CVE PR
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ github.event.pull_request.number }}
+          pull-request-number: ${{ steps.pr.outputs.number }}
           merge-method: squash
-
-  reenroll-existing-pr:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate requested PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ inputs.pull-request-number }}
-        run: |
-          set -euo pipefail
-          pr_json="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels,isDraft,state)"
-          state="$(echo "$pr_json" | jq -r '.state')"
-          draft="$(echo "$pr_json" | jq -r '.isDraft')"
-          labels="$(echo "$pr_json" | jq -r '[.labels[].name] | join(",")')"
-          if [[ "$state" != "OPEN" ]]; then
-            echo "PR #$PR_NUMBER must be open." >&2
-            exit 1
-          fi
-          if [[ "$draft" == "true" ]]; then
-            echo "PR #$PR_NUMBER is draft." >&2
-            exit 1
-          fi
-          echo "$labels" | grep -q 'base-image-cve' || { echo "missing base-image-cve label" >&2; exit 1; }
-          echo "$labels" | grep -Eq 'severity:(critical|high)' || { echo "missing severity:critical|high label" >&2; exit 1; }
-
-      - name: Reopen PR to retrigger automerge
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ inputs.pull-request-number }}
-        run: |
-          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
-          gh pr reopen "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
