@@ -31,9 +31,9 @@
     "db:down": "docker compose down"
   },
   "overrides": {
-    "esbuild": ">=0.28.1",
-    "fast-uri": ">=3.1.5",
-    "find-my-way": ">=9.7.0"
+    "esbuild": "^0.28.1",
+    "fast-uri": "^4.1.2",
+    "find-my-way": "^9.7.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
