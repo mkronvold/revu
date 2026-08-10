@@ -30,6 +30,11 @@
     "db:migrate": "bash ./scripts/db-migrate.sh",
     "db:down": "docker compose down"
   },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "fast-uri": "^4.1.2",
+    "find-my-way": "^9.7.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
