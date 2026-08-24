@@ -136,7 +136,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v4.37.7
+        uses: github/codeql-action/upload-sarif@v4.37.8
         if: always() && hashFiles(format('trivy-{0}.sarif', matrix.scan_category)) != ''
         with:
           sarif_file: trivy-${{ matrix.scan_category }}.sarif
