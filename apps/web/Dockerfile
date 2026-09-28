@@ -1,4 +1,4 @@
-FROM node:26-bookworm-slim@sha256:582460f614631b59b824ac6020533b9bf339c7fdf3a6d7db31abb6b4065f0212 AS builder
+FROM node:26-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY packages/contracts packages/contracts
 RUN npm run build --workspace @revu/contracts \
   && npm run build --workspace @revu/web
 
-FROM nginx:1.31-alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc48e3d4ac8
+FROM nginx:1.31-alpine@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
 
 ARG APP_REVISION=
 ENV APP_REVISION=$APP_REVISION
