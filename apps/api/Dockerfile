@@ -1,4 +1,4 @@
-FROM node:26-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS builder
+FROM node:26-bookworm-slim@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY packages/contracts packages/contracts
 RUN npm run build --workspace @revu/contracts \
   && npm run build --workspace @revu/api
 
-FROM node:26-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS runner
+FROM node:26-bookworm-slim@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS runner
 
 WORKDIR /app
 
