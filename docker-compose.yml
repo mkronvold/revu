@@ -1,7 +1,7 @@
 services:
   db:
     container_name: revu-postgres
-    image: postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-revu}
@@ -66,7 +66,7 @@ services:
 
   backup:
     container_name: revu-backup
-    image: node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe
+    image: node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9
     restart: unless-stopped
     working_dir: /opt/revu
     entrypoint:
