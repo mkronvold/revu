@@ -25,6 +25,10 @@ RUN npm run build --workspace @revu/contracts \
 
 FROM nginx:1.31-alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
 
+# CVE-2026-111497 (brotli OOB write): base image ships brotli-libs 1.2.0-r1; fixed in 1.2.1-r0.
+# Remove once the pinned nginx base image includes the fix.
+RUN apk upgrade --no-cache brotli-libs
+
 ARG APP_REVISION=
 ENV APP_REVISION=$APP_REVISION
 
