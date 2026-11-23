@@ -23,7 +23,7 @@ COPY packages/contracts packages/contracts
 RUN npm run build --workspace @revu/contracts \
   && npm run build --workspace @revu/web
 
-FROM nginx:1.31-alpine@sha256:fed7e14be83cbd2661a75cdc5b872d936cf155d46c327084d30b8df19ae88d72
+FROM nginx:1.31-alpine@sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7
 
 # CVE-2026-111497 (brotli OOB write): base image ships brotli-libs 1.2.0-r1; fixed in 1.2.1-r0.
 # Remove once the pinned nginx base image includes the fix.
